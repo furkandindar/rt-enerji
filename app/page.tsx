@@ -1,14 +1,21 @@
-import { AuthButton } from "@/components/auth-button";
-import { ThemeSwitcher } from "@/components/theme-switcher";
-import { Suspense } from "react";
+import { createClient } from "@/lib/supabase/server";
+import { redirect } from "next/navigation";
 
-export default function Home() {
+export default async function Home() {
+  const supabase = await createClient();
+
+  // Check if user is authenticated
+  const { data, error } = await supabase.auth.getClaims();
+  if (error || !data?.claims) {
+    redirect("/auth/login");
+  }
+  // User is authenticated, show the app generator
+
   return (
-    <div>
-      <Suspense>
-        <AuthButton/>
-      <ThemeSwitcher/>
-      </Suspense>
-    </div>
+    <>
+      <div className="container mx-auto py-8">
+        hello
+      </div>
+    </>
   );
 }
