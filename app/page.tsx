@@ -9,7 +9,6 @@ export default async function Home() {
   if (error || !data?.claims) {
     redirect("/auth/login");
   }
-  // User is authenticated, show the app generator
 
   return (
     <>
