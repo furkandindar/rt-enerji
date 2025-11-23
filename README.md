@@ -1,109 +1,208 @@
-<a href="https://demo-nextjs-with-supabase.vercel.app/">
-  <img alt="Next.js and Supabase Starter Kit - the fastest way to build apps with Next.js and Supabase" src="https://demo-nextjs-with-supabase.vercel.app/opengraph-image.png">
-  <h1 align="center">Next.js and Supabase Starter Kit</h1>
-</a>
+# RT Enerji Organizasyon Yönetim Sistemi
 
-<p align="center">
- The fastest way to build apps with Next.js and Supabase
-</p>
+RT Enerji ve bağlı sahaların organizasyon yapısını, pozisyonları, çalışanları ve atamalarını **tarihçeli** olarak yönetmek için merkezi platform.
 
-<p align="center">
-  <a href="#features"><strong>Features</strong></a> ·
-  <a href="#demo"><strong>Demo</strong></a> ·
-  <a href="#deploy-to-vercel"><strong>Deploy to Vercel</strong></a> ·
-  <a href="#clone-and-run-locally"><strong>Clone and run locally</strong></a> ·
-  <a href="#feedback-and-issues"><strong>Feedback and issues</strong></a>
-  <a href="#more-supabase-examples"><strong>More Examples</strong></a>
-</p>
-<br/>
+## 🚀 Teknoloji Stack
 
-## Features
+- **Frontend**: Next.js 15 + React 19 + TypeScript
+- **Backend**: Supabase (PostgreSQL + Auth + Storage)
+- **UI**: shadcn/ui + Tailwind CSS v4
+- **Auth**: Microsoft Azure/Entra ID SSO (`@rtenerji.com`)
 
-- Works across the entire [Next.js](https://nextjs.org) stack
-  - App Router
-  - Pages Router
-  - Proxy
-  - Client
-  - Server
-  - It just works!
-- supabase-ssr. A package to configure Supabase Auth to use cookies
-- Password-based authentication block installed via the [Supabase UI Library](https://supabase.com/ui/docs/nextjs/password-based-auth)
-- Styling with [Tailwind CSS](https://tailwindcss.com)
-- Components with [shadcn/ui](https://ui.shadcn.com/)
-- Optional deployment with [Supabase Vercel Integration and Vercel deploy](#deploy-your-own)
-  - Environment variables automatically assigned to Vercel project
+## 📚 Dokümantasyon
 
-## Demo
+- [Organizasyon Veri Modeli](docs/organizasyon-veri-modeli.md) - Database şeması ve ilişkiler
+- [Yönetici Özeti](docs/organizasyon-sistemi-yonetici-ozet.md) - İş tarafı için özet
+- [Teknik Tasarım](docs/teknik-tasarim-veritabani-ve-auth.md) - Teknik detaylar
+- [Auth Setup](docs/auth-setup.md) - OAuth callback fix dokümantasyonu
+- **[Frontend Geliştirme Planı](docs/frontend-development-plan.md)** 👈 **Buradan başla!**
 
-You can view a fully working demo at [demo-nextjs-with-supabase.vercel.app](https://demo-nextjs-with-supabase.vercel.app/).
+---
 
-## Deploy to Vercel
+## ✨ Özellikler
 
-Vercel deployment will guide you through creating a Supabase account and project.
+### Mevcut (Hazır)
+- ✅ Microsoft Azure/Entra ID SSO entegrasyonu
+- ✅ OAuth callback flow (düzeltildi)
+- ✅ Database schema (7 tablo + RLS policies)
+- ✅ Auto-provisioning (auth.users → app_users)
+- ✅ Role-based access (ORG_ADMIN / ORG_VIEWER)
+- ✅ App Shell + Sidebar layout
+- ✅ Dark/Light theme
+- ✅ TypeScript + Type generation
 
-After installation of the Supabase integration, all relevant environment variables will be assigned to the project so the deployment is fully functioning.
+### Geliştirme Aşamasında
+- 🚧 Sözlük yönetimi (unit_types, position_types, grade_levels)
+- 🚧 Organizasyon birimleri CRUD
+- 🚧 Pozisyon yönetimi
+- 🚧 Çalışan yönetimi
+- 🚧 Atama yönetimi (tarihçeli)
+- 🚧 Org chart görselleştirmesi
+- 🚧 Raporlar
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fvercel%2Fnext.js%2Ftree%2Fcanary%2Fexamples%2Fwith-supabase&project-name=nextjs-with-supabase&repository-name=nextjs-with-supabase&demo-title=nextjs-with-supabase&demo-description=This+starter+configures+Supabase+Auth+to+use+cookies%2C+making+the+user%27s+session+available+throughout+the+entire+Next.js+app+-+Client+Components%2C+Server+Components%2C+Route+Handlers%2C+Server+Actions+and+Middleware.&demo-url=https%3A%2F%2Fdemo-nextjs-with-supabase.vercel.app%2F&external-id=https%3A%2F%2Fgithub.com%2Fvercel%2Fnext.js%2Ftree%2Fcanary%2Fexamples%2Fwith-supabase&demo-image=https%3A%2F%2Fdemo-nextjs-with-supabase.vercel.app%2Fopengraph-image.png)
+## 🚀 Hızlı Başlangıç
 
-The above will also clone the Starter kit to your GitHub, you can clone that locally and develop locally.
+### 1. Gereksinimler
 
-If you wish to just develop locally and not deploy to Vercel, [follow the steps below](#clone-and-run-locally).
+- Node.js 18+
+- npm / yarn / pnpm
+- Supabase hesabı
 
-## Clone and run locally
+### 2. Kurulum
 
-1. You'll first need a Supabase project which can be made [via the Supabase dashboard](https://database.new)
+```bash
+# Bağımlılıkları yükle
+npm install
 
-2. Create a Next.js app using the Supabase Starter template npx command
+# Environment variables ayarla
+cp .env.example .env.local
+```
 
-   ```bash
-   npx create-next-app --example with-supabase with-supabase-app
-   ```
+`.env.local` dosyasını düzenle:
+```env
+NEXT_PUBLIC_SUPABASE_URL=your-project-url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+```
 
-   ```bash
-   yarn create next-app --example with-supabase with-supabase-app
-   ```
+### 3. Database Setup
 
-   ```bash
-   pnpm create next-app --example with-supabase with-supabase-app
-   ```
+Supabase SQL Editor'de sırasıyla çalıştır:
 
-3. Use `cd` to change into the app's directory
+```bash
+# 1. Schema
+sql/organizasyon_mvp_schema.sql
 
-   ```bash
-   cd with-supabase-app
-   ```
+# 2. Triggers
+sql/organizasyon_mvp_triggers.sql
 
-4. Rename `.env.example` to `.env.local` and update the following:
+# 3. RLS Policies
+sql/organizasyon_mvp_rls.sql
+```
 
-  ```env
-  NEXT_PUBLIC_SUPABASE_URL=[INSERT SUPABASE PROJECT URL]
-  NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=[INSERT SUPABASE PROJECT API PUBLISHABLE OR ANON KEY]
-  ```
-  > [!NOTE]
-  > This example uses `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, which refers to Supabase's new **publishable** key format.
-  > Both legacy **anon** keys and new **publishable** keys can be used with this variable name during the transition period. Supabase's dashboard may show `NEXT_PUBLIC_SUPABASE_ANON_KEY`; its value can be used in this example.
-  > See the [full announcement](https://github.com/orgs/supabase/discussions/29260) for more information.
+### 4. Supabase Auth Ayarları
 
-  Both `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` can be found in [your Supabase project's API settings](https://supabase.com/dashboard/project/_?showConnect=true)
+**Authentication → Providers → Azure:**
+- Client ID ve Secret ekle
+- Redirect URL: `http://localhost:3000/auth/callback`
 
-5. You can now run the Next.js local development server:
+**Authentication → URL Configuration:**
+- Redirect URLs'e ekle: `http://localhost:3000/auth/callback`
 
-   ```bash
-   npm run dev
-   ```
+### 5. Uygulamayı Başlat
 
-   The starter kit should now be running on [localhost:3000](http://localhost:3000/).
+```bash
+npm run dev
+```
 
-6. This template comes with the default shadcn/ui style initialized. If you instead want other ui.shadcn styles, delete `components.json` and [re-install shadcn/ui](https://ui.shadcn.com/docs/installation/next)
+Uygulama [localhost:3000](http://localhost:3000) adresinde çalışacak.
 
-> Check out [the docs for Local Development](https://supabase.com/docs/guides/getting-started/local-development) to also run Supabase locally.
+### 6. İlk Kullanıcı
 
-## Feedback and issues
+- `/auth/login` sayfasına git
+- "Microsoft ile giriş yap" butonuna tıkla
+- `@rtenerji.com` hesabınla giriş yap
+- Otomatik olarak `ORG_VIEWER` rolü atanacak
 
-Please file feedback and issues over on the [Supabase GitHub org](https://github.com/supabase/supabase/issues/new/choose).
+**Admin yapmak için:**
+```sql
+UPDATE app_users
+SET role = 'ORG_ADMIN'
+WHERE email = 'your-email@rtenerji.com';
+```
 
-## More Supabase examples
+## 📂 Proje Yapısı
 
-- [Next.js Subscription Payments Starter](https://github.com/vercel/nextjs-subscription-payments)
-- [Cookie-based Auth and the Next.js 13 App Router (free course)](https://youtube.com/playlist?list=PL5S4mPUpp4OtMhpnp93EFSo42iQ40XjbF)
-- [Supabase Auth and the Next.js App Router](https://github.com/supabase/supabase/tree/master/examples/auth/nextjs)
+```
+rt-enerji/
+├── app/
+│   ├── (dashboard)/              # Ana uygulama sayfaları
+│   │   ├── page.tsx              # Dashboard
+│   │   └── settings/
+│   │       └── dictionaries/     # 👈 İlk geliştirme buradan başlayacak
+│   ├── auth/                     # Auth sayfaları
+│   │   ├── login/
+│   │   ├── callback/             # OAuth callback
+│   │   └── auth-code-error/
+│   ├── api/                      # API routes (gelecek)
+│   └── layout.tsx
+├── components/
+│   ├── app-shell.tsx             # Ana layout
+│   ├── app-sidebar.tsx           # Sidebar navigation
+│   └── ui/                       # shadcn/ui components
+├── lib/
+│   ├── supabase/                 # Supabase clients
+│   ├── database.types.ts         # Auto-generated types
+│   └── utils.ts
+├── sql/
+│   ├── organizasyon_mvp_schema.sql    # Database schema
+│   ├── organizasyon_mvp_triggers.sql  # Triggers
+│   └── organizasyon_mvp_rls.sql       # RLS policies
+└── docs/
+    ├── organizasyon-veri-modeli.md
+    ├── organizasyon-sistemi-yonetici-ozet.md
+    ├── teknik-tasarim-veritabani-ve-auth.md
+    ├── auth-setup.md
+    └── frontend-development-plan.md   # 👈 Geliştirme planı
+```
+
+## 🎯 Geliştirme Yol Haritası
+
+### Faz 1: Temel Altyapı (1-2 hafta)
+- [ ] Sözlük yönetimi (unit_types, position_types, grade_levels)
+- [ ] Ortak data table component
+- [ ] Ortak form dialog component
+- [ ] Dashboard skeleton
+
+### Faz 2: Organizasyon Yönetimi (2-3 hafta)
+- [ ] Organizasyon birimleri CRUD
+- [ ] Pozisyon yönetimi
+- [ ] Hiyerarşik tree view
+
+### Faz 3: Çalışan Yönetimi (2-3 hafta)
+- [ ] Çalışan CRUD
+- [ ] Atama yönetimi (tarihçeli)
+- [ ] Terfi/transfer işlemleri
+
+### Faz 4: Görselleştirme (2-3 hafta)
+- [ ] Org chart
+- [ ] Raporlar
+- [ ] Export fonksiyonları
+
+Detaylı plan için: [Frontend Geliştirme Planı](docs/frontend-development-plan.md)
+
+## 🔧 Geliştirme Komutları
+
+```bash
+# Development server
+npm run dev
+
+# Type generation (Supabase)
+npx supabase gen types typescript --project-id your-project-id > lib/database.types.ts
+
+# Lint
+npm run lint
+
+# Build
+npm run build
+
+# Production server
+npm start
+```
+
+## 📝 Notlar
+
+- **Next.js 15**: `proxy.ts` kullanıyor (`middleware.ts` yerine)
+- **RLS**: Tüm tablolarda aktif, ORG_ADMIN ve ORG_VIEWER rolleri
+- **Soft Delete**: `is_active` alanı kullanılıyor
+- **Type Safety**: Supabase CLI ile otomatik type generation
+
+## 🤝 Katkıda Bulunma
+
+1. Feature branch oluştur (`git checkout -b feature/amazing-feature`)
+2. Değişiklikleri commit et (`git commit -m 'feat: add amazing feature'`)
+3. Branch'i push et (`git push origin feature/amazing-feature`)
+4. Pull Request aç
+
+## 📄 Lisans
+
+Bu proje RT Enerji için geliştirilmiştir.

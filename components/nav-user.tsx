@@ -35,12 +35,15 @@ import { useRouter } from "next/navigation"
 export function NavUser({
   user,
 }: {
-  user: {
+  user?: {
     name: string
     email: string
     avatar: string
   }
 }) {
+  if (!user) {
+    return null;
+  }
   const { isMobile } = useSidebar()
   const router = useRouter()
 
