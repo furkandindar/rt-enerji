@@ -48,7 +48,7 @@ import { cn } from "@/lib/utils";
 const formSchema = z.object({
   employee_id: z.string().min(1, "Çalışan seçimi zorunludur"),
   position_id: z.string().min(1, "Pozisyon seçimi zorunludur"),
-  start_date: z.date({ required_error: "Başlangıç tarihi zorunludur" }),
+  start_date: z.date({ message: "Başlangıç tarihi zorunludur" }),
   end_date: z.date().optional().nullable(),
   is_primary: z.boolean(),
 });
