@@ -10,11 +10,6 @@ export default async function Home() {
     redirect("/auth/login");
   }
 
-  return (
-    <>
-      <div className="container mx-auto py-8">
-        hello
-      </div>
-    </>
-  );
+  // Redirect to org chart
+  redirect("/org-chart");
 }

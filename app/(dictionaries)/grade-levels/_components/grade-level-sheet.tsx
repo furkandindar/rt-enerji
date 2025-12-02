@@ -208,6 +208,7 @@ export function GradeLevelSheet({
                           type="number"
                           placeholder="Örn: 100, 200, 300"
                           {...field}
+                          onChange={(e) => field.onChange(e.target.valueAsNumber || 0)}
                         />
                       </FormControl>
                       <FormDescription>

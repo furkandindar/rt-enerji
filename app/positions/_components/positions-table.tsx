@@ -135,7 +135,7 @@ export function PositionsTable({ positions }: PositionsTableProps) {
               </TableCell>
               <TableCell>
                 <div className="flex items-center gap-2">
-                  <Badge variant={position.is_active ? "default" : "secondary"}>
+                  <Badge variant={position.is_active ? "success" : "destructive"}>
                     {position.is_active ? "Aktif" : "Pasif"}
                   </Badge>
                   <Button

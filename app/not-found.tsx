@@ -15,7 +15,7 @@ export default function NotFound() {
             Sayfa Bulunamadı
           </h2>
           <p className="text-sm text-muted-foreground max-w-md">
-            Aradığınız sayfa mevcut değil veya taşınmış olabilir.
+            Aradığınız sayfa mevcut değil
           </p>
         </div>
         <div className="flex gap-2">
