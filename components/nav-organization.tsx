@@ -20,32 +20,32 @@ export function NavOrganization() {
     url: string;
     icon: LucideIcon;
   }[] = [
-    {
-      title: "Birimler",
-      url: "/organizational-units",
-      icon: Network,
-    },
-    {
-      title: "Pozisyonlar",
-      url: "/positions",
-      icon: Briefcase,
-    },
-    {
-      title: "Çalışanlar",
-      url: "/employees",
-      icon: Users,
-    },
-    {
-      title: "Pozisyon Atamaları",
-      url: "/position-assignments",
-      icon: UserCheck,
-    },
-    {
-      title: "Organizasyon Şeması",
-      url: "/org-chart",
-      icon: GitBranch,
-    },
-  ];
+      {
+        title: "Birimler",
+        url: "/organizational-units",
+        icon: Network,
+      },
+      {
+        title: "Pozisyonlar",
+        url: "/positions",
+        icon: Briefcase,
+      },
+      {
+        title: "Çalışanlar",
+        url: "/employees",
+        icon: Users,
+      },
+      {
+        title: "Pozisyon Atamaları",
+        url: "/position-assignments",
+        icon: UserCheck,
+      },
+      {
+        title: "Organizasyon Şeması",
+        url: "/org-chart",
+        icon: GitBranch,
+      },
+    ];
 
   return (
     <SidebarGroup>

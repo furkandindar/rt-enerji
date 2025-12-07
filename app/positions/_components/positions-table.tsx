@@ -79,8 +79,8 @@ export function PositionsTable({ positions }: PositionsTableProps) {
             <TableHead className="font-semibold">Birim</TableHead>
             <TableHead className="font-semibold">Tip</TableHead>
             <TableHead className="font-semibold">Seviye</TableHead>
-            <TableHead className="font-semibold">Rapor Verdiği</TableHead>
-            <TableHead className="font-semibold">Lokasyon</TableHead>
+            {/* <TableHead className="font-semibold">Rapor Verdiği</TableHead> */}
+            {/* <TableHead className="font-semibold">Lokasyon</TableHead> */}
             <TableHead className="font-semibold">Durum</TableHead>
           </TableRow>
         </TableHeader>
@@ -125,14 +125,14 @@ export function PositionsTable({ positions }: PositionsTableProps) {
                   ? `${position.grade_level.band} - ${position.grade_level.name}`
                   : "-"}
               </TableCell>
-              <TableCell className="text-muted-foreground text-sm">
+              {/* <TableCell className="text-muted-foreground text-sm">
                 {position.reports_to
                   ? `${position.reports_to.job_code} - ${position.reports_to.title}`
                   : "-"}
-              </TableCell>
-              <TableCell className="text-muted-foreground">
+              </TableCell> */}
+              {/* <TableCell className="text-muted-foreground">
                 {position.location || "-"}
-              </TableCell>
+              </TableCell> */}
               <TableCell>
                 <div className="flex items-center gap-2">
                   <Badge variant={position.is_active ? "success" : "destructive"}>

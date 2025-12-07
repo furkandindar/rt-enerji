@@ -20,22 +20,22 @@ export function NavDictionaries() {
     url: string;
     icon: LucideIcon;
   }[] = [
-    {
-      title: "Birim Tipleri",
-      url: "/unit-types",
-      icon: Building2,
-    },
-    {
-      title: "Pozisyon Tipleri",
-      url: "/position-types",
-      icon: Briefcase,
-    },
-    {
-      title: "Seviye Tipleri",
-      url: "/grade-levels",
-      icon: Layers,
-    },
-  ];
+      {
+        title: "Birim Tipleri",
+        url: "/unit-types",
+        icon: Building2,
+      },
+      {
+        title: "Pozisyon Tipleri",
+        url: "/position-types",
+        icon: Briefcase,
+      },
+      {
+        title: "Seviye Tipleri",
+        url: "/grade-levels",
+        icon: Layers,
+      },
+    ];
 
   return (
     <SidebarGroup>
