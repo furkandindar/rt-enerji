@@ -1,29 +1,28 @@
 import { createClient } from "@/lib/supabase/server";
-import { OrgChartTree } from "./_components/org-chart-tree";
+import { OrgChartFlow } from "./_components/org-chart-flow";
+import { ExportPdfButton } from "./_components/export-pdf-button";
 
 interface Employee {
   id: string;
   first_name: string;
   last_name: string;
-  employee_no: string | null;
 }
 
 interface Position {
   id: string;
   title: string;
-  job_code: string;
   is_unit_head: boolean;
   unit_id: string;
   employees: Employee[];
 }
 
-interface UnitNode {
+interface UnitData {
   id: string;
   name: string;
   code: string | null;
+  parent_id: string | null;
   unit_type: string | null;
   positions: Position[];
-  children: UnitNode[];
 }
 
 export default async function OrgChartPage() {
@@ -72,36 +71,33 @@ export default async function OrgChartPage() {
     unitPositionMap.set(p.unit_id, existing);
   });
 
-  // 3. Build unit hierarchy
-  const buildTree = (parentId: string | null): UnitNode[] => {
-    return units
-      .filter((u) => u.parent_id === parentId)
-      .map((u) => {
-        const unitType = unitTypes.find((ut) => ut.id === u.unit_type_id);
-        return {
-          id: u.id,
-          name: u.name,
-          code: u.code,
-          unit_type: unitType?.name || null,
-          positions: unitPositionMap.get(u.id) || [],
-          children: buildTree(u.id),
-        };
-      });
-  };
-
-  const tree = buildTree(null);
+  // 3. Build flat unit list with positions
+  const unitsWithPositions: UnitData[] = units.map((u) => {
+    const unitType = unitTypes.find((ut) => ut.id === u.unit_type_id);
+    return {
+      id: u.id,
+      name: u.name,
+      code: u.code,
+      parent_id: u.parent_id,
+      unit_type: unitType?.name || null,
+      positions: unitPositionMap.get(u.id) || [],
+    };
+  });
 
   return (
-    <div className="flex flex-col gap-4 p-4 sm:p-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Organizasyon Şeması</h1>
-        <p className="text-muted-foreground">
-          Şirket organizasyon yapısını görüntüleyin
-        </p>
+    <div className="flex flex-col gap-4 p-4 sm:p-6 h-[calc(100vh-4rem)]">
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Organizasyon Şeması</h1>
+          <p className="text-muted-foreground">
+            Şirket organizasyon yapısını görüntüleyin • Sürükle, yakınlaştır, kaydır
+          </p>
+        </div>
+        <ExportPdfButton />
       </div>
 
-      <div className="rounded-md border bg-muted/20 min-h-[500px]">
-        <OrgChartTree data={tree} />
+      <div className="rounded-md border bg-background flex-1 min-h-[500px]">
+        <OrgChartFlow units={unitsWithPositions} />
       </div>
     </div>
   );
