@@ -363,8 +363,8 @@ export function EmployeeSheet({
               </>
             )}
 
-            <SheetFooter className="gap-2 pt-4">
-              
+            <SheetFooter className="gap-2 pt-4 p-0">
+
               <Button type="submit" disabled={isSubmitting || isFetching}>
                 {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 {mode === "create" ? "Oluştur" : "Güncelle"}

@@ -15,6 +15,7 @@ interface PositionData {
   title: string;
   is_unit_head: boolean;
   employees: Employee[];
+  color: string | null;
 }
 
 interface UnitNodeData {
@@ -52,10 +53,22 @@ function UnitNodeComponent({ data }: { data: UnitNodeData }) {
       <div className="p-3 space-y-2">
         {/* Unit Head Position */}
         {headPosition && (
-          <div className="bg-primary/10 rounded-md p-2">
+          <div
+            className="rounded-md p-2 border-l-4"
+            style={{
+              borderLeftColor: headPosition.color || "hsl(var(--primary))",
+              backgroundColor: headPosition.color ? `${headPosition.color}15` : "hsl(var(--primary) / 0.1)",
+            }}
+          >
             <div className="flex items-center gap-1.5">
-              <Briefcase className="h-3 w-3 text-primary" />
-              <span className="text-xs font-medium text-primary truncate">
+              <Briefcase
+                className="h-3 w-3"
+                style={{ color: headPosition.color || "hsl(var(--primary))" }}
+              />
+              <span
+                className="text-xs font-medium truncate"
+                style={{ color: headPosition.color || "hsl(var(--primary))" }}
+              >
                 {headPosition.title}
               </span>
             </div>
@@ -81,9 +94,19 @@ function UnitNodeComponent({ data }: { data: UnitNodeData }) {
         {otherPositions.length > 0 && (
           <div className="space-y-1.5">
             {otherPositions.slice(0, 3).map((pos) => (
-              <div key={pos.id} className="text-xs">
+              <div
+                key={pos.id}
+                className="text-xs rounded p-1.5 border-l-2"
+                style={{
+                  borderLeftColor: pos.color || "hsl(var(--muted-foreground))",
+                  backgroundColor: pos.color ? `${pos.color}10` : "transparent",
+                }}
+              >
                 <div className="flex items-center gap-1.5">
-                  <Briefcase className="h-3 w-3 text-muted-foreground" />
+                  <Briefcase
+                    className="h-3 w-3"
+                    style={{ color: pos.color || "hsl(var(--muted-foreground))" }}
+                  />
                   <span className="truncate">{pos.title}</span>
                 </div>
                 {pos.employees.map((emp) => (

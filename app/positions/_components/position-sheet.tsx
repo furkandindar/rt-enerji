@@ -448,7 +448,7 @@ export function PositionSheet({
               </>
             )}
 
-            <SheetFooter className="gap-2 pt-4">
+            <SheetFooter className="gap-2 p-0 pt-4">
               {/* <Button
                 type="button"
                 variant="outline"
