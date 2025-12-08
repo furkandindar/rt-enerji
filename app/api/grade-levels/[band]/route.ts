@@ -1,8 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 
-export const dynamic = "force-dynamic";
-
 // GET /api/grade-levels/[band] - Get single grade level
 export async function GET(
   request: Request,

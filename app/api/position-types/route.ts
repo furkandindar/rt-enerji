@@ -1,8 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 
-export const dynamic = "force-dynamic";
-
 // GET /api/position-types - Get all position types
 export async function GET() {
   try {

@@ -1,10 +1,8 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
-export const dynamic = "force-dynamic";
-
 export async function GET() {
-  const supabase = await createClient();
+	const supabase = await createClient();
 
   // Fetch all position assignments
   const { data: assignments, error: assignmentsError } = await supabase

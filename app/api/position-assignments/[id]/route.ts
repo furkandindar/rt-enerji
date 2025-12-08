@@ -1,14 +1,12 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
-export const dynamic = "force-dynamic";
-
 export async function GET(
-  _request: Request,
-  { params }: { params: Promise<{ id: string }> }
+	_request: Request,
+	{ params }: { params: Promise<{ id: string }> }
 ) {
-  const supabase = await createClient();
-  const { id } = await params;
+	const supabase = await createClient();
+	const { id } = await params;
 
   const { data: assignment, error } = await supabase
     .from("employee_positions")
