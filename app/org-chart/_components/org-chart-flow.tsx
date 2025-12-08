@@ -33,6 +33,7 @@ interface Employee {
 interface Position {
   id: string;
   title: string;
+  job_code: string;
   is_unit_head: boolean;
   employees: Employee[];
   color: string | null;

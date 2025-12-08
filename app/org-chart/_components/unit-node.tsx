@@ -13,6 +13,7 @@ interface Employee {
 interface PositionData {
   id: string;
   title: string;
+  job_code: string;
   is_unit_head: boolean;
   employees: Employee[];
   color: string | null;
@@ -62,7 +63,7 @@ function UnitNodeComponent({ data }: { data: UnitNodeData }) {
           >
             <div className="flex items-center gap-1.5">
               <Briefcase
-                className="h-3 w-3"
+                className="h-3 w-3 shrink-0"
                 style={{ color: headPosition.color || "hsl(var(--primary))" }}
               />
               <span
@@ -70,6 +71,9 @@ function UnitNodeComponent({ data }: { data: UnitNodeData }) {
                 style={{ color: headPosition.color || "hsl(var(--primary))" }}
               >
                 {headPosition.title}
+              </span>
+              <span className="text-[10px] text-muted-foreground shrink-0">
+                ({headPosition.job_code})
               </span>
             </div>
             {headPosition.employees.length > 0 ? (
@@ -93,7 +97,7 @@ function UnitNodeComponent({ data }: { data: UnitNodeData }) {
         {/* Other Positions */}
         {otherPositions.length > 0 && (
           <div className="space-y-1.5">
-            {otherPositions.slice(0, 3).map((pos) => (
+            {otherPositions.map((pos) => (
               <div
                 key={pos.id}
                 className="text-xs rounded p-1.5 border-l-2"
@@ -104,10 +108,13 @@ function UnitNodeComponent({ data }: { data: UnitNodeData }) {
               >
                 <div className="flex items-center gap-1.5">
                   <Briefcase
-                    className="h-3 w-3"
+                    className="h-3 w-3 shrink-0"
                     style={{ color: pos.color || "hsl(var(--muted-foreground))" }}
                   />
                   <span className="truncate">{pos.title}</span>
+                  <span className="text-[10px] text-muted-foreground shrink-0">
+                    ({pos.job_code})
+                  </span>
                 </div>
                 {pos.employees.map((emp) => (
                   <div key={emp.id} className="flex items-center gap-1.5 ml-4">
@@ -119,19 +126,15 @@ function UnitNodeComponent({ data }: { data: UnitNodeData }) {
                 ))}
               </div>
             ))}
-            {otherPositions.length > 3 && (
-              <p className="text-xs text-muted-foreground text-center">
-                +{otherPositions.length - 3} pozisyon daha
-              </p>
-            )}
           </div>
         )}
 
         {/* No positions */}
         {data.positions.length === 0 && (
-          <p className="text-xs text-muted-foreground italic text-center">
-            Pozisyon tanımlanmamış
-          </p>
+          // <p className="text-xs text-muted-foreground italic text-center">
+          //   Pozisyon tanımlanmamış
+          // </p>
+          <div></div>
         )}
       </div>
 
