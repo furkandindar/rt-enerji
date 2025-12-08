@@ -71,7 +71,7 @@ export function AppShell({ children }: AppShellProps) {
   }
 
   if (loading) {
-    return <Loading fullscreen text="Loading..." />;
+    return <Loading fullscreen text="Yükleniyor..." />;
   }
 
   if (!user) {

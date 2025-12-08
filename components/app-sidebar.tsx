@@ -38,9 +38,16 @@ export function AppSidebar({ user, ...props }: React.ComponentProps<typeof Sideb
                 <Image
                   src="/logo.png"
                   alt="RT Enerji logo"
+                  width={20}
+                  height={20}
+                  className="h-5 w-5 dark:hidden"
+                />
+                <Image
+                  src="/rt_logo_white.png"
+                  alt="RT Enerji logo white"
                   width={16}
                   height={16}
-                  className="h-4 w-4"
+                  className="hidden h-5 w-5 dark:block"
                 />
               </div>
               <div className="grid flex-1 text-left text-sm leading-tight">
