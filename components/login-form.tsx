@@ -78,7 +78,7 @@ export function LoginForm({
 
             <div className="text-center">
               <p className="text-xs text-slate-500 font-medium tracking-wide opacity-60">
-                RT ENERJİ &copy; {new Date().getFullYear()}
+                RT ENERJİ &copy; 2025
               </p>
             </div>
           </div>

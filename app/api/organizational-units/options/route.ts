@@ -1,6 +1,9 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 
+// Prevent static prerendering - this route uses cookies
+export const dynamic = "force-dynamic";
+
 // GET /api/organizational-units/options - Get active unit types and organizational units for dropdowns
 export async function GET() {
   try {
