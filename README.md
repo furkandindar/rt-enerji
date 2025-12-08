@@ -1,4 +1,4 @@
-# RT Enerji Organizasyon Yönetim Sistemi v1
+# RT Enerji Organizasyon Yönetim Sistemi v1.1
 
 RT Enerji ve bağlı sahaların organizasyon yapısını, pozisyonları, çalışanları ve atamalarını **tarihçeli** olarak yönetmek için merkezi platform.
 
