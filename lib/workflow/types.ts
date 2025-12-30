@@ -1,0 +1,133 @@
+// Workflow Engine Types - V2
+
+// ============================================================================
+// ENUM Types (Database ile uyumlu)
+// ============================================================================
+
+export type ApproverType = 'REQUESTER' | 'UNIT_HEAD' | 'STATIC_POSITION';
+export type RequestStatus = 'DRAFT' | 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED';
+export type ApprovalStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
+export type LeaveType = 'ANNUAL_LEAVE' | 'SHORT_LEAVE';
+export type NotificationType = 'APPROVAL_REQUIRED' | 'REQUEST_APPROVED' | 'REQUEST_REJECTED' | 'REQUEST_CANCELLED';
+
+// ============================================================================
+// Database Table Types
+// ============================================================================
+
+export interface WorkflowDefinition {
+  id: string;
+  code: string;
+  name: string;
+  description: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface WorkflowStep {
+  id: string;
+  workflow_definition_id: string;
+  step_order: number;
+  name: string;
+  approver_type: ApproverType;
+  static_position_id: string | null;
+  is_required: boolean;
+  created_at: string;
+}
+
+export interface Request {
+  id: string;
+  workflow_definition_id: string;
+  requester_employee_id: string;
+  status: RequestStatus;
+  current_step: number;
+  submitted_at: string | null;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RequestApproval {
+  id: string;
+  request_id: string;
+  workflow_step_id: string;
+  approver_employee_id: string;
+  status: ApprovalStatus;
+  comment: string | null;
+  decided_at: string | null;
+  created_at: string;
+}
+
+export interface LeaveRequest {
+  id: string;
+  request_id: string;
+  leave_type: LeaveType;
+  start_datetime: string;
+  end_datetime: string;
+  total_days: number;
+  remaining_days: number | null;
+  address_during_leave: string | null;
+  reason: string | null;
+  overtime_amount: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Notification {
+  id: string;
+  user_id: string;
+  title: string;
+  message: string;
+  type: NotificationType;
+  reference_id: string | null;
+  is_read: boolean;
+  created_at: string;
+}
+
+// ============================================================================
+// Extended Types (Joins ile)
+// ============================================================================
+
+export interface RequestWithDetails extends Request {
+  workflow_definition: WorkflowDefinition;
+  requester: {
+    id: string;
+    first_name: string;
+    last_name: string;
+    employee_no: string;
+  };
+  leave_request?: LeaveRequest;
+  approvals: RequestApprovalWithDetails[];
+}
+
+export interface RequestApprovalWithDetails extends RequestApproval {
+  workflow_step: WorkflowStep;
+  approver: {
+    id: string;
+    first_name: string;
+    last_name: string;
+    employee_no: string;
+  };
+}
+
+// ============================================================================
+// API Input Types
+// ============================================================================
+
+export interface CreateLeaveRequestInput {
+  workflow_code: 'ANNUAL_LEAVE' | 'SHORT_LEAVE';
+  leave_type: LeaveType;
+  start_datetime: string;
+  end_datetime: string;
+  total_days: number;
+  address_during_leave?: string;
+  reason?: string;
+  overtime_amount?: number;
+}
+
+export interface ApprovalDecisionInput {
+  request_id: string;
+  decision: 'APPROVED' | 'REJECTED';
+  comment?: string;
+}
+
