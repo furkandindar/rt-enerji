@@ -153,6 +153,8 @@ export default function NewLeaveRequestPage() {
       leave_type: "ANNUAL_LEAVE",
       start_time: "09:00",
       end_time: "17:00",
+      address_during_leave: "",
+      reason: "",
     },
   });
 

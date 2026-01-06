@@ -4,6 +4,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 
 import { AppSidebar } from "@/components/app-sidebar";
+import { NotificationPopover } from "@/components/notification-popover";
 import { ThemeSwitcher } from "@/components/theme-switcher";
 import { createClient } from "@/lib/supabase/client";
 import {
@@ -129,7 +130,8 @@ export function AppShell({ children }: AppShellProps) {
               </BreadcrumbList>
             </Breadcrumb>
           </div>
-          <div className="ml-auto px-4">
+          <div className="ml-auto flex items-center gap-2 px-4">
+            <NotificationPopover />
             <ThemeSwitcher />
           </div>
         </header>

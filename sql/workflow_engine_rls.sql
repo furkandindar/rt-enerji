@@ -2,11 +2,51 @@
 -- Row Level Security (RLS) Politikaları
 --
 -- Prensipler:
+-- - app_users: Tüm authenticated kullanıcılar okuyabilir (bildirim sistemi için gerekli)
 -- - workflow_definitions, workflow_steps: Herkes okuyabilir (public config)
 -- - requests: Talep eden + onaycılar görebilir
 -- - request_approvals: İlgili talep erişilebilirse görülebilir
 -- - leave_requests: İlgili talep erişilebilirse görülebilir
 -- - notifications: Sadece kendi bildirimleri
+
+
+-- ============================================================================
+-- 0. APP_USERS - Tüm authenticated kullanıcılar okuyabilir
+-- ============================================================================
+-- NOT: Bildirim sistemi bir employee_id'den user_id'yi bulmak zorunda.
+-- Bu nedenle tüm authenticated kullanıcılar app_users tablosunu okuyabilmeli.
+
+alter table public.app_users enable row level security;
+
+-- SELECT: Tüm authenticated kullanıcılar okuyabilir
+create policy app_users_select_all
+  on public.app_users
+  for select
+  to authenticated
+  using (true);
+
+-- INSERT: Sadece admin
+create policy app_users_insert_admin
+  on public.app_users
+  for insert
+  with check (
+    exists (
+      select 1 from public.app_users au
+      where au.id = auth.uid() and au.role = 'ORG_ADMIN'
+    )
+  );
+
+-- UPDATE: Kendisi veya admin
+create policy app_users_update
+  on public.app_users
+  for update
+  using (
+    id = auth.uid()
+    OR exists (
+      select 1 from public.app_users au
+      where au.id = auth.uid() and au.role = 'ORG_ADMIN'
+    )
+  );
 
 
 -- ============================================================================
@@ -292,6 +332,8 @@ create policy leave_requests_update
 -- ============================================================================
 -- 6. NOTIFICATIONS - Sadece kendi bildirimleri
 -- ============================================================================
+-- NOT: Bildirim sistemi başka kullanıcılara bildirim gönderebilmeli.
+-- SELECT/UPDATE sadece kendi bildirimleri, INSERT herhangi bir kullanıcıya.
 
 alter table public.notifications enable row level security;
 
@@ -301,17 +343,13 @@ create policy notifications_select
   for select
   using (user_id = auth.uid());
 
--- INSERT: Authenticated kullanıcılar bildirim oluşturabilir
--- (Workflow engine onay verildiğinde bildirim gönderir)
-create policy notifications_insert
+-- INSERT: Authenticated kullanıcılar HERHANGİ bir kullanıcıya bildirim gönderebilir
+-- (Workflow engine onay bekleyen kişilere bildirim gönderir)
+create policy notifications_insert_any
   on public.notifications
   for insert
-  with check (
-    exists (
-      select 1 from public.app_users au
-      where au.id = auth.uid()
-    )
-  );
+  to authenticated
+  with check (true);
 
 -- UPDATE: Sadece kendi bildirimlerini okundu işaretleyebilir
 create policy notifications_update

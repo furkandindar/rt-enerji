@@ -162,10 +162,28 @@ export async function POST(request: Request) {
 
       // current_step'e göre sıradaki onaycıyı bul
       const currentStep = createdRequest.current_step || 1;
+
+      // Debug log
+      console.log("Notification debug:", {
+        currentStep,
+        approvals: createdRequest.approvals.map((a: { status: string; workflow_step: unknown; approver_employee_id: string }) => ({
+          status: a.status,
+          workflow_step: a.workflow_step,
+          approver_employee_id: a.approver_employee_id
+        }))
+      });
+
       const pendingApproval = createdRequest.approvals.find(
-        (a: { status: string; workflow_step: { step_order: number } }) =>
-          a.status === 'PENDING' && a.workflow_step.step_order === currentStep
+        (a: { status: string; workflow_step: { step_order: number } | { step_order: number }[] }) => {
+          // workflow_step array veya obje olabilir
+          const stepOrder = Array.isArray(a.workflow_step)
+            ? a.workflow_step[0]?.step_order
+            : a.workflow_step?.step_order;
+          return a.status === 'PENDING' && stepOrder === currentStep;
+        }
       );
+
+      console.log("Found pending approval:", pendingApproval);
 
       if (pendingApproval) {
         await notifyApprover(
@@ -175,6 +193,7 @@ export async function POST(request: Request) {
           newRequest.id,
           workflowDef.name
         );
+        console.log("Notification sent to:", pendingApproval.approver_employee_id);
       }
     }
 

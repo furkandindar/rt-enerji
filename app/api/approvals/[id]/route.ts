@@ -5,6 +5,8 @@ import {
   notifyRequestApproved,
   notifyRequestRejected
 } from "@/lib/workflow";
+import { generateRequestPDF } from "@/lib/pdf/generate-request-pdf";
+import { uploadRequestPDF } from "@/lib/storage/upload-request-pdf";
 
 // PATCH /api/approvals/[id] - Onay/Red ver
 export async function PATCH(
@@ -146,6 +148,35 @@ export async function PATCH(
           })
           .eq("id", requestData.id);
 
+        // PDF oluştur ve Storage'a yükle
+        try {
+          console.log('Generating PDF for request:', requestData.id);
+          const pdfBuffer = await generateRequestPDF({
+            requestId: requestData.id,
+            supabase,
+          });
+
+          console.log('Uploading PDF to storage...');
+          const pdfPath = await uploadRequestPDF({
+            requestId: requestData.id,
+            pdfBuffer,
+          });
+
+          console.log('PDF uploaded successfully:', pdfPath);
+
+          // PDF path'i database'e kaydet
+          await supabase
+            .from("requests")
+            .update({ pdf_path: pdfPath })
+            .eq("id", requestData.id);
+
+          console.log('PDF path saved to database');
+        } catch (pdfError) {
+          // PDF oluşturma hatası - loglayalım ama işlemi durdurmayalım
+          console.error('Error generating/uploading PDF:', pdfError);
+          // İsteğe bağlı: Hata bildirimi gönderilebilir
+        }
+
         // Talep edene "onaylandı" bildirimi gönder
         await notifyRequestApproved(
           supabase,
@@ -165,18 +196,28 @@ export async function PATCH(
           .eq("id", requestData.id);
 
         // Sonraki onaycıya bildirim gönder
-        const { data: nextApprovalData } = await supabase
+        const { data: nextApprovalData, error: nextApprovalError } = await supabase
           .from("request_approvals")
           .select(`
             approver_employee_id,
-            workflow_step:workflow_steps!inner(step_order)
+            workflow_step:workflow_steps(step_order)
           `)
           .eq("request_id", requestData.id)
-          .eq("status", "PENDING")
-          .eq("workflow_steps.step_order", nextStep)
-          .maybeSingle();
+          .eq("status", "PENDING");
 
-        if (nextApprovalData) {
+        console.log("Next approval query result:", nextApprovalData, "Error:", nextApprovalError);
+
+        // step_order'a göre filtrele
+        const nextApproval = nextApprovalData?.find((a: { workflow_step: { step_order: number } | { step_order: number }[] | null }) => {
+          const stepOrder = Array.isArray(a.workflow_step)
+            ? a.workflow_step[0]?.step_order
+            : a.workflow_step?.step_order;
+          return stepOrder === nextStep;
+        });
+
+        console.log("Found next approval for step", nextStep, ":", nextApproval);
+
+        if (nextApproval) {
           // Talep edenin adını al
           const { data: requester } = await supabase
             .from("employees")
@@ -190,7 +231,7 @@ export async function PATCH(
 
           await notifyApprover(
             supabase,
-            nextApprovalData.approver_employee_id,
+            nextApproval.approver_employee_id,
             requesterName,
             requestData.id,
             workflowName

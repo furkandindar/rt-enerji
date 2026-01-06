@@ -47,20 +47,20 @@ export async function createNotification(
   supabase: SupabaseClient,
   params: CreateNotificationParams
 ): Promise<void> {
-  const { error } = await supabase
-    .from('notifications')
-    .insert({
-      user_id: params.userId,
-      title: params.title,
-      message: params.message,
-      type: params.type,
-      reference_id: params.referenceId || null,
-      is_read: false,
-    });
+  // SECURITY DEFINER fonksiyon kullanarak bildirim oluştur
+  // Bu fonksiyon RLS'i bypass eder (Next.js SSR + Supabase JWT token sorunu için)
+  const { data, error } = await supabase.rpc('create_notification', {
+    p_user_id: params.userId,
+    p_title: params.title,
+    p_message: params.message,
+    p_type: params.type,
+    p_reference_id: params.referenceId || null,
+  });
 
   if (error) {
     console.error('Failed to create notification:', error);
-    // Bildirim hatası kritik değil, devam et
+  } else {
+    console.log('Notification created with id:', data);
   }
 }
 
