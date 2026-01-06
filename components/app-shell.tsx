@@ -47,17 +47,28 @@ export function AppShell({ children }: AppShellProps) {
 
     const getUser = async () => {
       const supabase = createClient();
-      const { data, error } = await supabase.auth.getClaims();
+      const { data: authData } = await supabase.auth.getUser();
 
-      if (!error && data?.claims) {
-        const claims = data.claims as any;
+      if (authData?.user) {
+        const authUser = authData.user;
+
+        // app_users -> employees ilişkisinden ad soyad bilgisini çek
+        const { data: appUserData } = await supabase
+          .from("app_users")
+          .select("employee_id, employees(first_name, last_name)")
+          .eq("id", authUser.id)
+          .single();
+
+        const employeeData = appUserData?.employees;
+        const employee = Array.isArray(employeeData) ? employeeData[0] : employeeData;
+        const fullName = employee
+          ? `${employee.first_name} ${employee.last_name}`
+          : authUser.user_metadata?.full_name || authUser.email?.split("@")[0] || "User";
+
         setUser({
-          name:
-            claims.user_metadata?.full_name ||
-            claims.email?.split("@")[0] ||
-            "User",
-          email: claims.email || "",
-          avatar: claims.user_metadata?.avatar_url || "",
+          name: fullName,
+          email: authUser.email || "",
+          avatar: authUser.user_metadata?.avatar_url || "",
         });
       }
 
