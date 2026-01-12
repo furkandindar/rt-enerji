@@ -1,8 +1,9 @@
 // Notification Service - V2
-// Bildirim oluşturma ve yönetimi
+// Bildirim oluşturma ve yönetimi + Email gönderimi
 
 import { SupabaseClient } from '@supabase/supabase-js';
 import { NotificationType } from './types';
+import { sendNotificationEmail } from '@/lib/email/email-service';
 
 // ============================================================================
 // Types
@@ -16,24 +17,41 @@ interface CreateNotificationParams {
   referenceId?: string;  // request_id veya başka bir referans
 }
 
+interface UserInfo {
+  id: string;
+  email: string | null;
+}
+
 // ============================================================================
 // Helper Functions
 // ============================================================================
 
 /**
- * Employee ID'den user ID'yi bulur
+ * Employee ID'den user ID ve email'i bulur
+ */
+async function getUserInfoByEmployeeId(
+  supabase: SupabaseClient,
+  employeeId: string
+): Promise<UserInfo | null> {
+  const { data } = await supabase
+    .from('app_users')
+    .select('id, email')
+    .eq('employee_id', employeeId)
+    .single();
+
+  if (!data) return null;
+  return { id: data.id, email: data.email };
+}
+
+/**
+ * Employee ID'den user ID'yi bulur (backward compatibility)
  */
 async function getUserIdByEmployeeId(
   supabase: SupabaseClient,
   employeeId: string
 ): Promise<string | null> {
-  const { data } = await supabase
-    .from('app_users')
-    .select('id')
-    .eq('employee_id', employeeId)
-    .single();
-
-  return data?.id || null;
+  const userInfo = await getUserInfoByEmployeeId(supabase, employeeId);
+  return userInfo?.id || null;
 }
 
 // ============================================================================
@@ -65,7 +83,7 @@ export async function createNotification(
 }
 
 /**
- * Onaycıya "onay bekliyor" bildirimi gönderir
+ * Onaycıya "onay bekliyor" bildirimi gönderir + Email
  */
 export async function notifyApprover(
   supabase: SupabaseClient,
@@ -74,20 +92,35 @@ export async function notifyApprover(
   requestId: string,
   workflowName: string
 ): Promise<void> {
-  const userId = await getUserIdByEmployeeId(supabase, approverEmployeeId);
-  if (!userId) return;
+  const userInfo = await getUserInfoByEmployeeId(supabase, approverEmployeeId);
+  if (!userInfo) return;
 
+  const title = 'Onay Bekleyen Talep';
+  const message = `${requesterName} tarafından oluşturulan ${workflowName} talebi onayınızı bekliyor.`;
+  const type = 'APPROVAL_REQUIRED';
+
+  // In-app bildirim oluştur
   await createNotification(supabase, {
-    userId,
-    title: 'Onay Bekleyen Talep',
-    message: `${requesterName} tarafından oluşturulan ${workflowName} talebiniz onayınızı bekliyor.`,
-    type: 'APPROVAL_REQUIRED',
+    userId: userInfo.id,
+    title,
+    message,
+    type,
     referenceId: requestId,
   });
+
+  // Email gönder
+  if (userInfo.email) {
+    await sendNotificationEmail({
+      to: userInfo.email,
+      title,
+      message,
+      type,
+    });
+  }
 }
 
 /**
- * Talep edene "onaylandı" bildirimi gönderir
+ * Talep edene "onaylandı" bildirimi gönderir + Email
  */
 export async function notifyRequestApproved(
   supabase: SupabaseClient,
@@ -95,20 +128,35 @@ export async function notifyRequestApproved(
   requestId: string,
   workflowName: string
 ): Promise<void> {
-  const userId = await getUserIdByEmployeeId(supabase, requesterEmployeeId);
-  if (!userId) return;
+  const userInfo = await getUserInfoByEmployeeId(supabase, requesterEmployeeId);
+  if (!userInfo) return;
 
+  const title = 'Talep Onaylandı';
+  const message = `${workflowName} talebiniz onaylandı.`;
+  const type = 'REQUEST_APPROVED';
+
+  // In-app bildirim oluştur
   await createNotification(supabase, {
-    userId,
-    title: 'Talep Onaylandı',
-    message: `${workflowName} talebiniz onaylandı.`,
-    type: 'REQUEST_APPROVED',
+    userId: userInfo.id,
+    title,
+    message,
+    type,
     referenceId: requestId,
   });
+
+  // Email gönder
+  if (userInfo.email) {
+    await sendNotificationEmail({
+      to: userInfo.email,
+      title,
+      message,
+      type,
+    });
+  }
 }
 
 /**
- * Talep edene "reddedildi" bildirimi gönderir
+ * Talep edene "reddedildi" bildirimi gönderir + Email
  */
 export async function notifyRequestRejected(
   supabase: SupabaseClient,
@@ -117,16 +165,31 @@ export async function notifyRequestRejected(
   workflowName: string,
   rejectedBy: string
 ): Promise<void> {
-  const userId = await getUserIdByEmployeeId(supabase, requesterEmployeeId);
-  if (!userId) return;
+  const userInfo = await getUserInfoByEmployeeId(supabase, requesterEmployeeId);
+  if (!userInfo) return;
 
+  const title = 'Talep Reddedildi';
+  const message = `${workflowName} talebiniz ${rejectedBy} tarafından reddedildi.`;
+  const type = 'REQUEST_REJECTED';
+
+  // In-app bildirim oluştur
   await createNotification(supabase, {
-    userId,
-    title: 'Talep Reddedildi',
-    message: `${workflowName} talebiniz ${rejectedBy} tarafından reddedildi.`,
-    type: 'REQUEST_REJECTED',
+    userId: userInfo.id,
+    title,
+    message,
+    type,
     referenceId: requestId,
   });
+
+  // Email gönder
+  if (userInfo.email) {
+    await sendNotificationEmail({
+      to: userInfo.email,
+      title,
+      message,
+      type,
+    });
+  }
 }
 
 /**

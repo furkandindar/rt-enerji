@@ -2,7 +2,7 @@
 
 import { AdminPageWrapper } from "@/components/admin-page-wrapper";
 
-export default function DictionariesLayout({
+export default function PositionAssignmentsLayout({
   children,
 }: {
   children: React.ReactNode;

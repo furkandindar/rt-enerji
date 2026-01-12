@@ -102,6 +102,21 @@ USING (
 -- Not: Bu SQL dosyasını çalıştırmadan önce, Supabase Dashboard'dan
 -- 'signatures' bucket'ını manuel olarak oluşturmanız gerekir.
 
+-- 4. Kullanıcıların kendi imza alanını güncellemesine izin ver
+DROP POLICY IF EXISTS "employees_update_own_signature" ON public.employees;
+CREATE POLICY "employees_update_own_signature"
+ON public.employees FOR UPDATE
+USING (
+  id = (
+    SELECT employee_id FROM public.app_users WHERE id = auth.uid()
+  )
+)
+WITH CHECK (
+  id = (
+    SELECT employee_id FROM public.app_users WHERE id = auth.uid()
+  )
+);
+
 -- 4. Mevcut imzaları olan çalışanların signature_path'ini güncelle
 -- Storage'da imzası olan çalışanlar için çalıştırın:
 -- (Storage'daki dosya listesine bakarak employee_id'leri belirleyin)
@@ -114,3 +129,14 @@ WHERE id IN (
   'yyyyyyyy-yyyy-yyyy-yyyy-yyyyyyyyyyyy'
 );
 */
+
+UPDATE public.employees
+SET signature_path = id::text || '.png'
+WHERE id IN (
+  -- Storage'daki dosya isimlerinden employee_id'leri al
+  '0efff671-623b-4cda-ac39-62f189aee025',
+  '0f1323f8-aef1-4ee2-82f6-60be98ae0d4f',
+  '1acdbbf7-2164-4520-8704-853166518f58',
+  '3ebbb618-b2c6-4940-bfa4-e65f487c9ff9',
+  'a1630769-373b-4d43-9d42-483c6975ad96'
+);

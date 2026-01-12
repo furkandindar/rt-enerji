@@ -1,13 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { formatDistanceToNow } from "date-fns";
 import { tr } from "date-fns/locale";
 import { Loader2, Bell, Check, CheckCheck } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import {
   Card,
   CardContent,
@@ -15,16 +14,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-
-interface Notification {
-  id: string;
-  title: string;
-  message: string;
-  type: string;
-  is_read: boolean;
-  created_at: string;
-  reference_id: string | null;
-}
+import { useNotificationStore } from "@/lib/stores/notification-store";
 
 const notificationTypeColors: Record<string, string> = {
   APPROVAL_REQUIRED: "bg-yellow-500",
@@ -34,61 +24,67 @@ const notificationTypeColors: Record<string, string> = {
 };
 
 export default function NotificationsPage() {
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [unreadCount, setUnreadCount] = useState(0);
-  const [isLoading, setIsLoading] = useState(true);
+  const router = useRouter();
 
-  useEffect(() => {
-    fetchNotifications();
-  }, []);
+  // Zustand store'dan state al
+  const {
+    notifications,
+    unreadCount,
+    isLoading,
+    isInitialized,
+    markAsRead: storeMarkAsRead,
+    markAllAsRead: storeMarkAllAsRead,
+  } = useNotificationStore();
 
-  const fetchNotifications = async () => {
-    try {
-      const response = await fetch("/api/notifications");
-      if (response.ok) {
-        const data = await response.json();
-        setNotifications(data.notifications);
-        setUnreadCount(data.unreadCount);
-      }
-    } catch (error) {
-      console.error("Error fetching notifications:", error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  // Tek bildirimi okundu işaretle
+  const handleMarkAsRead = async (id: string) => {
+    // Optimistic update
+    storeMarkAsRead(id);
 
-  const markAsRead = async (id: string) => {
     try {
       const response = await fetch(`/api/notifications/${id}`, {
         method: "PATCH",
       });
-      if (response.ok) {
-        setNotifications((prev) =>
-          prev.map((n) => (n.id === id ? { ...n, is_read: true } : n))
-        );
-        setUnreadCount((prev) => Math.max(0, prev - 1));
+      if (!response.ok) {
+        toast.error("Bildirim güncellenemedi");
       }
     } catch (error) {
       console.error("Error marking notification as read:", error);
+      toast.error("Bildirim güncellenemedi");
     }
   };
 
-  const markAllAsRead = async () => {
+  // Tüm bildirimleri okundu işaretle
+  const handleMarkAllAsRead = async () => {
+    // Optimistic update
+    storeMarkAllAsRead();
+
     try {
       const response = await fetch("/api/notifications/mark-all-read", {
         method: "POST",
       });
       if (response.ok) {
-        setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
-        setUnreadCount(0);
         toast.success("Tüm bildirimler okundu olarak işaretlendi");
+      } else {
+        toast.error("Bildirimler güncellenemedi");
       }
     } catch (error) {
       console.error("Error marking all as read:", error);
+      toast.error("Bildirimler güncellenemedi");
     }
   };
 
-  if (isLoading) {
+  // Bildirime tıklandığında
+  const handleNotificationClick = async (notificationId: string, isRead: boolean) => {
+    // Okunmamışsa okundu işaretle
+    if (!isRead) {
+      handleMarkAsRead(notificationId);
+    }
+    // Approvals sayfasına git
+    router.push("/approvals");
+  };
+
+  if (isLoading || !isInitialized) {
     return (
       <div className="flex items-center justify-center h-64">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -108,7 +104,7 @@ export default function NotificationsPage() {
           </p>
         </div>
         {unreadCount > 0 && (
-          <Button variant="outline" onClick={markAllAsRead}>
+          <Button variant="outline" onClick={handleMarkAllAsRead}>
             <CheckCheck className="mr-2 h-4 w-4" />
             Tümünü Okundu İşaretle
           </Button>
@@ -125,7 +121,10 @@ export default function NotificationsPage() {
           {notifications.map((notification) => (
             <Card
               key={notification.id}
-              className={notification.is_read ? "opacity-60" : ""}
+              className={`cursor-pointer transition-colors hover:bg-muted/50 ${
+                notification.is_read ? "opacity-60" : ""
+              }`}
+              onClick={() => handleNotificationClick(notification.id, notification.is_read)}
             >
               <CardHeader className="pb-2">
                 <div className="flex items-center justify-between">
@@ -141,7 +140,10 @@ export default function NotificationsPage() {
                     <Button
                       size="sm"
                       variant="ghost"
-                      onClick={() => markAsRead(notification.id)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleMarkAsRead(notification.id);
+                      }}
                     >
                       <Check className="h-4 w-4" />
                     </Button>

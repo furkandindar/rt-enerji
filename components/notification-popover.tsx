@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { formatDistanceToNow } from "date-fns";
 import { tr } from "date-fns/locale";
 import { Bell, Check, CheckCheck, Loader2 } from "lucide-react";
@@ -15,101 +16,74 @@ import {
 } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-
-interface Notification {
-  id: string;
-  title: string;
-  message: string;
-  type: string;
-  is_read: boolean;
-  created_at: string;
-  reference_id: string | null;
-}
+import { useNotificationStore } from "@/lib/stores/notification-store";
 
 const notificationTypeColors: Record<string, string> = {
-  leave_request_created: "bg-blue-500",
-  leave_request_approved: "bg-green-500",
-  leave_request_rejected: "bg-red-500",
-  approval_required: "bg-yellow-500",
+  APPROVAL_REQUIRED: "bg-yellow-500",
+  REQUEST_APPROVED: "bg-green-500",
+  REQUEST_REJECTED: "bg-red-500",
+  REQUEST_CANCELLED: "bg-gray-500",
 };
 
 export function NotificationPopover() {
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [unreadCount, setUnreadCount] = useState(0);
-  const [isLoading, setIsLoading] = useState(false);
   const [open, setOpen] = useState(false);
+  const router = useRouter();
 
-  const fetchNotifications = async () => {
-    setIsLoading(true);
+  // Zustand store'dan state al
+  const {
+    notifications,
+    unreadCount,
+    isLoading,
+    markAsRead: storeMarkAsRead,
+    markAllAsRead: storeMarkAllAsRead,
+  } = useNotificationStore();
+
+  // Tek bildirimi okundu işaretle
+  const handleMarkAsRead = async (id: string) => {
+    // Optimistic update
+    storeMarkAsRead(id);
+
     try {
-      const response = await fetch("/api/notifications");
-      if (response.ok) {
-        const data = await response.json();
-        setNotifications(data.notifications || []);
-        setUnreadCount(data.unreadCount || 0);
-      }
-    } catch (error) {
-      console.error("Error fetching notifications:", error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Popover açıldığında bildirimleri getir
-  useEffect(() => {
-    if (open) {
-      fetchNotifications();
-    }
-  }, [open]);
-
-  // İlk yüklemede ve periyodik olarak sadece sayıyı al
-  useEffect(() => {
-    const fetchUnreadCount = async () => {
-      try {
-        const response = await fetch("/api/notifications?unread=true");
-        if (response.ok) {
-          const data = await response.json();
-          setUnreadCount(data.unreadCount || 0);
-        }
-      } catch (error) {
-        console.error("Error fetching notification count:", error);
-      }
-    };
-
-    fetchUnreadCount();
-    const interval = setInterval(fetchUnreadCount, 30000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const markAsRead = async (id: string) => {
-    try {
-      const response = await fetch(`/api/notifications/${id}/read`, {
-        method: "POST",
+      const response = await fetch(`/api/notifications/${id}`, {
+        method: "PATCH",
       });
-      if (response.ok) {
-        setNotifications((prev) =>
-          prev.map((n) => (n.id === id ? { ...n, is_read: true } : n))
-        );
-        setUnreadCount((prev) => Math.max(0, prev - 1));
+      if (!response.ok) {
+        // Rollback on error - refetch yapılabilir
+        toast.error("Bildirim güncellenemedi");
       }
     } catch (error) {
       toast.error("Bildirim güncellenemedi");
     }
   };
 
-  const markAllAsRead = async () => {
+  // Tüm bildirimleri okundu işaretle
+  const handleMarkAllAsRead = async () => {
+    // Optimistic update
+    storeMarkAllAsRead();
+
     try {
-      const response = await fetch("/api/notifications/read-all", {
+      const response = await fetch("/api/notifications/mark-all-read", {
         method: "POST",
       });
       if (response.ok) {
-        setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
-        setUnreadCount(0);
         toast.success("Tüm bildirimler okundu olarak işaretlendi");
+      } else {
+        toast.error("Bildirimler güncellenemedi");
       }
     } catch (error) {
       toast.error("Bildirimler güncellenemedi");
     }
+  };
+
+  // Bildirime tıklandığında
+  const handleNotificationClick = async (notificationId: string, isRead: boolean) => {
+    // Okunmamışsa okundu işaretle
+    if (!isRead) {
+      handleMarkAsRead(notificationId);
+    }
+    // Popover'ı kapat ve approvals sayfasına git
+    setOpen(false);
+    router.push("/approvals");
   };
 
   return (
@@ -133,7 +107,7 @@ export function NotificationPopover() {
               variant="ghost"
               size="sm"
               className="h-auto p-1 text-xs"
-              onClick={markAllAsRead}
+              onClick={handleMarkAllAsRead}
             >
               <CheckCheck className="mr-1 h-3 w-3" />
               Tümünü oku
@@ -156,9 +130,10 @@ export function NotificationPopover() {
               {notifications.slice(0, 10).map((notification) => (
                 <div
                   key={notification.id}
-                  className={`flex gap-3 px-4 py-3 hover:bg-muted/50 ${
+                  className={`flex gap-3 px-4 py-3 hover:bg-muted/50 cursor-pointer transition-colors ${
                     !notification.is_read ? "bg-muted/30" : ""
                   }`}
+                  onClick={() => handleNotificationClick(notification.id, notification.is_read)}
                 >
                   <div
                     className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${
@@ -184,7 +159,10 @@ export function NotificationPopover() {
                       variant="ghost"
                       size="icon"
                       className="h-6 w-6 shrink-0"
-                      onClick={() => markAsRead(notification.id)}
+                      onClick={(e) => {
+                        e.stopPropagation(); // Parent onClick'i tetikleme
+                        handleMarkAsRead(notification.id);
+                      }}
                     >
                       <Check className="h-3 w-3" />
                     </Button>

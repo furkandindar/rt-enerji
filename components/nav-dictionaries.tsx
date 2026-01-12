@@ -11,9 +11,16 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
+import { useUser } from "@/lib/contexts/user-context";
 
 export function NavDictionaries() {
   const pathname = usePathname();
+  const { isAdmin } = useUser();
+
+  // Sadece admin kullanıcılar bu menüyü görebilir
+  if (!isAdmin) {
+    return null;
+  }
 
   const items: {
     title: string;

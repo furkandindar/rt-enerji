@@ -1,12 +1,13 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { useEffect, useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 
 import { AppSidebar } from "@/components/app-sidebar";
 import { NotificationPopover } from "@/components/notification-popover";
 import { ThemeSwitcher } from "@/components/theme-switcher";
-import { createClient } from "@/lib/supabase/client";
+import { UserProvider, useUser } from "@/lib/contexts/user-context";
+import { useNotificationSubscription } from "@/hooks/use-notification-subscription";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -30,57 +31,27 @@ interface AppShellProps {
 
 export function AppShell({ children }: AppShellProps) {
   const pathname = usePathname();
-  const [user, setUser] = useState<{
-    name: string;
-    email: string;
-    avatar: string;
-  } | null>(null);
-  const [loading, setLoading] = useState(true);
-
   const isAuthRoute = pathname.startsWith("/auth");
 
-  useEffect(() => {
-    if (isAuthRoute) {
-      setLoading(false);
-      return;
-    }
-
-    const getUser = async () => {
-      const supabase = createClient();
-      const { data: authData } = await supabase.auth.getUser();
-
-      if (authData?.user) {
-        const authUser = authData.user;
-
-        // app_users -> employees ilişkisinden ad soyad bilgisini çek
-        const { data: appUserData } = await supabase
-          .from("app_users")
-          .select("employee_id, employees(first_name, last_name)")
-          .eq("id", authUser.id)
-          .single();
-
-        const employeeData = appUserData?.employees;
-        const employee = Array.isArray(employeeData) ? employeeData[0] : employeeData;
-        const fullName = employee
-          ? `${employee.first_name} ${employee.last_name}`
-          : authUser.user_metadata?.full_name || authUser.email?.split("@")[0] || "User";
-
-        setUser({
-          name: fullName,
-          email: authUser.email || "",
-          avatar: authUser.user_metadata?.avatar_url || "",
-        });
-      }
-
-      setLoading(false);
-    };
-
-    getUser();
-  }, [isAuthRoute]);
-
+  // Auth route'ları için provider gereksiz
   if (isAuthRoute) {
     return <>{children}</>;
   }
+
+  return (
+    <UserProvider>
+      <AppShellContent>{children}</AppShellContent>
+    </UserProvider>
+  );
+}
+
+// İç component: UserContext'e erişebilir
+function AppShellContent({ children }: { children: ReactNode }) {
+  const pathname = usePathname();
+  const { user, loading } = useUser();
+
+  // Realtime notification subscription
+  useNotificationSubscription(user?.id ?? null);
 
   if (loading) {
     return <Loading fullscreen text="Yükleniyor..." />;
