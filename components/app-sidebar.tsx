@@ -40,9 +40,9 @@ export function AppSidebar({ user, ...props }: React.ComponentProps<typeof Sideb
                 <Image
                   src="/logo.png"
                   alt="RT Enerji logo"
-                  width={20}
-                  height={20}
-                  className="h-5 w-5 dark:hidden"
+                  width={132}
+                  height={132}
+                  className="h-8 w-8 dark:hidden"
                 />
                 <Image
                   src="/rt_logo_white.png"

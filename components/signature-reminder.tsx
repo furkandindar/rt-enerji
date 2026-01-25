@@ -9,39 +9,54 @@ import { cn } from "@/lib/utils";
 export function SignatureReminder() {
   const [needsSignature, setNeedsSignature] = useState(false);
   const [loading, setLoading] = useState(true);
-  const supabase = createClient();
 
   useEffect(() => {
-    checkSignature();
-  }, []);
+    const supabase = createClient();
 
-  const checkSignature = async () => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
+    const checkSignature = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          setLoading(false);
+          return;
+        }
+
+        // App user ve employee bilgisini al
+        const { data: appUser } = await supabase
+          .from("app_users")
+          .select(`
+            employee:employees(
+              signature_text,
+              signature_font
+            )
+          `)
+          .eq("id", user.id)
+          .single();
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const employee = appUser?.employee as any;
+        // İmza metni ve fontu varsa imza tamamdır
+        setNeedsSignature(!employee?.signature_text || !employee?.signature_font);
+      } catch (error) {
+        console.error("Error checking signature:", error);
+      } finally {
         setLoading(false);
-        return;
       }
+    };
 
-      // App user ve employee bilgisini al
-      const { data: appUser } = await supabase
-        .from("app_users")
-        .select(`
-          employee:employees(
-            signature_path
-          )
-        `)
-        .eq("id", user.id)
-        .single();
+    checkSignature();
 
-      const employee = appUser?.employee as any;
-      setNeedsSignature(!employee?.signature_path);
-    } catch (error) {
-      console.error("Error checking signature:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
+    // Listen for signature updates
+    const handleSignatureUpdate = () => {
+      checkSignature();
+    };
+
+    window.addEventListener("signatureUpdated", handleSignatureUpdate);
+
+    return () => {
+      window.removeEventListener("signatureUpdated", handleSignatureUpdate);
+    };
+  }, []);
 
   if (loading || !needsSignature) {
     return null;

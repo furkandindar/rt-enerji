@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist } from "next/font/google";
+import { Geist, Ballet, Great_Vibes, Sacramento } from "next/font/google";
 import { ThemeProvider } from "next-themes";
 import { Toaster } from "@/components/ui/sonner";
 import { AppShell } from "@/components/app-shell";
@@ -21,6 +21,28 @@ const geistSans = Geist({
   subsets: ["latin"],
 });
 
+// Signature fonts
+const ballet = Ballet({
+  variable: "--font-ballet",
+  display: "swap",
+  subsets: ["latin"],
+  weight: "400",
+});
+
+const greatVibes = Great_Vibes({
+  variable: "--font-great-vibes",
+  display: "swap",
+  subsets: ["latin"],
+  weight: "400",
+});
+
+const sacramento = Sacramento({
+  variable: "--font-sacramento",
+  display: "swap",
+  subsets: ["latin"],
+  weight: "400",
+});
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -28,7 +50,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`${geistSans.className} antialiased`}>
+      <body className={`${geistSans.className} ${ballet.variable} ${greatVibes.variable} ${sacramento.variable} antialiased`}>
         <ThemeProvider
           attribute="class"
           defaultTheme="system"

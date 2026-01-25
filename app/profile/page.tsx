@@ -1,13 +1,14 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { SignatureManager } from "./_components/signature-manager";
+import { SignatureFont } from "@/lib/signature/types";
 
 export default async function ProfilePage() {
   const supabase = await createClient();
 
   // Kullanıcı bilgilerini al
   const { data: { user } } = await supabase.auth.getUser();
-  
+
   if (!user) {
     redirect("/auth/login");
   }
@@ -24,7 +25,8 @@ export default async function ProfilePage() {
         employee_no,
         email,
         phone,
-        signature_path
+        signature_text,
+        signature_font
       )
     `)
     .eq("id", user.id)
@@ -38,7 +40,18 @@ export default async function ProfilePage() {
     );
   }
 
-  const employee = appUser.employee as any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const employeeData = appUser.employee as any;
+  const employee = {
+    id: employeeData.id as string,
+    first_name: employeeData.first_name as string,
+    last_name: employeeData.last_name as string,
+    employee_no: employeeData.employee_no as string | null,
+    email: employeeData.email as string | null,
+    phone: employeeData.phone as string | null,
+    signature_text: employeeData.signature_text as string | null,
+    signature_font: employeeData.signature_font as SignatureFont | null,
+  };
 
   return (
     <div className="flex flex-col gap-6 p-4 sm:p-6">
@@ -80,9 +93,12 @@ export default async function ProfilePage() {
         <p className="text-sm text-muted-foreground mb-6">
           İmzanız onayladığınız taleplerin PDF belgelerinde görünecektir.
         </p>
-        <SignatureManager 
+        <SignatureManager
           employeeId={employee.id}
-          currentSignaturePath={employee.signature_path}
+          firstName={employee.first_name}
+          lastName={employee.last_name}
+          currentSignatureText={employee.signature_text}
+          currentSignatureFont={employee.signature_font}
         />
       </div>
     </div>

@@ -179,3 +179,16 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Signature Fonts */
+.font-ballet {
+  font-family: var(--font-ballet), cursive;
+}
+
+.font-great-vibes {
+  font-family: var(--font-great-vibes), cursive;
+}
+
+.font-sacramento {
+  font-family: var(--font-sacramento), cursive;
+}

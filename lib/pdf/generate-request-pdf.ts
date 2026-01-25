@@ -2,11 +2,17 @@ import React from 'react';
 import { renderToBuffer, DocumentProps } from '@react-pdf/renderer';
 import { RequestPDFTemplate } from './request-pdf-template';
 import { SupabaseClient } from '@supabase/supabase-js';
-import { createServiceRoleClient } from '@/lib/supabase/server';
+import { SignatureFont, DEFAULT_SIGNATURE_FONT } from '@/lib/signature/types';
 
 interface GeneratePDFOptions {
   requestId: string;
   supabase: SupabaseClient;
+}
+
+// Font-based signature info
+interface SignatureInfo {
+  text: string;
+  font: SignatureFont;
 }
 
 /**
@@ -19,7 +25,7 @@ export async function generateRequestPDF(
 ): Promise<Buffer> {
   const { requestId, supabase } = options;
 
-  // Talep verilerini getir
+  // Talep verilerini getir (imza bilgileri dahil)
   const { data: request, error: requestError } = await supabase
     .from('requests')
     .select(`
@@ -30,6 +36,8 @@ export async function generateRequestPDF(
         first_name,
         last_name,
         employee_no,
+        signature_text,
+        signature_font,
         employee_positions(
           position:positions(
             id,
@@ -57,7 +65,9 @@ export async function generateRequestPDF(
         approver:employees!request_approvals_approver_employee_id_fkey(
           id,
           first_name,
-          last_name
+          last_name,
+          signature_text,
+          signature_font
         )
       )
     `)
@@ -69,45 +79,36 @@ export async function generateRequestPDF(
     throw new Error(`Request not found: ${requestId}. Error: ${requestError?.message || 'Unknown error'}`);
   }
 
-  // İmzaları yükle - Service role client ile (RLS bypass)
-  const signatures: Record<string, string> = {};
-  const supabaseAdmin = createServiceRoleClient();
-
-  // Yardımcı fonksiyon: İmza buffer'ı al
-  const getSignatureBuffer = async (employeeId: string): Promise<Buffer | null> => {
-    const fileName = `${employeeId}.png`;
-    const { data, error } = await supabaseAdmin.storage
-      .from('signatures')
-      .download(fileName);
-
-    if (error || !data) {
-      console.log(`No signature found for employee ${employeeId}`);
-      return null;
-    }
-
-    const arrayBuffer = await data.arrayBuffer();
-    return Buffer.from(arrayBuffer);
-  };
+  // Font-based imzaları topla
+  const signatures: Record<string, SignatureInfo> = {};
 
   // Talep sahibinin imzası
-  try {
-    const requesterSignature = await getSignatureBuffer(request.requester.id);
-    if (requesterSignature) {
-      signatures[request.requester.id] = `data:image/png;base64,${requesterSignature.toString('base64')}`;
-    }
-  } catch (error) {
-    console.log('No signature for requester:', request.requester.id);
+  if (request.requester.signature_text && request.requester.signature_font) {
+    signatures[request.requester.id] = {
+      text: request.requester.signature_text,
+      font: request.requester.signature_font as SignatureFont,
+    };
+  } else if (request.requester.first_name && request.requester.last_name) {
+    // Fallback: İsim soyisim ile default font
+    signatures[request.requester.id] = {
+      text: `${request.requester.first_name} ${request.requester.last_name}`,
+      font: DEFAULT_SIGNATURE_FONT,
+    };
   }
 
   // Onaylayanların imzaları
   for (const approval of request.approvals || []) {
-    try {
-      const approverSignature = await getSignatureBuffer(approval.approver.id);
-      if (approverSignature) {
-        signatures[approval.approver.id] = `data:image/png;base64,${approverSignature.toString('base64')}`;
-      }
-    } catch (error) {
-      console.log('No signature for approver:', approval.approver.id);
+    if (approval.approver.signature_text && approval.approver.signature_font) {
+      signatures[approval.approver.id] = {
+        text: approval.approver.signature_text,
+        font: approval.approver.signature_font as SignatureFont,
+      };
+    } else if (approval.approver.first_name && approval.approver.last_name) {
+      // Fallback: İsim soyisim ile default font
+      signatures[approval.approver.id] = {
+        text: `${approval.approver.first_name} ${approval.approver.last_name}`,
+        font: DEFAULT_SIGNATURE_FONT,
+      };
     }
   }
 

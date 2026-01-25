@@ -1,7 +1,14 @@
 import React from 'react';
 import { Document, Page, Text, View, StyleSheet, Font, Image } from '@react-pdf/renderer';
 import { format } from 'date-fns';
-import { tr } from 'date-fns/locale';
+import { SignatureFont } from '@/lib/signature/types';
+import path from 'path';
+
+// Logo path - Server-side render için mutlak yol gerekli
+const getLogoPath = () => {
+  // Server-side'da process.cwd() kullanarak mutlak yol oluştur
+  return path.join(process.cwd(), 'public', 'logo.png');
+};
 
 // Türkçe karakterleri destekleyen font kaydet
 Font.register({
@@ -26,132 +33,257 @@ Font.register({
   ],
 });
 
-// PDF için stil tanımlamaları
+// İmza fontlarını kaydet
+Font.register({
+  family: 'Ballet',
+  src: 'https://fonts.gstatic.com/s/ballet/v27/QGYyz_MYZA-HM4NjuGOVnUEXme1I4Xi3C4G-EiAou6Y.ttf',
+});
+
+Font.register({
+  family: 'Great Vibes',
+  src: 'https://fonts.gstatic.com/s/greatvibes/v18/RWmMoKWR9v4ksMfaWd_JN-XCg6UKDXlq.ttf',
+});
+
+Font.register({
+  family: 'Sacramento',
+  src: 'https://fonts.gstatic.com/s/sacramento/v15/buEzpo6gcdjy0EiZMBUG0CoV_NxLeiw.ttf',
+});
+
+// Font mapping for PDF
+const signatureFontMap: Record<SignatureFont, string> = {
+  'Ballet': 'Ballet',
+  'Great Vibes': 'Great Vibes',
+  'Sacramento': 'Sacramento',
+};
+
+// Renkler - Screenshot'a uygun
+const colors = {
+  orange: '#F97316',
+  orangeLight: '#FFECD2',
+  black: '#000000',
+  white: '#FFFFFF',
+};
+
+// PDF için stil tanımlamaları - Landscape format (Screenshot'a uygun)
 const styles = StyleSheet.create({
   page: {
-    padding: 40,
-    fontSize: 11,
-    fontFamily: 'Roboto',
-  },
-  header: {
-    marginBottom: 20,
-    borderBottom: '2 solid #333',
-    paddingBottom: 10,
-  },
-  title: {
-    fontSize: 18,
-    fontWeight: 700,
-    marginBottom: 5,
-    color: '#1a1a1a',
-  },
-  subtitle: {
-    fontSize: 10,
-    color: '#666',
-  },
-  section: {
-    marginTop: 15,
-    marginBottom: 10,
-  },
-  sectionTitle: {
-    fontSize: 13,
-    fontWeight: 700,
-    marginBottom: 8,
-    color: '#333',
-    borderBottom: '1 solid #ddd',
-    paddingBottom: 4,
-  },
-  row: {
-    flexDirection: 'row',
-    marginBottom: 6,
-  },
-  label: {
-    width: '35%',
-    fontSize: 10,
-    color: '#666',
-    fontWeight: 500,
-  },
-  value: {
-    width: '65%',
-    fontSize: 10,
-    color: '#1a1a1a',
-  },
-  table: {
-    marginTop: 10,
-  },
-  tableHeader: {
-    flexDirection: 'row',
-    backgroundColor: '#f5f5f5',
-    padding: 8,
-    fontWeight: 700,
-    fontSize: 9,
-    borderBottom: '1 solid #ddd',
-  },
-  tableRow: {
-    flexDirection: 'row',
-    padding: 8,
-    fontSize: 9,
-    borderBottom: '1 solid #eee',
-  },
-  tableCol: {
-    flex: 1,
-  },
-  badge: {
-    padding: '4 8',
-    borderRadius: 4,
-    fontSize: 9,
-    fontWeight: 700,
-    textAlign: 'center',
-  },
-  badgeApproved: {
-    backgroundColor: '#22c55e',
-    color: '#fff',
-  },
-  badgeRejected: {
-    backgroundColor: '#ef4444',
-    color: '#fff',
-  },
-  badgePending: {
-    backgroundColor: '#eab308',
-    color: '#fff',
-  },
-  footer: {
-    position: 'absolute',
-    bottom: 30,
-    left: 40,
-    right: 40,
-    textAlign: 'center',
+    padding: 20,
     fontSize: 8,
-    color: '#999',
-    borderTop: '1 solid #ddd',
-    paddingTop: 10,
+    fontFamily: 'Roboto',
+    backgroundColor: colors.white,
   },
-  signatureRow: {
+  // Header - Logo | Title | Logo
+  headerContainer: {
     flexDirection: 'row',
-    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: colors.black,
+  },
+  logoCell: {
+    width: 70,
+    padding: 8,
+    borderRightWidth: 1,
+    borderColor: colors.black,
+    justifyContent: 'center',
     alignItems: 'center',
   },
-  signaturePosition: {
-    width: '35%',
-    fontSize: 10,
-    color: '#333',
+  logoImage: {
+    width: 45,
+    height: 45,
+  },
+  titleCell: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 8,
+  },
+  titleText: {
+    fontSize: 14,
+    fontWeight: 700,
+  },
+  logoRightCell: {
+    width: 70,
+    padding: 8,
+    borderLeftWidth: 1,
+    borderColor: colors.black,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  // Section Header (PERSONEL BİLGİLERİ, ONAY)
+  sectionHeader: {
+    backgroundColor: colors.orange,
+    padding: 4,
+    borderWidth: 1,
+    borderTopWidth: 0,
+    borderColor: colors.black,
+  },
+  sectionHeaderText: {
+    color: colors.white,
+    fontSize: 9,
+    fontWeight: 700,
+    textAlign: 'center',
+  },
+  // Main content area - two columns
+  mainContent: {
+    flexDirection: 'row',
+    borderWidth: 1,
+    borderTopWidth: 0,
+    borderColor: colors.black,
+  },
+  leftColumn: {
+    width: '55%',
+    borderRightWidth: 1,
+    borderColor: colors.black,
+  },
+  rightColumn: {
+    width: '45%',
+  },
+  // Table row for left column
+  tableRow: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    borderColor: colors.black,
+    minHeight: 20,
+  },
+  tableRowLast: {
+    flexDirection: 'row',
+    minHeight: 20,
+  },
+  labelCell: {
+    width: '40%',
+    backgroundColor: colors.orangeLight,
+    padding: 4,
+    borderRightWidth: 1,
+    borderColor: colors.black,
+    justifyContent: 'center',
+  },
+  valueCell: {
+    width: '60%',
+    padding: 4,
+    justifyContent: 'center',
+  },
+  labelText: {
+    fontSize: 8,
     fontWeight: 500,
   },
-  signatureName: {
-    width: '45%',
-    fontSize: 10,
-    color: '#1a1a1a',
+  valueText: {
+    fontSize: 8,
+  },
+  // Right column - top rows
+  rightTopRow: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    borderColor: colors.black,
+    minHeight: 20,
+  },
+  rightLabelCell: {
+    width: '50%',
+    backgroundColor: colors.orangeLight,
+    padding: 4,
+    borderRightWidth: 1,
+    borderColor: colors.black,
+    justifyContent: 'center',
+  },
+  rightValueCell: {
+    width: '50%',
+    padding: 4,
+    justifyContent: 'center',
+  },
+  // Info box (sağ taraftaki sarı kutu)
+  infoBox: {
+    backgroundColor: colors.orangeLight,
+    padding: 6,
+    flex: 1,
+  },
+  infoText: {
+    fontSize: 6,
+    lineHeight: 1.4,
+  },
+  infoBold: {
+    fontSize: 6,
+    fontWeight: 700,
+    marginTop: 4,
+  },
+  // ONAY Section
+  onayHeader: {
+    backgroundColor: colors.orange,
+    padding: 4,
+    borderWidth: 1,
+    borderTopWidth: 0,
+    borderColor: colors.black,
+  },
+  onayHeaderText: {
+    color: colors.white,
+    fontSize: 9,
+    fontWeight: 700,
+    textAlign: 'center',
+  },
+  onayContent: {
+    flexDirection: 'row',
+    borderWidth: 1,
+    borderTopWidth: 0,
+    borderColor: colors.black,
+  },
+  onayColumn: {
+    flex: 1,
+    borderRightWidth: 1,
+    borderColor: colors.black,
+  },
+  onayColumnLast: {
+    flex: 1,
+  },
+  onayTitleRow: {
+    backgroundColor: colors.orangeLight,
+    padding: 4,
+    borderBottomWidth: 1,
+    borderColor: colors.black,
+    minHeight: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  onayTitleText: {
+    fontSize: 7,
+    fontWeight: 700,
+    textAlign: 'center',
+  },
+  onaySignatureRow: {
+    padding: 4,
+    borderBottomWidth: 1,
+    borderColor: colors.white,
+    minHeight: 35,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 2,
+  },
+  onayNameText: {
+    fontSize: 7,
+    textAlign: 'center',
+    marginBottom: 2,
+  },
+  onayNoteRow: {
+    padding: 4,
+    minHeight: 45,
+  },
+  onayNoteText: {
+    fontSize: 5.5,
+    color: '#666',
+    lineHeight: 1.3,
+  },
+  // Footer
+  footer: {
+    marginTop: 10,
+    fontSize: 6,
+    color: '#666',
+  },
+  footerText: {
+    marginBottom: 2,
+  },
+  signatureText: {
+    fontSize: 14,
+    color: '#1a365d',
   },
   signatureStatus: {
-    width: '20%',
-    fontSize: 9,
-    color: '#22c55e',
-    fontWeight: 500,
-    textAlign: 'right',
-  },
-  signatureImage: {
-    width: 80,
-    height: 40,
-    objectFit: 'contain',
+    fontSize: 7,
+    color: '#666',
   },
 });
 
@@ -160,13 +292,19 @@ const leaveTypeLabels: Record<string, string> = {
   SHORT_LEAVE: 'Kısa Süreli İzin',
 };
 
+// Font-based signature info
+interface SignatureInfo {
+  text: string;
+  font: SignatureFont;
+}
+
 interface RequestPDFTemplateProps {
   request: any;
   requester: any;
   leaveRequest: any;
   approvals: any[];
-  workflowName: string;
-  signatures?: Record<string, string>; // employeeId -> base64 image data
+  workflowName?: string;
+  signatures?: Record<string, SignatureInfo>; // employeeId -> signature info
 }
 
 export const RequestPDFTemplate: React.FC<RequestPDFTemplateProps> = ({
@@ -175,8 +313,20 @@ export const RequestPDFTemplate: React.FC<RequestPDFTemplateProps> = ({
   leaveRequest,
   approvals,
   signatures = {},
-  workflowName,
 }) => {
+  // İmza render helper
+  const renderSignature = (employeeId: string) => {
+    const sig = signatures[employeeId];
+    if (sig) {
+      return (
+        <Text style={[styles.signatureText, { fontFamily: signatureFontMap[sig.font] }]}>
+          {sig.text}
+        </Text>
+      );
+    }
+    return <Text style={styles.signatureStatus}>İmza</Text>;
+  };
+
   const getRequesterPosition = () => {
     if (!requester?.employee_positions) return '-';
     const primaryPosition = requester.employee_positions.find(
@@ -185,149 +335,192 @@ export const RequestPDFTemplate: React.FC<RequestPDFTemplateProps> = ({
     return primaryPosition?.position?.title || '-';
   };
 
+  // Varolan izin günü (örnek - gerçek verinize göre güncellenmeli)
+  const varolanIzinGunu = leaveRequest?.remaining_leave_days || '-';
+
+  // Onay sütunları - Screenshot'taki gibi 5 sütun
+  const getApprovalColumns = () => {
+    const columns = [
+      { title: 'Talep Eden', name: `${requester.first_name} ${requester.last_name}`, employeeId: requester.id, note: '' },
+    ];
+
+    // Onaylayanları sıraya göre ekle
+    const sortedApprovals = approvals
+      .filter((a) => a.workflow_step.step_order > 1)
+      .sort((a, b) => a.workflow_step.step_order - b.workflow_step.step_order);
+
+    sortedApprovals.forEach((approval) => {
+      const positionTitle = approval.workflow_step.static_position
+        ? approval.workflow_step.static_position.title
+        : 'Talep Eden Amiri';
+      columns.push({
+        title: positionTitle,
+        name: `${approval.approver.first_name} ${approval.approver.last_name}`,
+        employeeId: approval.approver.id,
+        note: '',
+      });
+    });
+
+    // İnsan Kaynakları için özel not
+    const hrIndex = columns.findIndex(c => c.title.toLowerCase().includes('insan kaynakları') || c.title.toLowerCase().includes('personel'));
+    if (hrIndex > -1) {
+      columns[hrIndex].note = 'Fazla Mesai oluşup oluşmadığı yazılmalıdır.\nOluşuyorsa izin boyunca oluşacak toplam tutar yazılmalıdır.';
+    }
+
+    return columns;
+  };
+
+  const approvalColumns = getApprovalColumns();
+
   return (
     <Document>
-      <Page size="A4" style={styles.page}>
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.title}>Talep Onay Belgesi</Text>
-          <Text style={styles.subtitle}>RT Enerji - {workflowName}</Text>
-        </View>
-
-        {/* Talep Bilgileri */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Talep Bilgileri</Text>
-          <View style={styles.row}>
-            <Text style={styles.label}>Talep No:</Text>
-            <Text style={styles.value}>{request.id}</Text>
+      <Page size="A4" orientation="landscape" style={styles.page}>
+        {/* Header - Logo | Title | Logo */}
+        <View style={styles.headerContainer}>
+          <View style={styles.logoCell}>
+            <Image src={getLogoPath()} style={styles.logoImage} />
           </View>
-          <View style={styles.row}>
-            <Text style={styles.label}>Durum:</Text>
-            <Text style={styles.value}>{request.status === 'APPROVED' ? 'Onaylandı' : request.status}</Text>
+          <View style={styles.titleCell}>
+            <Text style={styles.titleText}>YILLIK İZİN TALEP FORMU</Text>
           </View>
-          <View style={styles.row}>
-            <Text style={styles.label}>Oluşturulma Tarihi:</Text>
-            <Text style={styles.value}>
-              {format(new Date(request.created_at), 'd MMMM yyyy HH:mm', { locale: tr })}
-            </Text>
-          </View>
-          {request.completed_at && (
-            <View style={styles.row}>
-              <Text style={styles.label}>Onaylanma Tarihi:</Text>
-              <Text style={styles.value}>
-                {format(new Date(request.completed_at), 'd MMMM yyyy HH:mm', { locale: tr })}
-              </Text>
-            </View>
-          )}
-        </View>
-
-        {/* Talep Sahibi Bilgileri */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Talep Sahibi</Text>
-          <View style={styles.row}>
-            <Text style={styles.label}>Ad Soyad:</Text>
-            <Text style={styles.value}>
-              {requester.first_name} {requester.last_name}
-            </Text>
-          </View>
-          {/* <View style={styles.row}>
-            <Text style={styles.label}>Sicil No:</Text>
-            <Text style={styles.value}>{requester.employee_no}</Text>
-          </View> */}
-          <View style={styles.row}>
-            <Text style={styles.label}>Ünvan:</Text>
-            <Text style={styles.value}>{getRequesterPosition()}</Text>
+          <View style={styles.logoRightCell}>
+            <Image src={getLogoPath()} style={styles.logoImage} />
           </View>
         </View>
 
-        {/* İzin Detayları */}
-        {leaveRequest && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>İzin Detayları</Text>
-            <View style={styles.row}>
-              <Text style={styles.label}>İzin Türü:</Text>
-              <Text style={styles.value}>
-                {leaveTypeLabels[leaveRequest.leave_type] || leaveRequest.leave_type}
-              </Text>
+        {/* PERSONEL BİLGİLERİ Header */}
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionHeaderText}>PERSONEL BİLGİLERİ</Text>
+        </View>
+
+        {/* Main Content - Two Columns */}
+        <View style={styles.mainContent}>
+          {/* Left Column - Form Fields */}
+          <View style={styles.leftColumn}>
+            {/* Adı / Soyadı */}
+            <View style={styles.tableRow}>
+              <View style={styles.labelCell}><Text style={styles.labelText}>Adı / Soyadı</Text></View>
+              <View style={styles.valueCell}><Text style={styles.valueText}>{requester.first_name} {requester.last_name}</Text></View>
             </View>
-            <View style={styles.row}>
-              <Text style={styles.label}>Başlangıç:</Text>
-              <Text style={styles.value}>
-                {format(new Date(leaveRequest.start_datetime), 'd MMMM yyyy HH:mm', { locale: tr })}
-              </Text>
+            {/* Şirket */}
+            <View style={styles.tableRow}>
+              <View style={styles.labelCell}><Text style={styles.labelText}>Şirket</Text></View>
+              <View style={styles.valueCell}><Text style={styles.valueText}>RT ENERJİ TURİZM SAN. TİC. A.Ş.</Text></View>
             </View>
-            <View style={styles.row}>
-              <Text style={styles.label}>Bitiş:</Text>
-              <Text style={styles.value}>
-                {format(new Date(leaveRequest.end_datetime), 'd MMMM yyyy HH:mm', { locale: tr })}
-              </Text>
+            {/* Görev Unvanı */}
+            <View style={styles.tableRow}>
+              <View style={styles.labelCell}><Text style={styles.labelText}>Görev Unvanı</Text></View>
+              <View style={styles.valueCell}><Text style={styles.valueText}>{getRequesterPosition()}</Text></View>
             </View>
-            <View style={styles.row}>
-              <Text style={styles.label}>Toplam Gün:</Text>
-              <Text style={styles.value}>{leaveRequest.total_days} gün</Text>
+            {/* İzinde Bulunacağı Adres */}
+            <View style={styles.tableRow}>
+              <View style={styles.labelCell}><Text style={styles.labelText}>İzinde Bulunacağı Adres</Text></View>
+              <View style={styles.valueCell}><Text style={styles.valueText}>{leaveRequest?.address_during_leave || '-'}</Text></View>
             </View>
-            {leaveRequest.reason && (
-              <View style={styles.row}>
-                <Text style={styles.label}>Neden:</Text>
-                <Text style={styles.value}>{leaveRequest.reason}</Text>
+            {/* İzne Çıkış Tarihi/Saati */}
+            <View style={styles.tableRow}>
+              <View style={styles.labelCell}><Text style={styles.labelText}>İzne Çıkış Tarihi/Saati</Text></View>
+              <View style={styles.valueCell}>
+                <Text style={styles.valueText}>
+                  {leaveRequest ? format(new Date(leaveRequest.start_datetime), 'dd/MM/yyyy HH:mm') : '-'}
+                </Text>
               </View>
-            )}
-          </View>
-        )}
-
-        {/* İmzalar */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>İmzalar</Text>
-
-          {/* Talep Eden */}
-          <View style={styles.signatureRow}>
-            <Text style={styles.signaturePosition}>Talep Eden:</Text>
-            <Text style={styles.signatureName}>
-              {requester.first_name} {requester.last_name}
-            </Text>
-            <View style={{ width: '20%', alignItems: 'flex-end' }}>
-              {signatures[requester.id] ? (
-                <Image src={signatures[requester.id]} style={styles.signatureImage} />
-              ) : (
-                <Text style={styles.signatureStatus}>İmzalandı</Text>
-              )}
+            </View>
+            {/* İzinden Dönüş Tarihi/Saati */}
+            <View style={styles.tableRow}>
+              <View style={styles.labelCell}><Text style={styles.labelText}>İzinden Dönüş Tarihi/Saati</Text></View>
+              <View style={styles.valueCell}>
+                <Text style={styles.valueText}>
+                  {leaveRequest ? format(new Date(leaveRequest.end_datetime), 'dd/MM/yyyy HH:mm') : '-'}
+                </Text>
+              </View>
+            </View>
+            {/* İzin Gün Sayısı */}
+            <View style={styles.tableRow}>
+              <View style={styles.labelCell}><Text style={styles.labelText}>İzin Gün Sayısı</Text></View>
+              <View style={styles.valueCell}><Text style={styles.valueText}>{leaveRequest?.total_days || '-'} gün</Text></View>
+            </View>
+            {/* Varolan İzin Günü */}
+            <View style={styles.tableRow}>
+              <View style={styles.labelCell}><Text style={styles.labelText}>Varolan İzin Günü</Text></View>
+              <View style={styles.valueCell}><Text style={styles.valueText}>{varolanIzinGunu}</Text></View>
+            </View>
+            {/* İzin Talep Nedeni */}
+            <View style={styles.tableRowLast}>
+              <View style={styles.labelCell}><Text style={styles.labelText}>İzin Talep Nedeni</Text></View>
+              <View style={styles.valueCell}><Text style={styles.valueText}>{leaveRequest?.reason || '-'}</Text></View>
             </View>
           </View>
 
-          {/* Onaylayanlar - step_order > 1 olanlar (ilk adım talep edenin kendisi) */}
-          {approvals
-            .filter((a) => a.workflow_step.step_order > 1)
-            .sort((a, b) => a.workflow_step.step_order - b.workflow_step.step_order)
-            .map((approval, index) => {
-              // Pozisyon adını belirle
-              const positionTitle = approval.workflow_step.static_position
-                ? approval.workflow_step.static_position.title
-                : 'Talep Eden Amiri';
+          {/* Right Column */}
+          <View style={styles.rightColumn}>
+            {/* İzin Türü */}
+            <View style={styles.rightTopRow}>
+              <View style={styles.rightLabelCell}><Text style={styles.labelText}>İzin Türü:</Text></View>
+              <View style={styles.rightValueCell}>
+                <Text style={styles.valueText}>{leaveTypeLabels[leaveRequest?.leave_type] || leaveRequest?.leave_type || 'Yıllık İzin'}</Text>
+              </View>
+            </View>
+            {/* İzin Talep Tarihi */}
+            <View style={styles.rightTopRow}>
+              <View style={styles.rightLabelCell}><Text style={styles.labelText}>İzin Talep Tarihi:</Text></View>
+              <View style={styles.rightValueCell}>
+                <Text style={styles.valueText}>
+                  {format(new Date(request.created_at), 'dd/MM/yyyy')}
+                </Text>
+              </View>
+            </View>
+            {/* Info Box */}
+            <View style={styles.infoBox}>
+              <Text style={styles.infoText}>
+                Yıllık izinler en fazla dört parçaya bölünebilir. Önemli olmayan konularda bölünmüş yıllık izin kullanımı uygun değildir.
+              </Text>
+              <Text style={styles.infoText}>
+                Bölünmüş yıllık izinler haftasonu, resmi tatil ve haftasonları ile birleştirilemez.
+              </Text>
+              <Text style={[styles.infoBold, { marginTop: 8 }]}>ASİSTAN – Bildirim</Text>
+              <Text style={styles.infoText}>1-Talep Eden</Text>
+              <Text style={styles.infoText}>2-İlgili Bölüm Müdürü</Text>
+              <Text style={styles.infoText}>3-Personel Müdürlüğü</Text>
+              <Text style={styles.infoText}>4-Muhasebe Müdürlüğü</Text>
+              <Text style={[styles.infoText, { marginTop: 8 }]}>
+                Tamamlanan form asistan tarafından taranarak İK - İK Onaylı Formlar adresine yüklenir.
+              </Text>
+            </View>
+          </View>
+        </View>
 
-              return (
-                <View key={index} style={styles.signatureRow}>
-                  <Text style={styles.signaturePosition}>{positionTitle}:</Text>
-                  <Text style={styles.signatureName}>
-                    {approval.approver.first_name} {approval.approver.last_name}
-                  </Text>
-                  <View style={{ width: '20%', alignItems: 'flex-end' }}>
-                    {signatures[approval.approver.id] ? (
-                      <Image src={signatures[approval.approver.id]} style={styles.signatureImage} />
-                    ) : (
-                      <Text style={styles.signatureStatus}>İmzalandı</Text>
-                    )}
-                  </View>
-                </View>
-              );
-            })}
+        {/* ONAY Section Header */}
+        <View style={styles.onayHeader}>
+          <Text style={styles.onayHeaderText}>ONAY</Text>
+        </View>
+
+        {/* ONAY Content - Workflow adımlarına göre dinamik sütunlar */}
+        <View style={styles.onayContent}>
+          {approvalColumns.map((col, index) => (
+            <View key={index} style={index === approvalColumns.length - 1 ? styles.onayColumnLast : styles.onayColumn}>
+              {/* Title Row */}
+              <View style={styles.onayTitleRow}>
+                <Text style={styles.onayTitleText}>{col.title}</Text>
+              </View>
+              {/* Signature Row - Ad Soyad + İmza */}
+              <View style={styles.onaySignatureRow}>
+                <Text style={styles.onayNameText}>{col.name}</Text>
+                {renderSignature(col.employeeId)}
+              </View>
+              {/* Note Row */}
+              {/* <View style={styles.onayNoteRow}>
+                <Text style={styles.onayNoteText}>{col.note}</Text>
+              </View> */}
+            </View>
+          ))}
         </View>
 
         {/* Footer */}
         <View style={styles.footer}>
-          <Text>
-            Bu belge {format(new Date(), 'd MMMM yyyy HH:mm', { locale: tr })} tarihinde otomatik olarak oluşturulmuştur.
-          </Text>
-          <Text>RT Enerji - İnsan Kaynakları Yönetim Sistemi</Text>
+          <Text style={styles.footerText}>Bildirim Yetkilisi:Yönetici Asistanı</Text>
+          <Text style={styles.footerText}>Bildirilecek Kişiler:Çalışan/Amiri/Muhasebe/Personel Müdürlüğü/İK(SharePoint)</Text>
+          <Text style={styles.footerText}>Tüm Formlar SharePoint/İK/Formlar dosyasına kaydedilir.</Text>
         </View>
       </Page>
     </Document>

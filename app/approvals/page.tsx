@@ -5,6 +5,9 @@ import { format } from "date-fns";
 import { tr } from "date-fns/locale";
 import { Eye, Loader2, ChevronLeft, ChevronRight, Download } from "lucide-react";
 import { toast } from "sonner";
+import { createClient } from "@/lib/supabase/client";
+import { SignaturePanel } from "@/components/signature-panel";
+import { SignatureFont } from "@/lib/signature/types";
 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -144,6 +147,12 @@ const requestStatusColors: Record<string, string> = {
   CANCELLED: "bg-gray-400",
 };
 
+// Signature state interface
+interface SignatureInfo {
+  signatureText: string | null;
+  signatureFont: SignatureFont | null;
+}
+
 export default function ApprovalsPage() {
   const [pendingApprovals, setPendingApprovals] = useState<PendingApproval[]>([]);
   const [approvalHistory, setApprovalHistory] = useState<PendingApproval[]>([]);
@@ -152,9 +161,22 @@ export default function ApprovalsPage() {
   const [comment, setComment] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Signature states
+  const [signatureAccepted, setSignatureAccepted] = useState(false);
+  const [signatureInfo, setSignatureInfo] = useState<SignatureInfo>({
+    signatureText: null,
+    signatureFont: null,
+  });
+  const supabase = createClient();
+
   // Pagination states for approval history
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
+
+  // İmza var mı?
+  const hasValidSignature = Boolean(signatureInfo.signatureText && signatureInfo.signatureFont);
+  // Onay için imza kabul edilmeli
+  const canApprove = hasValidSignature && signatureAccepted;
 
   const getRequesterFullName = (requester?: Requester): string => {
     if (!requester) return "-";
@@ -193,7 +215,43 @@ export default function ApprovalsPage() {
 
   useEffect(() => {
     fetchApprovals();
+    loadSignatureInfo();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // selectedApproval değiştiğinde signatureAccepted'ı sıfırla
+  useEffect(() => {
+    setSignatureAccepted(false);
+  }, [selectedApproval]);
+
+  const loadSignatureInfo = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: appUser } = await supabase
+        .from("app_users")
+        .select(`
+          employee:employees(
+            signature_text,
+            signature_font
+          )
+        `)
+        .eq("id", user.id)
+        .single();
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const employee = appUser?.employee as any;
+      if (employee) {
+        setSignatureInfo({
+          signatureText: employee.signature_text,
+          signatureFont: employee.signature_font,
+        });
+      }
+    } catch (error) {
+      console.error("Error loading signature:", error);
+    }
+  };
 
   const fetchApprovals = async () => {
     try {
@@ -692,14 +750,26 @@ export default function ApprovalsPage() {
                       onChange={(e) => setComment(e.target.value)}
                     />
                   </div>
+
+                  {/* İmza Paneli */}
+                  <SignaturePanel
+                    signatureText={signatureInfo.signatureText}
+                    signatureFont={signatureInfo.signatureFont}
+                    isAccepted={signatureAccepted}
+                    onAcceptChange={setSignatureAccepted}
+                    title="ONAY İMZASI"
+                    description="Bu talebi imzanızla onaylayacaksınız:"
+                    disabled={isSubmitting}
+                  />
+
                   <div className="flex gap-2">
                     <Button
                       className="flex-1"
                       onClick={() => handleDecision("APPROVED")}
-                      disabled={isSubmitting}
+                      disabled={isSubmitting || !canApprove}
                     >
                       {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                      Onayla
+                      İmzala ve Onayla
                     </Button>
                     <Button
                       variant="destructive"

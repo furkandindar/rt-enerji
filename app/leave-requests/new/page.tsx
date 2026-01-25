@@ -1,12 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
 import { CalendarIcon, Loader2 } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
+import { SignaturePanel } from "@/components/signature-panel";
+import { SignatureFont } from "@/lib/signature/types";
 import { format, eachDayOfInterval } from "date-fns";
 import { tr } from "date-fns/locale";
 
@@ -142,9 +145,58 @@ const timeOptions = [
   "17:00", "17:30", "18:00"
 ];
 
+// Signature state interface
+interface SignatureInfo {
+  signatureText: string | null;
+  signatureFont: SignatureFont | null;
+}
+
 export default function NewLeaveRequestPage() {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [signatureAccepted, setSignatureAccepted] = useState(false);
+  const [signatureInfo, setSignatureInfo] = useState<SignatureInfo>({
+    signatureText: null,
+    signatureFont: null,
+  });
+  const [loadingSignature, setLoadingSignature] = useState(true);
+  const supabase = createClient();
+
+  // Kullanıcının imza bilgilerini yükle
+  useEffect(() => {
+    const loadSignatureInfo = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+
+        const { data: appUser } = await supabase
+          .from("app_users")
+          .select(`
+            employee:employees(
+              signature_text,
+              signature_font
+            )
+          `)
+          .eq("id", user.id)
+          .single();
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const employee = appUser?.employee as any;
+        if (employee) {
+          setSignatureInfo({
+            signatureText: employee.signature_text,
+            signatureFont: employee.signature_font,
+          });
+        }
+      } catch (error) {
+        console.error("Error loading signature:", error);
+      } finally {
+        setLoadingSignature(false);
+      }
+    };
+
+    loadSignatureInfo();
+  }, [supabase]);
 
   const form = useForm<LeaveRequestFormValues>({
     resolver: zodResolver(leaveRequestSchema),
@@ -157,6 +209,10 @@ export default function NewLeaveRequestPage() {
       reason: "",
     },
   });
+
+  // İmza var ve kabul edildi mi?
+  const hasValidSignature = Boolean(signatureInfo.signatureText && signatureInfo.signatureFont);
+  const canSubmit = hasValidSignature && signatureAccepted;
 
   const watchStartDate = form.watch("start_date");
   const watchEndDate = form.watch("end_date");
@@ -454,6 +510,19 @@ export default function NewLeaveRequestPage() {
                 )}
               />
 
+              {/* İmza Paneli */}
+              {!loadingSignature && (
+                <SignaturePanel
+                  signatureText={signatureInfo.signatureText}
+                  signatureFont={signatureInfo.signatureFont}
+                  isAccepted={signatureAccepted}
+                  onAcceptChange={setSignatureAccepted}
+                  title="TALEP İMZASI"
+                  description="Bu talebi imzanızla onaylayacaksınız:"
+                  disabled={isSubmitting}
+                />
+              )}
+
               {/* Butonlar */}
               <div className="flex gap-4">
                 <Button
@@ -463,11 +532,11 @@ export default function NewLeaveRequestPage() {
                 >
                   İptal
                 </Button>
-                <Button type="submit" disabled={isSubmitting}>
+                <Button type="submit" disabled={isSubmitting || !canSubmit}>
                   {isSubmitting && (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   )}
-                  Talep Oluştur
+                  İmzala ve Talebi Gönder
                 </Button>
               </div>
             </form>
