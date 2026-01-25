@@ -1,4 +1,4 @@
-// Workflow Engine Types - V2
+// Workflow Engine Types - V3
 
 // ============================================================================
 // ENUM Types (Database ile uyumlu)
@@ -10,6 +10,9 @@ export type ApprovalStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
 export type LeaveType = 'ANNUAL_LEAVE' | 'SHORT_LEAVE';
 export type NotificationType = 'APPROVAL_REQUIRED' | 'REQUEST_APPROVED' | 'REQUEST_REJECTED' | 'REQUEST_CANCELLED';
 
+// V3: Yeni action type
+export type ActionType = 'FILL_AND_SIGN' | 'SIGN_ONLY';
+
 // ============================================================================
 // Database Table Types
 // ============================================================================
@@ -20,6 +23,7 @@ export interface WorkflowDefinition {
   name: string;
   description: string | null;
   is_active: boolean;
+  is_restricted: boolean; // V3: Sadece belirli pozisyonlar başlatabilir mi?
   created_at: string;
   updated_at: string;
 }
@@ -32,6 +36,16 @@ export interface WorkflowStep {
   approver_type: ApproverType;
   static_position_id: string | null;
   is_required: boolean;
+  action_type: ActionType; // V3: FILL_AND_SIGN veya SIGN_ONLY
+  form_section_key: string | null; // V3: Hangi form bölümü doldurulacak
+  created_at: string;
+}
+
+// V3: Workflow başlatma yetkisi
+export interface WorkflowInitiator {
+  id: string;
+  workflow_definition_id: string;
+  position_id: string;
   created_at: string;
 }
 
@@ -131,3 +145,24 @@ export interface ApprovalDecisionInput {
   comment?: string;
 }
 
+// ============================================================================
+// Salary Advance Types
+// ============================================================================
+
+export type PaymentMethod = 'CASH' | 'BANK_TRANSFER';
+
+export interface SalaryAdvanceRequest {
+  id: string;
+  request_id: string;
+  amount: number;
+  salary_deduction_consent: boolean;
+  payment_method: PaymentMethod;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateSalaryAdvanceInput {
+  amount: number;
+  payment_method: PaymentMethod;
+  salary_deduction_consent: boolean;
+}

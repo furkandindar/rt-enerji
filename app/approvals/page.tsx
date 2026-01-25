@@ -86,6 +86,13 @@ interface Approval {
   approver: Approver;
 }
 
+interface SalaryAdvanceRequest {
+  id: string;
+  amount: number;
+  payment_method: 'CASH' | 'BANK_TRANSFER';
+  salary_deduction_consent: boolean;
+}
+
 interface PendingApproval {
   id: string;
   status: string;
@@ -103,13 +110,14 @@ interface PendingApproval {
       name: string;
     };
     requester: Requester;
-    leave_request: {
+    leave_request?: {
       leave_type: string;
       start_datetime: string;
       end_datetime: string;
       total_days: number;
       reason: string | null;
     };
+    salary_advance_request?: SalaryAdvanceRequest;
     approvals?: Approval[];
   };
 }
@@ -194,6 +202,9 @@ export default function ApprovalsPage() {
   const getRequestSummary = (approval: PendingApproval): string => {
     if (approval.request.leave_request) {
       return leaveTypeLabels[approval.request.leave_request.leave_type] || approval.request.leave_request.leave_type;
+    }
+    if (approval.request.salary_advance_request) {
+      return `${approval.request.salary_advance_request.amount.toLocaleString('tr-TR')} TL`;
     }
     return "-";
   };
@@ -652,6 +663,32 @@ export default function ApprovalsPage() {
                       <p className="text-sm font-semibold">{selectedApproval.request.leave_request.reason}</p>
                     </div>
                   )}
+                </>
+              )}
+
+              {/* Salary Advance Request specific fields */}
+              {selectedApproval.request.salary_advance_request && (
+                <>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">Avans Miktarı</p>
+                      <p className="text-sm font-semibold">
+                        {selectedApproval.request.salary_advance_request.amount.toLocaleString('tr-TR')} TL
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">Ödeme Şekli</p>
+                      <p className="text-sm font-semibold">
+                        {selectedApproval.request.salary_advance_request.payment_method === 'CASH' ? 'Nakit' : 'Banka Havalesi'}
+                      </p>
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground">Maaş Kesinti Muvafakatı</p>
+                    <p className="text-sm font-semibold">
+                      {selectedApproval.request.salary_advance_request.salary_deduction_consent ? 'Onaylandı' : 'Onaylanmadı'}
+                    </p>
+                  </div>
                 </>
               )}
 

@@ -1,8 +1,8 @@
-// Workflow Engine Service - V2
-// Onaycı belirleme ve approval chain oluşturma mantığı
+// Workflow Engine Service - V3
+// Onaycı belirleme, approval chain oluşturma ve workflow yetkilendirme
 
 import { SupabaseClient } from '@supabase/supabase-js';
-import { WorkflowStep } from './types';
+import { WorkflowStep, WorkflowDefinition } from './types';
 
 // ============================================================================
 // Types
@@ -131,6 +131,120 @@ async function getEmployeeByPosition(
   return assignment?.employee_id || null;
 }
 
+/**
+ * Bir pozisyonun unit_id'sini getirir
+ */
+async function getPositionUnitId(
+  supabase: SupabaseClient,
+  positionId: string
+): Promise<string | null> {
+  const { data } = await supabase
+    .from('positions')
+    .select('unit_id')
+    .eq('id', positionId)
+    .single();
+
+  return data?.unit_id || null;
+}
+
+/**
+ * Bir birimde, belirtilen kişi hariç, alternatif bir çalışan bulur.
+ * Önce aynı birimde herhangi biri aranır (level_band sıralaması ile).
+ * Bulunamazsa null döner.
+ */
+async function findAlternativeInUnit(
+  supabase: SupabaseClient,
+  unitId: string,
+  excludeEmployeeId: string
+): Promise<string | null> {
+  // Birimde aktif pozisyonları ve çalışanları bul (level_band sıralı - düşük önce)
+  const { data: assignments } = await supabase
+    .from('employee_positions')
+    .select(`
+      employee_id,
+      position:positions!inner (
+        id,
+        unit_id,
+        level_band,
+        is_active
+      )
+    `)
+    .eq('position.unit_id', unitId)
+    .eq('position.is_active', true)
+    .is('end_date', null)
+    .neq('employee_id', excludeEmployeeId);
+
+  if (!assignments || assignments.length === 0) {
+    return null;
+  }
+
+  // Level band'e göre sırala (100 en üst, 500 en alt - düşük değer önce)
+  const sorted = assignments.sort((a, b) => {
+    const levelA = (a.position as unknown as { level_band: number }).level_band;
+    const levelB = (b.position as unknown as { level_band: number }).level_band;
+    return levelA - levelB;
+  });
+
+  // İlk bulunanı döndür
+  return sorted[0].employee_id;
+}
+
+/**
+ * STATIC_POSITION için alternatif onaycı bulur.
+ *
+ * Kural:
+ * 1. Pozisyondaki kişiyi bul
+ * 2. Eğer talep eden = onaycı ise → Aynı birimde alternatif ara
+ * 3. Alternatif yoksa → Üst birime escalate et
+ * 4. Üst birimde de yoksa → Kendi kendini onaylar (self-approval)
+ */
+async function findAlternativeForStaticPosition(
+  supabase: SupabaseClient,
+  positionId: string,
+  requesterEmployeeId: string
+): Promise<string | null> {
+  // 1. Pozisyonun birimini al
+  const unitId = await getPositionUnitId(supabase, positionId);
+  if (!unitId) {
+    return null;
+  }
+
+  let currentUnitId: string | null = unitId;
+  let iterations = 0;
+  const maxIterations = 10; // Sonsuz döngü koruması
+
+  while (currentUnitId && iterations < maxIterations) {
+    iterations++;
+
+    // 2. Bu birimde alternatif ara
+    const alternativeEmployeeId = await findAlternativeInUnit(
+      supabase,
+      currentUnitId,
+      requesterEmployeeId
+    );
+
+    if (alternativeEmployeeId) {
+      return alternativeEmployeeId;
+    }
+
+    // 3. Bulunamadı, üst birime bak
+    const parentUnit = await getParentUnit(supabase, currentUnitId);
+    if (!parentUnit) {
+      // En üst birime ulaşıldı, alternatif yok
+      break;
+    }
+
+    currentUnitId = parentUnit.id;
+  }
+
+  // 4. Hiç alternatif bulunamadı - self-approval (talep eden kendi kendini onaylar)
+  console.warn(
+    `No alternative approver found for position ${positionId}. ` +
+    `Requester ${requesterEmployeeId} will self-approve.`
+  );
+  return requesterEmployeeId;
+}
+
 // ============================================================================
 // Main Functions
 // ============================================================================
@@ -155,11 +269,25 @@ export async function determineApprover(
   }
 
   // STATIC_POSITION: Belirtilen pozisyondaki kişi
+  // Eğer onaycı = talep eden ise, aynı birimde alternatif ara
   if (step.approver_type === 'STATIC_POSITION') {
     if (!step.static_position_id) {
       throw new Error(`Step "${step.name}" requires static_position_id`);
     }
-    return getEmployeeByPosition(supabase, step.static_position_id);
+
+    // Pozisyondaki kişiyi bul
+    const approverEmployeeId = await getEmployeeByPosition(supabase, step.static_position_id);
+
+    // Eğer onaycı = talep eden ise, alternatif bul
+    if (approverEmployeeId === requesterEmployeeId) {
+      return findAlternativeForStaticPosition(
+        supabase,
+        step.static_position_id,
+        requesterEmployeeId
+      );
+    }
+
+    return approverEmployeeId;
   }
 
   // UNIT_HEAD: Talep edenin birim müdürü (escalation mantığı ile)
@@ -313,14 +441,134 @@ export async function createApprovalChain(
 export async function getWorkflowDefinitionByCode(
   supabase: SupabaseClient,
   code: string
-): Promise<{ id: string; name: string } | null> {
+): Promise<{ id: string; name: string; is_restricted: boolean } | null> {
   const { data } = await supabase
     .from('workflow_definitions')
-    .select('id, name')
+    .select('id, name, is_restricted')
     .eq('code', code)
     .eq('is_active', true)
     .single();
 
   return data;
+}
+
+// ============================================================================
+// V3: Workflow Yetkilendirme Fonksiyonları
+// ============================================================================
+
+/**
+ * Çalışanın tüm pozisyonlarını getirir (primary ve secondary)
+ */
+async function getEmployeePositionIds(
+  supabase: SupabaseClient,
+  employeeId: string
+): Promise<string[]> {
+  const { data, error } = await supabase
+    .from('employee_positions')
+    .select('position_id')
+    .eq('employee_id', employeeId)
+    .is('end_date', null); // Aktif atamalar
+
+  if (error || !data) return [];
+  return data.map(ep => ep.position_id);
+}
+
+/**
+ * Bir workflow'u başlatabilecek pozisyon ID'lerini getirir
+ */
+async function getWorkflowInitiatorPositionIds(
+  supabase: SupabaseClient,
+  workflowDefinitionId: string
+): Promise<string[]> {
+  const { data, error } = await supabase
+    .from('workflow_initiators')
+    .select('position_id')
+    .eq('workflow_definition_id', workflowDefinitionId);
+
+  if (error || !data) return [];
+  return data.map(wi => wi.position_id);
+}
+
+/**
+ * Çalışanın belirli bir workflow'u başlatıp başlatamayacağını kontrol eder
+ */
+export async function canStartWorkflow(
+  supabase: SupabaseClient,
+  employeeId: string,
+  workflowDefinitionId: string
+): Promise<boolean> {
+  // 1. Workflow'u al
+  const { data: workflow } = await supabase
+    .from('workflow_definitions')
+    .select('is_restricted')
+    .eq('id', workflowDefinitionId)
+    .eq('is_active', true)
+    .single();
+
+  if (!workflow) return false;
+
+  // 2. Kısıtlı değilse herkes başlatabilir
+  if (!workflow.is_restricted) return true;
+
+  // 3. Çalışanın pozisyonlarını al
+  const employeePositionIds = await getEmployeePositionIds(supabase, employeeId);
+  if (employeePositionIds.length === 0) return false;
+
+  // 4. İzin verilen pozisyonları al
+  const allowedPositionIds = await getWorkflowInitiatorPositionIds(supabase, workflowDefinitionId);
+  if (allowedPositionIds.length === 0) return false;
+
+  // 5. Kesişim var mı?
+  return employeePositionIds.some(epId => allowedPositionIds.includes(epId));
+}
+
+/**
+ * Çalışanın başlatabileceği tüm workflow'ları getirir
+ */
+export async function getAvailableWorkflows(
+  supabase: SupabaseClient,
+  employeeId: string
+): Promise<WorkflowDefinition[]> {
+  // 1. Tüm aktif workflow'ları al
+  const { data: workflows, error } = await supabase
+    .from('workflow_definitions')
+    .select(`
+      id,
+      code,
+      name,
+      description,
+      is_active,
+      is_restricted,
+      created_at,
+      updated_at
+    `)
+    .eq('is_active', true)
+    .order('name');
+
+  if (error || !workflows) return [];
+
+  // 2. Çalışanın pozisyonlarını al
+  const employeePositionIds = await getEmployeePositionIds(supabase, employeeId);
+
+  // 3. Her workflow için yetki kontrolü yap
+  const availableWorkflows: WorkflowDefinition[] = [];
+
+  for (const workflow of workflows) {
+    // Kısıtlı değilse ekle
+    if (!workflow.is_restricted) {
+      availableWorkflows.push(workflow as WorkflowDefinition);
+      continue;
+    }
+
+    // Kısıtlıysa, pozisyon kontrolü yap
+    const allowedPositionIds = await getWorkflowInitiatorPositionIds(supabase, workflow.id);
+    const hasPermission = employeePositionIds.some(epId => allowedPositionIds.includes(epId));
+
+    if (hasPermission) {
+      availableWorkflows.push(workflow as WorkflowDefinition);
+    }
+  }
+
+  return availableWorkflows;
 }
 

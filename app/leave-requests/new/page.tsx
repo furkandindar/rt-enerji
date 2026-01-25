@@ -151,6 +151,13 @@ interface SignatureInfo {
   signatureFont: SignatureFont | null;
 }
 
+// V3: Workflow tipi
+interface WorkflowOption {
+  id: string;
+  code: string;
+  name: string;
+}
+
 export default function NewLeaveRequestPage() {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -160,6 +167,9 @@ export default function NewLeaveRequestPage() {
     signatureFont: null,
   });
   const [loadingSignature, setLoadingSignature] = useState(true);
+  // V3: Kullanıcının başlatabileceği workflow'lar
+  const [availableWorkflows, setAvailableWorkflows] = useState<WorkflowOption[]>([]);
+  const [loadingWorkflows, setLoadingWorkflows] = useState(true);
   const supabase = createClient();
 
   // Kullanıcının imza bilgilerini yükle
@@ -197,6 +207,29 @@ export default function NewLeaveRequestPage() {
 
     loadSignatureInfo();
   }, [supabase]);
+
+  // V3: Kullanıcının başlatabileceği workflow'ları yükle
+  useEffect(() => {
+    const loadAvailableWorkflows = async () => {
+      try {
+        const response = await fetch("/api/workflows/available");
+        if (response.ok) {
+          const workflows = await response.json();
+          // Sadece izin tipi workflow'larını filtrele
+          const leaveWorkflows = workflows.filter(
+            (w: WorkflowOption) => w.code === "ANNUAL_LEAVE" || w.code === "SHORT_LEAVE"
+          );
+          setAvailableWorkflows(leaveWorkflows);
+        }
+      } catch (error) {
+        console.error("Error loading workflows:", error);
+      } finally {
+        setLoadingWorkflows(false);
+      }
+    };
+
+    loadAvailableWorkflows();
+  }, []);
 
   const form = useForm<LeaveRequestFormValues>({
     resolver: zodResolver(leaveRequestSchema),
@@ -293,27 +326,44 @@ export default function NewLeaveRequestPage() {
         <CardContent>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-              {/* İzin Tipi */}
+              {/* İzin Tipi - V3: Dinamik workflow listesi */}
               <FormField
                 control={form.control}
                 name="leave_type"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>İzin Tipi</FormLabel>
-                    <Select
-                      onValueChange={handleLeaveTypeChange}
-                      defaultValue={field.value}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="İzin tipi seçin" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="ANNUAL_LEAVE">Yıllık İzin</SelectItem>
-                        <SelectItem value="SHORT_LEAVE">Kısa Süreli İzin</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    {loadingWorkflows ? (
+                      <div className="flex items-center gap-2 h-10 px-3 py-2 border rounded-md">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <span className="text-sm text-muted-foreground">Yükleniyor...</span>
+                      </div>
+                    ) : availableWorkflows.length === 0 ? (
+                      <div className="flex items-center h-10 px-3 py-2 border rounded-md bg-muted">
+                        <span className="text-sm text-muted-foreground">
+                          Başlatabileceğiniz izin türü bulunmuyor
+                        </span>
+                      </div>
+                    ) : (
+                      <Select
+                        onValueChange={handleLeaveTypeChange}
+                        defaultValue={field.value}
+                        disabled={availableWorkflows.length === 0}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="İzin tipi seçin" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {availableWorkflows.map((workflow) => (
+                            <SelectItem key={workflow.id} value={workflow.code}>
+                              {workflow.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
                     <FormMessage />
                   </FormItem>
                 )}

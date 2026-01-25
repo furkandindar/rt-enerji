@@ -34,6 +34,7 @@ export async function GET(request: NextRequest) {
         *,
         workflow_definition:workflow_definitions(id, code, name),
         leave_request:leave_requests(*),
+        salary_advance_request:salary_advance_requests(*),
         requester:employees!requester_employee_id(
           id,
           first_name,

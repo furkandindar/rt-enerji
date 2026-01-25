@@ -1,14 +1,14 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { createApprovalChain, getWorkflowDefinitionByCode, notifyApprover, canStartWorkflow } from "@/lib/workflow";
-import type { CreateLeaveRequestInput } from "@/lib/workflow";
+import type { CreateSalaryAdvanceInput } from "@/lib/workflow";
 
-// GET /api/leave-requests - Kullanıcının izin taleplerini listele
+// GET /api/salary-advance - Kullanıcının maaş avans taleplerini listele
 export async function GET() {
   try {
     const supabase = await createClient();
 
-    // Mevcut kullanıcının employee_id'sini al
+    // 1. Mevcut kullanıcının employee_id'sini al
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -24,15 +24,16 @@ export async function GET() {
       return NextResponse.json({ error: "User not linked to employee" }, { status: 400 });
     }
 
-    // Kullanıcının taleplerini getir
+    // 2. Kullanıcının taleplerini getir
     const { data: requests, error } = await supabase
       .from("requests")
       .select(`
         *,
         workflow_definition:workflow_definitions(id, code, name),
-        leave_request:leave_requests(*)
+        salary_advance_request:salary_advance_requests(*)
       `)
       .eq("requester_employee_id", appUser.employee_id)
+      .eq("workflow_definition.code", "SALARY_ADVANCE")
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -40,18 +41,21 @@ export async function GET() {
       return NextResponse.json({ error: "Failed to fetch requests" }, { status: 500 });
     }
 
-    return NextResponse.json(requests);
+    // workflow_definition null olanları filtrele (code eşleşmeyenler)
+    const filteredRequests = requests?.filter(r => r.workflow_definition !== null) || [];
+
+    return NextResponse.json(filteredRequests);
   } catch (error) {
     console.error("Unexpected error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
 
-// POST /api/leave-requests - Yeni izin talebi oluştur
+// POST /api/salary-advance - Yeni maaş avans talebi oluştur
 export async function POST(request: Request) {
   try {
     const supabase = await createClient();
-    const body: CreateLeaveRequestInput = await request.json();
+    const body: CreateSalaryAdvanceInput = await request.json();
 
     // 1. Mevcut kullanıcının employee_id'sini al
     const { data: { user } } = await supabase.auth.getUser();
@@ -70,18 +74,26 @@ export async function POST(request: Request) {
     }
 
     // 2. Workflow definition'ı al
-    const workflowDef = await getWorkflowDefinitionByCode(supabase, body.workflow_code);
+    const workflowDef = await getWorkflowDefinitionByCode(supabase, "SALARY_ADVANCE");
     if (!workflowDef) {
-      return NextResponse.json({ error: "Invalid workflow code" }, { status: 400 });
+      return NextResponse.json({ error: "Workflow not found" }, { status: 400 });
     }
 
-    // 3. V3: Workflow başlatma yetkisi kontrolü
+    // 3. Workflow başlatma yetkisi kontrolü
     const hasPermission = await canStartWorkflow(supabase, appUser.employee_id, workflowDef.id);
     if (!hasPermission) {
       return NextResponse.json({ error: "Bu formu başlatma yetkiniz yok" }, { status: 403 });
     }
 
-    // 4. Ana request kaydını oluştur
+    // 4. Validasyon
+    if (!body.amount || body.amount <= 0) {
+      return NextResponse.json({ error: "Geçerli bir avans miktarı girin" }, { status: 400 });
+    }
+    if (!body.payment_method || !["CASH", "BANK_TRANSFER"].includes(body.payment_method)) {
+      return NextResponse.json({ error: "Geçerli bir ödeme şekli seçin" }, { status: 400 });
+    }
+
+    // 5. Ana request kaydını oluştur
     const { data: newRequest, error: requestError } = await supabase
       .from("requests")
       .insert({
@@ -99,28 +111,24 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Failed to create request" }, { status: 500 });
     }
 
-    // 5. Leave request detaylarını oluştur
-    const { error: leaveError } = await supabase
-      .from("leave_requests")
+    // 6. Salary advance request detaylarını oluştur
+    const { error: advanceError } = await supabase
+      .from("salary_advance_requests")
       .insert({
         request_id: newRequest.id,
-        leave_type: body.leave_type,
-        start_datetime: body.start_datetime,
-        end_datetime: body.end_datetime,
-        total_days: body.total_days,
-        address_during_leave: body.address_during_leave || null,
-        reason: body.reason || null,
-        overtime_amount: body.overtime_amount || null,
+        amount: body.amount,
+        payment_method: body.payment_method,
+        salary_deduction_consent: body.salary_deduction_consent || false,
       });
 
-    if (leaveError) {
+    if (advanceError) {
       // Rollback: request'i sil
       await supabase.from("requests").delete().eq("id", newRequest.id);
-      console.error("Error creating leave request:", leaveError);
-      return NextResponse.json({ error: "Failed to create leave details" }, { status: 500 });
+      console.error("Error creating salary advance request:", advanceError);
+      return NextResponse.json({ error: "Failed to create salary advance details" }, { status: 500 });
     }
 
-    // 6. Approval chain oluştur
+    // 7. Approval chain oluştur
     try {
       await createApprovalChain(
         supabase,
@@ -130,7 +138,7 @@ export async function POST(request: Request) {
       );
     } catch (approvalError) {
       // Rollback: tüm kayıtları sil
-      await supabase.from("leave_requests").delete().eq("request_id", newRequest.id);
+      await supabase.from("salary_advance_requests").delete().eq("request_id", newRequest.id);
       await supabase.from("requests").delete().eq("id", newRequest.id);
       console.error("Error creating approval chain:", approvalError);
       return NextResponse.json({ 
@@ -138,13 +146,13 @@ export async function POST(request: Request) {
       }, { status: 500 });
     }
 
-    // 7. Oluşturulan talebi detaylı getir
+    // 8. Oluşturulan talebi detaylı getir
     const { data: createdRequest } = await supabase
       .from("requests")
       .select(`
         *,
         workflow_definition:workflow_definitions(id, code, name),
-        leave_request:leave_requests(*),
+        salary_advance_request:salary_advance_requests(*),
         approvals:request_approvals(
           *,
           workflow_step:workflow_steps(*)
@@ -153,9 +161,8 @@ export async function POST(request: Request) {
       .eq("id", newRequest.id)
       .single();
 
-    // 8. Onaycıya bildirim gönder
+    // 9. Onaycıya bildirim gönder
     if (createdRequest?.approvals) {
-      // Talep edenin adını al
       const { data: requester } = await supabase
         .from("employees")
         .select("first_name, last_name")
@@ -166,30 +173,16 @@ export async function POST(request: Request) {
         ? `${requester.first_name} ${requester.last_name}`
         : "Bir çalışan";
 
-      // current_step'e göre sıradaki onaycıyı bul
       const currentStep = createdRequest.current_step || 1;
-
-      // Debug log
-      console.log("Notification debug:", {
-        currentStep,
-        approvals: createdRequest.approvals.map((a: { status: string; workflow_step: unknown; approver_employee_id: string }) => ({
-          status: a.status,
-          workflow_step: a.workflow_step,
-          approver_employee_id: a.approver_employee_id
-        }))
-      });
 
       const pendingApproval = createdRequest.approvals.find(
         (a: { status: string; workflow_step: { step_order: number } | { step_order: number }[] }) => {
-          // workflow_step array veya obje olabilir
           const stepOrder = Array.isArray(a.workflow_step)
             ? a.workflow_step[0]?.step_order
             : a.workflow_step?.step_order;
           return a.status === 'PENDING' && stepOrder === currentStep;
         }
       );
-
-      console.log("Found pending approval:", pendingApproval);
 
       if (pendingApproval) {
         await notifyApprover(
@@ -199,7 +192,6 @@ export async function POST(request: Request) {
           newRequest.id,
           workflowDef.name
         );
-        console.log("Notification sent to:", pendingApproval.approver_employee_id);
       }
     }
 

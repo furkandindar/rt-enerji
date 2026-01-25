@@ -46,6 +46,7 @@ export async function GET() {
             )
           ),
           leave_request:leave_requests(*),
+          salary_advance_request:salary_advance_requests(*),
           approvals:request_approvals(
             id,
             status,

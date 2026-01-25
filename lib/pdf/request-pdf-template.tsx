@@ -518,8 +518,8 @@ export const RequestPDFTemplate: React.FC<RequestPDFTemplateProps> = ({
 
         {/* Footer */}
         <View style={styles.footer}>
-          <Text style={styles.footerText}>Bildirim Yetkilisi:Yönetici Asistanı</Text>
-          <Text style={styles.footerText}>Bildirilecek Kişiler:Çalışan/Amiri/Muhasebe/Personel Müdürlüğü/İK(SharePoint)</Text>
+          {/* <Text style={styles.footerText}>Bildirim Yetkilisi:Yönetici Asistanı</Text>
+          <Text style={styles.footerText}>Bildirilecek Kişiler:Çalışan/Amiri/Muhasebe/Personel Müdürlüğü/İK(SharePoint)</Text> */}
           <Text style={styles.footerText}>Tüm Formlar SharePoint/İK/Formlar dosyasına kaydedilir.</Text>
         </View>
       </Page>

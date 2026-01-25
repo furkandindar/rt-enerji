@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarPlus, FileCheck, ClipboardList, type LucideIcon } from "lucide-react";
+import { CalendarPlus, FileCheck, ClipboardList, Banknote, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -24,6 +24,11 @@ export function NavWorkflow() {
       title: "İzin Talebi Oluştur",
       url: "/leave-requests/new",
       icon: CalendarPlus,
+    },
+    {
+      title: "Maaş Avans Talebi",
+      url: "/salary-advance/new",
+      icon: Banknote,
     },
     {
       title: "Taleplerim",

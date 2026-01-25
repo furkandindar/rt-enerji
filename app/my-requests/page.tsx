@@ -97,6 +97,13 @@ interface Approval {
   approver: Approver;
 }
 
+interface SalaryAdvanceRequest {
+  id: string;
+  amount: number;
+  payment_method: 'CASH' | 'BANK_TRANSFER';
+  salary_deduction_consent: boolean;
+}
+
 interface Request {
   id: string;
   status: string;
@@ -104,6 +111,7 @@ interface Request {
   created_at: string;
   workflow_definition: WorkflowDefinition;
   leave_request?: LeaveRequestData;
+  salary_advance_request?: SalaryAdvanceRequest;
   requester?: Requester;
   approvals?: Approval[];
 }
@@ -188,6 +196,9 @@ export default function MyRequestsPage() {
   const getRequestSummary = (request: Request): string => {
     if (request.leave_request) {
       return leaveTypeLabels[request.leave_request.leave_type] || request.leave_request.leave_type;
+    }
+    if (request.salary_advance_request) {
+      return `${request.salary_advance_request.amount.toLocaleString('tr-TR')} TL`;
     }
     return "-";
   };
@@ -429,6 +440,32 @@ export default function MyRequestsPage() {
                       <p className="text-sm font-semibold">{selectedRequest.leave_request.reason}</p>
                     </div>
                   )}
+                </>
+              )}
+
+              {/* Salary Advance Request specific fields */}
+              {selectedRequest.salary_advance_request && (
+                <>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">Avans Miktarı</p>
+                      <p className="text-sm font-semibold">
+                        {selectedRequest.salary_advance_request.amount.toLocaleString('tr-TR')} TL
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">Ödeme Şekli</p>
+                      <p className="text-sm font-semibold">
+                        {selectedRequest.salary_advance_request.payment_method === 'CASH' ? 'Nakit' : 'Banka Havalesi'}
+                      </p>
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground">Maaş Kesinti Muvafakatı</p>
+                    <p className="text-sm font-semibold">
+                      {selectedRequest.salary_advance_request.salary_deduction_consent ? 'Onaylandı' : 'Onaylanmadı'}
+                    </p>
+                  </div>
                 </>
               )}
 

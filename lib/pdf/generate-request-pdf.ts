@@ -1,6 +1,7 @@
 import React from 'react';
 import { renderToBuffer, DocumentProps } from '@react-pdf/renderer';
 import { RequestPDFTemplate } from './request-pdf-template';
+import { SalaryAdvancePDFTemplate } from './salary-advance-pdf-template';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { SignatureFont, DEFAULT_SIGNATURE_FONT } from '@/lib/signature/types';
 
@@ -48,6 +49,7 @@ export async function generateRequestPDF(
         )
       ),
       leave_request:leave_requests(*),
+      salary_advance_request:salary_advance_requests(*),
       approvals:request_approvals(
         id,
         status,
@@ -112,18 +114,32 @@ export async function generateRequestPDF(
     }
   }
 
-  // PDF template'i oluştur
-  const pdfDocument = React.createElement(RequestPDFTemplate, {
-    request,
-    requester: request.requester,
-    leaveRequest: request.leave_request,
-    approvals: request.approvals || [],
-    workflowName: request.workflow_definition?.name || 'Talep',
-    signatures,
-  });
+  // PDF template'i oluştur - workflow tipine göre farklı template kullan
+  let pdfDocument: React.ReactElement<DocumentProps>;
+
+  if (request.salary_advance_request) {
+    // Maaş Avans PDF'i
+    pdfDocument = React.createElement(SalaryAdvancePDFTemplate, {
+      request,
+      requester: request.requester,
+      salaryAdvanceRequest: request.salary_advance_request,
+      approvals: request.approvals || [],
+      signatures,
+    }) as React.ReactElement<DocumentProps>;
+  } else {
+    // İzin Talebi PDF'i (varsayılan)
+    pdfDocument = React.createElement(RequestPDFTemplate, {
+      request,
+      requester: request.requester,
+      leaveRequest: request.leave_request,
+      approvals: request.approvals || [],
+      workflowName: request.workflow_definition?.name || 'Talep',
+      signatures,
+    }) as React.ReactElement<DocumentProps>;
+  }
 
   // PDF'i buffer'a render et
-  const pdfBuffer = await renderToBuffer(pdfDocument as React.ReactElement<DocumentProps>);
+  const pdfBuffer = await renderToBuffer(pdfDocument);
 
   return Buffer.from(pdfBuffer);
 }
