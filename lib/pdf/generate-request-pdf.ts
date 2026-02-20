@@ -2,6 +2,7 @@ import React from 'react';
 import { renderToBuffer, DocumentProps } from '@react-pdf/renderer';
 import { RequestPDFTemplate } from './request-pdf-template';
 import { SalaryAdvancePDFTemplate } from './salary-advance-pdf-template';
+import { OvertimePDFTemplate } from './overtime-pdf-template';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { SignatureFont, DEFAULT_SIGNATURE_FONT } from '@/lib/signature/types';
 
@@ -50,6 +51,10 @@ export async function generateRequestPDF(
       ),
       leave_request:leave_requests(*),
       salary_advance_request:salary_advance_requests(*),
+      overtime_request:overtime_requests(
+        *,
+        entries:overtime_entries(*)
+      ),
       approvals:request_approvals(
         id,
         status,
@@ -117,7 +122,17 @@ export async function generateRequestPDF(
   // PDF template'i oluştur - workflow tipine göre farklı template kullan
   let pdfDocument: React.ReactElement<DocumentProps>;
 
-  if (request.salary_advance_request) {
+  if (request.overtime_request) {
+    // Fazla Mesai PDF'i
+    pdfDocument = React.createElement(OvertimePDFTemplate, {
+      request,
+      requester: request.requester,
+      overtimeRequest: request.overtime_request,
+      entries: request.overtime_request.entries || [],
+      approvals: request.approvals || [],
+      signatures,
+    }) as React.ReactElement<DocumentProps>;
+  } else if (request.salary_advance_request) {
     // Maaş Avans PDF'i
     pdfDocument = React.createElement(SalaryAdvancePDFTemplate, {
       request,

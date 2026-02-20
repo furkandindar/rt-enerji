@@ -83,6 +83,7 @@ export interface LeaveRequest {
   address_during_leave: string | null;
   reason: string | null;
   overtime_amount: number | null;
+  hr_note: string | null; // Personel Müdürlüğü tarafından eklenen not
   created_at: string;
   updated_at: string;
 }
@@ -166,3 +167,85 @@ export interface CreateSalaryAdvanceInput {
   payment_method: PaymentMethod;
   salary_deduction_consent: boolean;
 }
+
+// ============================================================================
+// Overtime (Fazla Mesai) Types
+// ============================================================================
+
+export type OvertimeType = 'EMERGENCY' | 'STAFF_SHORTAGE';
+
+export type OvertimeReasonCategory =
+  // EMERGENCY nedenleri
+  | 'SHIFT_OUTSIDE'
+  | 'NON_CONTINUOUS'
+  | 'EMERGENCY_CASE'
+  | 'SUDDEN_DEVELOPMENT'
+  | 'ON_REQUEST'
+  // STAFF_SHORTAGE nedenleri
+  | 'STAFF_SHORTAGE'
+  | 'REPORTING'
+  | 'ENERGY_PRODUCTION';
+
+export interface OvertimeRequest {
+  id: string;
+  request_id: string;
+  overtime_type: OvertimeType;
+  month: string;
+  year: number;
+  reason_category: OvertimeReasonCategory;
+  reason_detail: string;
+  hr_note: string | null;
+  // EMERGENCY only
+  work_location: string | null;
+  work_start_date: string | null;
+  work_end_date: string | null;
+  previous_shift: string | null;
+  next_shift: string | null;
+  work_reason: string | null;
+  // STAFF_SHORTAGE only
+  total_hours: number | null;
+  total_pay: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface OvertimeEntry {
+  id: string;
+  overtime_request_id: string;
+  role_title: string;
+  overtime_hours: number;
+  overtime_pay: number;
+  created_at: string;
+}
+
+// API Input Types
+export interface CreateOvertimeEmergencyInput {
+  overtime_type: 'EMERGENCY';
+  month: string;
+  year: number;
+  reason_category: 'SHIFT_OUTSIDE' | 'NON_CONTINUOUS' | 'EMERGENCY_CASE' | 'SUDDEN_DEVELOPMENT' | 'ON_REQUEST';
+  reason_detail: string;
+  hr_note?: string;
+  work_location: string;
+  work_start_date: string;
+  work_end_date: string;
+  previous_shift: string;
+  next_shift: string;
+  work_reason: string;
+}
+
+export interface CreateOvertimeStaffShortageInput {
+  overtime_type: 'STAFF_SHORTAGE';
+  month: string;
+  year: number;
+  reason_category: 'STAFF_SHORTAGE' | 'REPORTING' | 'ENERGY_PRODUCTION';
+  reason_detail: string;
+  hr_note?: string;
+  entries: Array<{
+    role_title: string;
+    overtime_hours: number;
+    overtime_pay: number;
+  }>;
+}
+
+export type CreateOvertimeInput = CreateOvertimeEmergencyInput | CreateOvertimeStaffShortageInput;

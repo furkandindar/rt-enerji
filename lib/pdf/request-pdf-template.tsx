@@ -335,8 +335,13 @@ export const RequestPDFTemplate: React.FC<RequestPDFTemplateProps> = ({
     return primaryPosition?.position?.title || '-';
   };
 
-  // Varolan izin günü (örnek - gerçek verinize göre güncellenmeli)
-  const varolanIzinGunu = leaveRequest?.remaining_leave_days || '-';
+  // Kalan izin günü (Personel Müdürlüğü tarafından giriliyor)
+  const kalanIzinGunu = leaveRequest?.remaining_days !== null && leaveRequest?.remaining_days !== undefined
+    ? `${leaveRequest.remaining_days} gün`
+    : '-';
+
+  // HR notu (Personel Müdürlüğü tarafından giriliyor - opsiyonel)
+  const hrNote = leaveRequest?.hr_note || null;
 
   // Onay sütunları - Screenshot'taki gibi 5 sütun
   const getApprovalColumns = () => {
@@ -440,16 +445,23 @@ export const RequestPDFTemplate: React.FC<RequestPDFTemplateProps> = ({
               <View style={styles.labelCell}><Text style={styles.labelText}>İzin Gün Sayısı</Text></View>
               <View style={styles.valueCell}><Text style={styles.valueText}>{leaveRequest?.total_days || '-'} gün</Text></View>
             </View>
-            {/* Varolan İzin Günü */}
+            {/* Kalan İzin Günü */}
             <View style={styles.tableRow}>
-              <View style={styles.labelCell}><Text style={styles.labelText}>Varolan İzin Günü</Text></View>
-              <View style={styles.valueCell}><Text style={styles.valueText}>{varolanIzinGunu}</Text></View>
+              <View style={styles.labelCell}><Text style={styles.labelText}>Kalan İzin Günü</Text></View>
+              <View style={styles.valueCell}><Text style={styles.valueText}>{kalanIzinGunu}</Text></View>
             </View>
             {/* İzin Talep Nedeni */}
-            <View style={styles.tableRowLast}>
+            <View style={hrNote ? styles.tableRow : styles.tableRowLast}>
               <View style={styles.labelCell}><Text style={styles.labelText}>İzin Talep Nedeni</Text></View>
               <View style={styles.valueCell}><Text style={styles.valueText}>{leaveRequest?.reason || '-'}</Text></View>
             </View>
+            {/* İK Notu - Sadece varsa göster */}
+            {hrNote && (
+              <View style={styles.tableRowLast}>
+                <View style={styles.labelCell}><Text style={styles.labelText}>İK Notu</Text></View>
+                <View style={styles.valueCell}><Text style={styles.valueText}>{hrNote}</Text></View>
+              </View>
+            )}
           </View>
 
           {/* Right Column */}

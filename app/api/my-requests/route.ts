@@ -35,6 +35,10 @@ export async function GET(request: NextRequest) {
         workflow_definition:workflow_definitions(id, code, name),
         leave_request:leave_requests(*),
         salary_advance_request:salary_advance_requests(*),
+        overtime_request:overtime_requests(
+          *,
+          entries:overtime_entries(*)
+        ),
         requester:employees!requester_employee_id(
           id,
           first_name,

@@ -269,7 +269,8 @@ export async function determineApprover(
   }
 
   // STATIC_POSITION: Belirtilen pozisyondaki kişi
-  // Eğer onaycı = talep eden ise, aynı birimde alternatif ara
+  // Eğer onaycı = talep eden ise VE action_type SIGN_ONLY ise, alternatif ara
+  // FILL_AND_SIGN için alternatif arama - kişi formu doldurup imzalıyor
   if (step.approver_type === 'STATIC_POSITION') {
     if (!step.static_position_id) {
       throw new Error(`Step "${step.name}" requires static_position_id`);
@@ -278,8 +279,9 @@ export async function determineApprover(
     // Pozisyondaki kişiyi bul
     const approverEmployeeId = await getEmployeeByPosition(supabase, step.static_position_id);
 
-    // Eğer onaycı = talep eden ise, alternatif bul
-    if (approverEmployeeId === requesterEmployeeId) {
+    // Eğer onaycı = talep eden ise VE SIGN_ONLY ise, alternatif bul
+    // FILL_AND_SIGN için alternatif aramıyoruz çünkü kişi formu doldurup imzalıyor
+    if (approverEmployeeId === requesterEmployeeId && step.action_type !== 'FILL_AND_SIGN') {
       return findAlternativeForStaticPosition(
         supabase,
         step.static_position_id,
@@ -361,7 +363,9 @@ async function determineUnitHeadApprover(
 
 /**
  * Bir talep için tüm approval kayıtlarını oluşturur.
- * Eğer ilk adım REQUESTER tipindeyse otomatik olarak onaylar.
+ * Eğer ilk adım aşağıdaki koşullardan birini sağlıyorsa otomatik olarak onaylar:
+ * 1. REQUESTER tipinde ise (talep eden kendi formunu imzalıyor)
+ * 2. FILL_AND_SIGN action'ı ile talep eden = onaycı ise (örn: İK kendi formu dolduruyor)
  */
 export async function createApprovalChain(
   supabase: SupabaseClient,
@@ -383,7 +387,7 @@ export async function createApprovalChain(
 
   // 2. Her adım için onaycıyı belirle ve approval kaydı oluştur
   const approvals = [];
-  let firstRequesterStepId: string | null = null;
+  let shouldAutoApproveFirstStep = false;
 
   for (const step of steps) {
     const approverEmployeeId = await determineApprover(
@@ -396,20 +400,26 @@ export async function createApprovalChain(
       throw new Error(`Could not determine approver for step: ${step.name}`);
     }
 
-    // İlk adım REQUESTER tipinde mi kontrol et
+    // İlk adımı otomatik onaylama koşulları:
+    // 1. REQUESTER tipinde ise
+    // 2. FILL_AND_SIGN action'ı ile talep eden = onaycı ise
     const isFirstRequesterStep = step.step_order === 1 && step.approver_type === 'REQUESTER';
+    const isFirstFillAndSignByRequester = step.step_order === 1 &&
+                                           step.action_type === 'FILL_AND_SIGN' &&
+                                           approverEmployeeId === requesterEmployeeId;
+    const autoApproveThisStep = isFirstRequesterStep || isFirstFillAndSignByRequester;
 
     approvals.push({
       request_id: requestId,
       workflow_step_id: step.id,
       approver_employee_id: approverEmployeeId,
-      // REQUESTER adımını otomatik onayla
-      status: isFirstRequesterStep ? 'APPROVED' : 'PENDING',
-      decided_at: isFirstRequesterStep ? new Date().toISOString() : null,
+      // Koşul sağlanıyorsa otomatik onayla
+      status: autoApproveThisStep ? 'APPROVED' : 'PENDING',
+      decided_at: autoApproveThisStep ? new Date().toISOString() : null,
     });
 
-    if (isFirstRequesterStep) {
-      firstRequesterStepId = step.id;
+    if (autoApproveThisStep) {
+      shouldAutoApproveFirstStep = true;
     }
   }
 
@@ -422,8 +432,8 @@ export async function createApprovalChain(
     throw new Error(`Failed to create approval chain: ${insertError.message}`);
   }
 
-  // 4. Eğer ilk adım REQUESTER ise, current_step'i 2'ye güncelle
-  if (firstRequesterStepId) {
+  // 4. Eğer ilk adım otomatik onaylandıysa, current_step'i 2'ye güncelle
+  if (shouldAutoApproveFirstStep) {
     const { error: updateError } = await supabase
       .from('requests')
       .update({ current_step: 2 })

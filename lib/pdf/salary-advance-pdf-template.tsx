@@ -148,7 +148,7 @@ export const SalaryAdvancePDFTemplate: React.FC<SalaryAdvancePDFTemplateProps> =
             <View style={styles.rightTopRow}><View style={styles.rightLabelCell}><Text style={styles.labelText}>Ödeme Şekli:</Text></View><View style={styles.rightValueCell}><Text style={styles.valueText}>{paymentMethodLabels[salaryAdvanceRequest?.payment_method] || '-'}</Text></View></View>
             <View style={styles.infoBox}>
               <Text style={styles.infoBold}>Maaş Kesinti Muvafakatı:</Text>
-              <Text style={styles.infoText}>{salaryAdvanceRequest?.salary_deduction_consent ? '✓ Talep ettiğim avans tutarının maaşımdan kesilmesini kabul ediyorum.' : '✗ Onaylanmadı'}</Text>
+              <Text style={styles.infoText}>{salaryAdvanceRequest?.salary_deduction_consent ? 'Maaş kesintisine ilişkin muvafakatname ilgili personelden ıslak imza ile teslim alınmıştır.' : '✗ Onaylanmadı'}</Text>
             </View>
           </View>
         </View>

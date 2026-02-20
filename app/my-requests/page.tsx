@@ -104,6 +104,32 @@ interface SalaryAdvanceRequest {
   salary_deduction_consent: boolean;
 }
 
+interface OvertimeEntry {
+  id: string;
+  role_title: string;
+  overtime_hours: number;
+  overtime_pay: number;
+}
+
+interface OvertimeRequest {
+  id: string;
+  overtime_type: 'EMERGENCY' | 'STAFF_SHORTAGE';
+  month: string;
+  year: number;
+  reason_category: string;
+  reason_detail: string;
+  hr_note: string | null;
+  work_location: string | null;
+  work_start_date: string | null;
+  work_end_date: string | null;
+  previous_shift: string | null;
+  next_shift: string | null;
+  work_reason: string | null;
+  total_hours: number | null;
+  total_pay: number | null;
+  entries?: OvertimeEntry[];
+}
+
 interface Request {
   id: string;
   status: string;
@@ -112,6 +138,7 @@ interface Request {
   workflow_definition: WorkflowDefinition;
   leave_request?: LeaveRequestData;
   salary_advance_request?: SalaryAdvanceRequest;
+  overtime_request?: OvertimeRequest;
   requester?: Requester;
   approvals?: Approval[];
 }
@@ -147,6 +174,22 @@ const approvalStatusColors: Record<string, string> = {
 const leaveTypeLabels: Record<string, string> = {
   ANNUAL_LEAVE: "Yıllık İzin",
   SHORT_LEAVE: "Kısa Süreli İzin",
+};
+
+const overtimeTypeLabels: Record<string, string> = {
+  EMERGENCY: "Acil Durum / Talep Üzerine",
+  STAFF_SHORTAGE: "Personel Eksikliği / Raporlama",
+};
+
+const overtimeReasonLabels: Record<string, string> = {
+  SHIFT_OUTSIDE: "Vardiya Dışı",
+  NON_CONTINUOUS: "Sürekli Olmayan",
+  EMERGENCY_CASE: "Acil Durumlar",
+  SUDDEN_DEVELOPMENT: "Ani Gelişen",
+  ON_REQUEST: "Talep Üzerine",
+  STAFF_SHORTAGE: "Personel Eksikliği",
+  REPORTING: "Raporlama",
+  ENERGY_PRODUCTION: "7/24 Enerji Üretimi",
 };
 
 export default function MyRequestsPage() {
@@ -199,6 +242,10 @@ export default function MyRequestsPage() {
     }
     if (request.salary_advance_request) {
       return `${request.salary_advance_request.amount.toLocaleString('tr-TR')} TL`;
+    }
+    if (request.overtime_request) {
+      const ot = request.overtime_request;
+      return `${ot.month} ${ot.year} - ${overtimeTypeLabels[ot.overtime_type]}`;
     }
     return "-";
   };
@@ -466,6 +513,126 @@ export default function MyRequestsPage() {
                       {selectedRequest.salary_advance_request.salary_deduction_consent ? 'Onaylandı' : 'Onaylanmadı'}
                     </p>
                   </div>
+                </>
+              )}
+
+              {/* Overtime Request specific fields */}
+              {selectedRequest.overtime_request && (
+                <>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">Fazla Mesai Tipi</p>
+                      <p className="text-sm font-semibold">
+                        {overtimeTypeLabels[selectedRequest.overtime_request.overtime_type]}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">Dönem</p>
+                      <p className="text-sm font-semibold">
+                        {selectedRequest.overtime_request.month} {selectedRequest.overtime_request.year}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">Neden Kategorisi</p>
+                      <p className="text-sm font-semibold">
+                        {overtimeReasonLabels[selectedRequest.overtime_request.reason_category]}
+                      </p>
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground">Talep Eden Kişi/Durum</p>
+                    <p className="text-sm font-semibold">{selectedRequest.overtime_request.reason_detail}</p>
+                  </div>
+
+                  {/* EMERGENCY specific fields */}
+                  {selectedRequest.overtime_request.overtime_type === 'EMERGENCY' && (
+                    <>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <p className="text-sm font-medium text-muted-foreground">Çalışma Yeri</p>
+                          <p className="text-sm font-semibold">{selectedRequest.overtime_request.work_location || "-"}</p>
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-muted-foreground">Çalışma Nedeni</p>
+                          <p className="text-sm font-semibold">{selectedRequest.overtime_request.work_reason || "-"}</p>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <p className="text-sm font-medium text-muted-foreground">Çalışma Başlangıç</p>
+                          <p className="text-sm font-semibold">
+                            {selectedRequest.overtime_request.work_start_date
+                              ? format(new Date(selectedRequest.overtime_request.work_start_date), "d MMM yyyy HH:mm", { locale: tr })
+                              : "-"}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-muted-foreground">Çalışma Bitiş</p>
+                          <p className="text-sm font-semibold">
+                            {selectedRequest.overtime_request.work_end_date
+                              ? format(new Date(selectedRequest.overtime_request.work_end_date), "d MMM yyyy HH:mm", { locale: tr })
+                              : "-"}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <p className="text-sm font-medium text-muted-foreground">Önceki Mesai Saati</p>
+                          <p className="text-sm font-semibold">{selectedRequest.overtime_request.previous_shift || "-"}</p>
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-muted-foreground">Sonraki Mesai Saati</p>
+                          <p className="text-sm font-semibold">{selectedRequest.overtime_request.next_shift || "-"}</p>
+                        </div>
+                      </div>
+                    </>
+                  )}
+
+                  {/* STAFF_SHORTAGE specific fields */}
+                  {selectedRequest.overtime_request.overtime_type === 'STAFF_SHORTAGE' && selectedRequest.overtime_request.entries && (
+                    <div className="space-y-2">
+                      <p className="text-sm font-medium text-muted-foreground">Çalışan Listesi</p>
+                      <div className="rounded-md border">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Rol/Unvan</TableHead>
+                              <TableHead>FM Saati</TableHead>
+                              <TableHead>Ücret (TL)</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {selectedRequest.overtime_request.entries.map((entry) => (
+                              <TableRow key={entry.id}>
+                                <TableCell>{entry.role_title}</TableCell>
+                                <TableCell>{entry.overtime_hours} saat</TableCell>
+                                <TableCell>{entry.overtime_pay.toLocaleString('tr-TR')} TL</TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4 mt-2">
+                        <div>
+                          <p className="text-sm font-medium text-muted-foreground">Toplam Saat</p>
+                          <p className="text-sm font-semibold">{selectedRequest.overtime_request.total_hours || 0} saat</p>
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-muted-foreground">Toplam Ücret</p>
+                          <p className="text-sm font-semibold">{(selectedRequest.overtime_request.total_pay || 0).toLocaleString('tr-TR')} TL</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {selectedRequest.overtime_request.hr_note && (
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">İK Notu</p>
+                      <p className="text-sm font-semibold">{selectedRequest.overtime_request.hr_note}</p>
+                    </div>
+                  )}
                 </>
               )}
 

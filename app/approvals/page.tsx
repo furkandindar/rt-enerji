@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Table,
   TableBody,
@@ -93,6 +94,32 @@ interface SalaryAdvanceRequest {
   salary_deduction_consent: boolean;
 }
 
+interface OvertimeEntry {
+  id: string;
+  role_title: string;
+  overtime_hours: number;
+  overtime_pay: number;
+}
+
+interface OvertimeRequest {
+  id: string;
+  overtime_type: 'EMERGENCY' | 'STAFF_SHORTAGE';
+  month: string;
+  year: number;
+  reason_category: string;
+  reason_detail: string;
+  hr_note: string | null;
+  work_location: string | null;
+  work_start_date: string | null;
+  work_end_date: string | null;
+  previous_shift: string | null;
+  next_shift: string | null;
+  work_reason: string | null;
+  total_hours: number | null;
+  total_pay: number | null;
+  entries?: OvertimeEntry[];
+}
+
 interface PendingApproval {
   id: string;
   status: string;
@@ -100,6 +127,8 @@ interface PendingApproval {
   workflow_step: {
     name: string;
     step_order: number;
+    action_type: 'FILL_AND_SIGN' | 'SIGN_ONLY';
+    form_section_key: string | null;
   };
   request: {
     id: string;
@@ -115,9 +144,12 @@ interface PendingApproval {
       start_datetime: string;
       end_datetime: string;
       total_days: number;
+      remaining_days: number | null;
       reason: string | null;
+      hr_note: string | null;
     };
     salary_advance_request?: SalaryAdvanceRequest;
+    overtime_request?: OvertimeRequest;
     approvals?: Approval[];
   };
 }
@@ -125,6 +157,22 @@ interface PendingApproval {
 const leaveTypeLabels: Record<string, string> = {
   ANNUAL_LEAVE: "Yıllık İzin",
   SHORT_LEAVE: "Kısa Süreli İzin",
+};
+
+const overtimeTypeLabels: Record<string, string> = {
+  EMERGENCY: "Acil Durum / Talep Üzerine",
+  STAFF_SHORTAGE: "Personel Eksikliği / Raporlama",
+};
+
+const overtimeReasonLabels: Record<string, string> = {
+  SHIFT_OUTSIDE: "Vardiya Dışı",
+  NON_CONTINUOUS: "Sürekli Olmayan",
+  EMERGENCY_CASE: "Acil Durumlar",
+  SUDDEN_DEVELOPMENT: "Ani Gelişen",
+  ON_REQUEST: "Talep Üzerine",
+  STAFF_SHORTAGE: "Personel Eksikliği",
+  REPORTING: "Raporlama",
+  ENERGY_PRODUCTION: "7/24 Enerji Üretimi",
 };
 
 const approvalStatusLabels: Record<string, string> = {
@@ -169,6 +217,13 @@ export default function ApprovalsPage() {
   const [comment, setComment] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // HR form states (Personel Müdürlüğü için)
+  const [remainingDays, setRemainingDays] = useState<string>("");
+  const [hrNote, setHrNote] = useState<string>("");
+
+  // Salary deduction consent state (Personel Müdürlüğü - Avans için)
+  const [salaryDeductionConsent, setSalaryDeductionConsent] = useState(false);
+
   // Signature states
   const [signatureAccepted, setSignatureAccepted] = useState(false);
   const [signatureInfo, setSignatureInfo] = useState<SignatureInfo>({
@@ -183,8 +238,23 @@ export default function ApprovalsPage() {
 
   // İmza var mı?
   const hasValidSignature = Boolean(signatureInfo.signatureText && signatureInfo.signatureFont);
-  // Onay için imza kabul edilmeli
-  const canApprove = hasValidSignature && signatureAccepted;
+
+  // HR form mu? (FILL_AND_SIGN + hr_details)
+  const isHrForm = selectedApproval?.workflow_step?.action_type === 'FILL_AND_SIGN' &&
+                   selectedApproval?.workflow_step?.form_section_key === 'hr_details';
+
+  // Salary deduction consent form mu? (FILL_AND_SIGN + salary_deduction_consent)
+  const isSalaryConsentForm = selectedApproval?.workflow_step?.action_type === 'FILL_AND_SIGN' &&
+                              selectedApproval?.workflow_step?.form_section_key === 'salary_deduction_consent';
+
+  // HR form için remaining_days zorunlu
+  const hrFormValid = !isHrForm || (remainingDays.trim() !== "" && !isNaN(Number(remainingDays)));
+
+  // Salary consent form için checkbox zorunlu
+  const salaryConsentFormValid = !isSalaryConsentForm || salaryDeductionConsent;
+
+  // Onay için imza kabul edilmeli ve tüm formlar valid olmalı
+  const canApprove = hasValidSignature && signatureAccepted && hrFormValid && salaryConsentFormValid;
 
   const getRequesterFullName = (requester?: Requester): string => {
     if (!requester) return "-";
@@ -205,6 +275,10 @@ export default function ApprovalsPage() {
     }
     if (approval.request.salary_advance_request) {
       return `${approval.request.salary_advance_request.amount.toLocaleString('tr-TR')} TL`;
+    }
+    if (approval.request.overtime_request) {
+      const ot = approval.request.overtime_request;
+      return `${ot.month} ${ot.year} - ${overtimeTypeLabels[ot.overtime_type]}`;
     }
     return "-";
   };
@@ -230,9 +304,12 @@ export default function ApprovalsPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // selectedApproval değiştiğinde signatureAccepted'ı sıfırla
+  // selectedApproval değiştiğinde form state'lerini sıfırla
   useEffect(() => {
     setSignatureAccepted(false);
+    setRemainingDays("");
+    setHrNote("");
+    setSalaryDeductionConsent(false);
   }, [selectedApproval]);
 
   const loadSignatureInfo = async () => {
@@ -286,12 +363,51 @@ export default function ApprovalsPage() {
       return;
     }
 
+    // HR form validasyonu (onay durumunda)
+    if (decision === "APPROVED" && isHrForm) {
+      if (!remainingDays.trim() || isNaN(Number(remainingDays))) {
+        toast.error("Kalan izin günü zorunludur");
+        return;
+      }
+    }
+
+    // Salary consent form validasyonu (onay durumunda)
+    if (decision === "APPROVED" && isSalaryConsentForm) {
+      if (!salaryDeductionConsent) {
+        toast.error("Maaş kesinti muvafakatını onaylamanız gerekiyor");
+        return;
+      }
+    }
+
     setIsSubmitting(true);
     try {
+      // Request body hazırla
+      const requestBody: {
+        decision: string;
+        comment: string;
+        hr_fields?: { remaining_days: number; hr_note?: string };
+        salary_consent_fields?: { consent: boolean };
+      } = { decision, comment };
+
+      // HR form ise hr_fields ekle
+      if (decision === "APPROVED" && isHrForm) {
+        requestBody.hr_fields = {
+          remaining_days: Number(remainingDays),
+          hr_note: hrNote.trim() || undefined,
+        };
+      }
+
+      // Salary consent form ise salary_consent_fields ekle
+      if (decision === "APPROVED" && isSalaryConsentForm) {
+        requestBody.salary_consent_fields = {
+          consent: salaryDeductionConsent,
+        };
+      }
+
       const response = await fetch(`/api/approvals/${selectedApproval.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ decision, comment }),
+        body: JSON.stringify(requestBody),
       });
 
       if (!response.ok) {
@@ -302,6 +418,9 @@ export default function ApprovalsPage() {
       toast.success(decision === "APPROVED" ? "Talep onaylandı" : "Talep reddedildi");
       setSelectedApproval(null);
       setComment("");
+      setRemainingDays("");
+      setHrNote("");
+      setSalaryDeductionConsent(false);
       fetchApprovals();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Bir hata oluştu");
@@ -586,7 +705,7 @@ export default function ApprovalsPage() {
           setComment("");
         }
       }}>
-        <SheetContent className="overflow-y-auto sm:max-w-[550px]">
+        <SheetContent className="overflow-y-auto sm:max-w-[750px]">
           <SheetHeader>
             <SheetTitle>Talep Detayları</SheetTitle>
             <SheetDescription>
@@ -618,12 +737,12 @@ export default function ApprovalsPage() {
                     {selectedApproval.request.workflow_definition?.name || "-"}
                   </p>
                 </div>
-                <div>
+                {/* <div>
                   <p className="text-sm font-medium text-muted-foreground">Sicil No</p>
                   <p className="text-sm font-semibold">
                     {selectedApproval.request.requester?.employee_no || "-"}
                   </p>
-                </div>
+                </div> */}
               </div>
 
               {/* Leave Request specific fields */}
@@ -663,6 +782,25 @@ export default function ApprovalsPage() {
                       <p className="text-sm font-semibold">{selectedApproval.request.leave_request.reason}</p>
                     </div>
                   )}
+                  {(selectedApproval.request.leave_request.remaining_days !== null ||
+                    selectedApproval.request.leave_request.hr_note) && (
+                    <div className="grid grid-cols-2 gap-4 border-t pt-3 mt-1">
+                      {selectedApproval.request.leave_request.remaining_days !== null && (
+                        <div>
+                          <p className="text-sm font-medium text-muted-foreground">Kalan İzin Günü</p>
+                          <p className="text-sm font-semibold">
+                            {selectedApproval.request.leave_request.remaining_days} gün
+                          </p>
+                        </div>
+                      )}
+                      {selectedApproval.request.leave_request.hr_note && (
+                        <div>
+                          <p className="text-sm font-medium text-muted-foreground">İK Notu</p>
+                          <p className="text-sm font-semibold">{selectedApproval.request.leave_request.hr_note}</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </>
               )}
 
@@ -689,6 +827,126 @@ export default function ApprovalsPage() {
                       {selectedApproval.request.salary_advance_request.salary_deduction_consent ? 'Onaylandı' : 'Onaylanmadı'}
                     </p>
                   </div>
+                </>
+              )}
+
+              {/* Overtime Request specific fields */}
+              {selectedApproval.request.overtime_request && (
+                <>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">Fazla Mesai Tipi</p>
+                      <p className="text-sm font-semibold">
+                        {overtimeTypeLabels[selectedApproval.request.overtime_request.overtime_type]}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">Dönem</p>
+                      <p className="text-sm font-semibold">
+                        {selectedApproval.request.overtime_request.month} {selectedApproval.request.overtime_request.year}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">Neden Kategorisi</p>
+                      <p className="text-sm font-semibold">
+                        {overtimeReasonLabels[selectedApproval.request.overtime_request.reason_category]}
+                      </p>
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground">Talep Eden Kişi/Durum</p>
+                    <p className="text-sm font-semibold">{selectedApproval.request.overtime_request.reason_detail}</p>
+                  </div>
+
+                  {/* EMERGENCY specific fields */}
+                  {selectedApproval.request.overtime_request.overtime_type === 'EMERGENCY' && (
+                    <>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <p className="text-sm font-medium text-muted-foreground">Çalışma Yeri</p>
+                          <p className="text-sm font-semibold">{selectedApproval.request.overtime_request.work_location || "-"}</p>
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-muted-foreground">Çalışma Nedeni</p>
+                          <p className="text-sm font-semibold">{selectedApproval.request.overtime_request.work_reason || "-"}</p>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <p className="text-sm font-medium text-muted-foreground">Çalışma Başlangıç</p>
+                          <p className="text-sm font-semibold">
+                            {selectedApproval.request.overtime_request.work_start_date
+                              ? format(new Date(selectedApproval.request.overtime_request.work_start_date), "d MMM yyyy HH:mm", { locale: tr })
+                              : "-"}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-muted-foreground">Çalışma Bitiş</p>
+                          <p className="text-sm font-semibold">
+                            {selectedApproval.request.overtime_request.work_end_date
+                              ? format(new Date(selectedApproval.request.overtime_request.work_end_date), "d MMM yyyy HH:mm", { locale: tr })
+                              : "-"}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <p className="text-sm font-medium text-muted-foreground">Önceki Mesai Saati</p>
+                          <p className="text-sm font-semibold">{selectedApproval.request.overtime_request.previous_shift || "-"}</p>
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-muted-foreground">Sonraki Mesai Saati</p>
+                          <p className="text-sm font-semibold">{selectedApproval.request.overtime_request.next_shift || "-"}</p>
+                        </div>
+                      </div>
+                    </>
+                  )}
+
+                  {/* STAFF_SHORTAGE specific fields */}
+                  {selectedApproval.request.overtime_request.overtime_type === 'STAFF_SHORTAGE' && selectedApproval.request.overtime_request.entries && (
+                    <div className="space-y-2">
+                      <p className="text-sm font-medium text-muted-foreground">Çalışan Listesi</p>
+                      <div className="rounded-md border">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Rol/Unvan</TableHead>
+                              <TableHead>FM Saati</TableHead>
+                              <TableHead>Ücret (TL)</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {selectedApproval.request.overtime_request.entries.map((entry) => (
+                              <TableRow key={entry.id}>
+                                <TableCell>{entry.role_title}</TableCell>
+                                <TableCell>{entry.overtime_hours} saat</TableCell>
+                                <TableCell>{entry.overtime_pay.toLocaleString('tr-TR')} TL</TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4 mt-2">
+                        <div>
+                          <p className="text-sm font-medium text-muted-foreground">Toplam Saat</p>
+                          <p className="text-sm font-semibold">{selectedApproval.request.overtime_request.total_hours || 0} saat</p>
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-muted-foreground">Toplam Ücret</p>
+                          <p className="text-sm font-semibold">{(selectedApproval.request.overtime_request.total_pay || 0).toLocaleString('tr-TR')} TL</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {selectedApproval.request.overtime_request.hr_note && (
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">İK Notu</p>
+                      <p className="text-sm font-semibold">{selectedApproval.request.overtime_request.hr_note}</p>
+                    </div>
+                  )}
                 </>
               )}
 
@@ -787,6 +1045,70 @@ export default function ApprovalsPage() {
                       onChange={(e) => setComment(e.target.value)}
                     />
                   </div>
+
+                  {/* HR Form Alanları - Sadece Personel Müdürlüğü için */}
+                  {isHrForm && (
+                    <div className="space-y-4 border-t pt-4">
+                      <div className="text-sm font-medium text-muted-foreground">
+                        Personel Müdürlüğü Bilgileri
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="remaining_days" className="text-sm font-medium">
+                          Kalan İzin Günü <span className="text-red-500">*</span>
+                        </Label>
+                        <Input
+                          id="remaining_days"
+                          type="number"
+                          min="0"
+                          placeholder="Örn: 15"
+                          value={remainingDays}
+                          onChange={(e) => setRemainingDays(e.target.value)}
+                          disabled={isSubmitting}
+                        />
+                        {remainingDays && isNaN(Number(remainingDays)) && (
+                          <p className="text-sm text-red-500">Geçerli bir sayı giriniz</p>
+                        )}
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="hr_note" className="text-sm font-medium">
+                          İK Notu (Opsiyonel)
+                        </Label>
+                        <Input
+                          id="hr_note"
+                          placeholder="İsteğe bağlı not ekleyebilirsiniz..."
+                          value={hrNote}
+                          onChange={(e) => setHrNote(e.target.value)}
+                          disabled={isSubmitting}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Salary Deduction Consent Form - Personel Müdürlüğü Avans için */}
+                  {isSalaryConsentForm && (
+                    <div className="space-y-4 border-t pt-4">
+                      <div className="text-sm font-medium text-muted-foreground">
+                        Maaş Kesinti Muvafakatnamesi
+                      </div>
+                      <div className="flex items-start space-x-3 rounded-md border p-4">
+                        <Checkbox
+                          id="salary_deduction_consent"
+                          checked={salaryDeductionConsent}
+                          onCheckedChange={(checked) => setSalaryDeductionConsent(checked === true)}
+                          disabled={isSubmitting}
+                        />
+                        <div className="space-y-1 leading-none">
+                          <Label htmlFor="salary_deduction_consent" className="text-sm font-medium">
+                            Maaş Kesinti Muvafakatı <span className="text-red-500">*</span>
+                          </Label>
+                          <p className="text-sm text-muted-foreground">
+                            Maaş kesintisine ilişkin muvafakatname ilgili personelden ıslak imza ile teslim alınmıştır.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   {/* İmza Paneli */}
                   <SignaturePanel

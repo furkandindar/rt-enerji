@@ -18,9 +18,16 @@ export async function PATCH(
     const { id } = await params;
     const body = await request.json();
 
-    const { decision, comment } = body as { 
-      decision: 'APPROVED' | 'REJECTED'; 
+    const { decision, comment, hr_fields, salary_consent_fields } = body as {
+      decision: 'APPROVED' | 'REJECTED';
       comment?: string;
+      hr_fields?: {
+        remaining_days?: number;
+        hr_note?: string;
+      };
+      salary_consent_fields?: {
+        consent: boolean;
+      };
     };
 
     if (!decision || !['APPROVED', 'REJECTED'].includes(decision)) {
@@ -75,7 +82,73 @@ export async function PATCH(
       return NextResponse.json({ error: "Not your turn to approve" }, { status: 400 });
     }
 
-    // 3. Approval'ı güncelle
+    // 3. FILL_AND_SIGN adımları için HR alanlarını güncelle (sadece onay durumunda)
+    if (decision === 'APPROVED' && stepData.action_type === 'FILL_AND_SIGN' && stepData.form_section_key === 'hr_details') {
+      // remaining_days zorunlu kontrol
+      if (hr_fields?.remaining_days === undefined || hr_fields?.remaining_days === null) {
+        return NextResponse.json({ error: "Kalan izin günü (remaining_days) zorunludur" }, { status: 400 });
+      }
+
+      // leave_requests tablosunu güncelle
+      const { data: leaveRequest } = await supabase
+        .from("leave_requests")
+        .select("id")
+        .eq("request_id", requestData.id)
+        .single();
+
+      if (leaveRequest) {
+        const { error: hrUpdateError } = await supabase
+          .from("leave_requests")
+          .update({
+            remaining_days: hr_fields.remaining_days,
+            hr_note: hr_fields.hr_note || null,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", leaveRequest.id);
+
+        if (hrUpdateError) {
+          console.error("Error updating HR fields:", hrUpdateError);
+          return NextResponse.json({ error: "Failed to update HR fields" }, { status: 500 });
+        }
+
+        console.log("HR fields updated successfully:", {
+          remaining_days: hr_fields.remaining_days,
+          hr_note: hr_fields.hr_note,
+        });
+      }
+    }
+
+    // 3b. FILL_AND_SIGN adımları için salary_deduction_consent güncelle (sadece onay durumunda)
+    if (decision === 'APPROVED' && stepData.action_type === 'FILL_AND_SIGN' && stepData.form_section_key === 'salary_deduction_consent') {
+      if (!salary_consent_fields?.consent) {
+        return NextResponse.json({ error: "Maaş kesinti muvafakatı zorunludur" }, { status: 400 });
+      }
+
+      const { data: advanceRequest } = await supabase
+        .from("salary_advance_requests")
+        .select("id")
+        .eq("request_id", requestData.id)
+        .single();
+
+      if (advanceRequest) {
+        const { error: consentUpdateError } = await supabase
+          .from("salary_advance_requests")
+          .update({
+            salary_deduction_consent: true,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", advanceRequest.id);
+
+        if (consentUpdateError) {
+          console.error("Error updating salary deduction consent:", consentUpdateError);
+          return NextResponse.json({ error: "Failed to update salary deduction consent" }, { status: 500 });
+        }
+
+        console.log("Salary deduction consent updated successfully for request:", requestData.id);
+      }
+    }
+
+    // 4. Approval'ı güncelle
     const { error: updateError } = await supabase
       .from("request_approvals")
       .update({

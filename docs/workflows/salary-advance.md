@@ -47,7 +47,7 @@ Maaş avans talebi, çalışanların maaşlarından avans talep etmelerini sağl
 | Adım | Onaycı | approver_type | action_type | form_section_key | Not |
 |------|--------|---------------|-------------|------------------|-----|
 | 1 | Talep Eden | `REQUESTER` | `FILL_AND_SIGN` | `advance_details` | Formu doldurur + imzalar |
-| 2 | Personel (İK) | `STATIC_POSITION` | `SIGN_ONLY` | `null` | Muvafakatname 25% kontrolü |
+| 2 | Personel (İK) | `STATIC_POSITION` | `FILL_AND_SIGN` | `salary_deduction_consent` | Maaş kesinti muvafakatını onaylar + imzalar |
 | 3 | Muhasebe | `STATIC_POSITION` | `SIGN_ONLY` | `null` | Avans kaydı, avans durumu |
 | 4 | Finans | `STATIC_POSITION` | `SIGN_ONLY` | `null` | - |
 | 5 | Genel Koordinatör | `STATIC_POSITION` | `SIGN_ONLY` | `null` | - |
@@ -71,9 +71,9 @@ VALUES ('SALARY_ADVANCE', 'Maaş Avans Talebi', 'Maaş avans talep süreci', tru
 INSERT INTO workflow_steps (workflow_definition_id, step_order, name, approver_type, static_position_id, is_required, action_type, form_section_key)
 VALUES ('<workflow_id>', 1, 'Talep Eden', 'REQUESTER', NULL, true, 'FILL_AND_SIGN', 'advance_details');
 
--- Adım 2: Personel
+-- Adım 2: Personel (Maaş Kesinti Muvafakatı)
 INSERT INTO workflow_steps (workflow_definition_id, step_order, name, approver_type, static_position_id, is_required, action_type, form_section_key)
-VALUES ('<workflow_id>', 2, 'Personel', 'STATIC_POSITION', '<personel_position_id>', true, 'SIGN_ONLY', NULL);
+VALUES ('<workflow_id>', 2, 'Personel', 'STATIC_POSITION', '<personel_position_id>', true, 'FILL_AND_SIGN', 'salary_deduction_consent');
 
 -- Adım 3: Muhasebe
 INSERT INTO workflow_steps (workflow_definition_id, step_order, name, approver_type, static_position_id, is_required, action_type, form_section_key)

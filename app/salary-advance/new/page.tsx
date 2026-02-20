@@ -30,12 +30,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Checkbox } from "@/components/ui/checkbox";
+
 
 const salaryAdvanceSchema = z.object({
-  amount: z.number({ required_error: "Avans miktarı gerekli" }).min(1, "Avans miktarı 0'dan büyük olmalı"),
-  payment_method: z.enum(["CASH", "BANK_TRANSFER"], { required_error: "Ödeme şekli seçin" }),
-  salary_deduction_consent: z.boolean(),
+  amount: z.number({ message: "Avans miktarı gerekli" }).min(1, "Avans miktarı 0'dan büyük olmalı"),
+  payment_method: z.enum(["CASH", "BANK_TRANSFER"], { message: "Ödeme şekli seçin" }),
 });
 
 type SalaryAdvanceFormValues = z.infer<typeof salaryAdvanceSchema>;
@@ -97,20 +96,13 @@ export default function NewSalaryAdvancePage() {
     defaultValues: {
       amount: undefined,
       payment_method: "BANK_TRANSFER",
-      salary_deduction_consent: false,
     },
   });
 
   const hasValidSignature = Boolean(signatureInfo.signatureText && signatureInfo.signatureFont);
-  const watchConsent = form.watch("salary_deduction_consent");
-  const canSubmit = hasValidSignature && signatureAccepted && watchConsent;
+  const canSubmit = hasValidSignature && signatureAccepted;
 
   const onSubmit = async (data: SalaryAdvanceFormValues) => {
-    if (!watchConsent) {
-      toast.error("Maaş kesinti muvafakatını onaylamanız gerekiyor");
-      return;
-    }
-
     setIsSubmitting(true);
     try {
       const response = await fetch("/api/salary-advance", {
@@ -119,7 +111,6 @@ export default function NewSalaryAdvancePage() {
         body: JSON.stringify({
           amount: data.amount,
           payment_method: data.payment_method,
-          salary_deduction_consent: data.salary_deduction_consent,
         }),
       });
 
@@ -200,30 +191,6 @@ export default function NewSalaryAdvancePage() {
                       </SelectContent>
                     </Select>
                     <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              {/* Maaş Kesinti Muvafakatı */}
-              <FormField
-                control={form.control}
-                name="salary_deduction_consent"
-                render={({ field }) => (
-                  <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
-                    <FormControl>
-                      <Checkbox
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                      />
-                    </FormControl>
-                    <div className="space-y-1 leading-none">
-                      <FormLabel>
-                        Maaş Kesinti Muvafakatı
-                      </FormLabel>
-                      <FormDescription>
-                        Talep ettiğim avans tutarının maaşımdan kesileceğini kabul ediyorum.
-                      </FormDescription>
-                    </div>
                   </FormItem>
                 )}
               />
