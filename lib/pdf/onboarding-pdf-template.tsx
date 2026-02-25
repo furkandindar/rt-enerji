@@ -1,5 +1,5 @@
 import React from 'react';
-import { Document, Page, Text, View, StyleSheet, Font, Image } from '@react-pdf/renderer';
+import { Document, Page, Text, View, StyleSheet, Font, Image, Svg, Path, Line } from '@react-pdf/renderer';
 import { format } from 'date-fns';
 import { SignatureFont } from '@/lib/signature/types';
 import path from 'path';
@@ -19,6 +19,7 @@ Font.register({
 Font.register({ family: 'Ballet', src: 'https://fonts.gstatic.com/s/ballet/v27/QGYyz_MYZA-HM4NjuGOVnUEXme1I4Xi3C4G-EiAou6Y.ttf' });
 Font.register({ family: 'Great Vibes', src: 'https://fonts.gstatic.com/s/greatvibes/v18/RWmMoKWR9v4ksMfaWd_JN-XCg6UKDXlq.ttf' });
 Font.register({ family: 'Sacramento', src: 'https://fonts.gstatic.com/s/sacramento/v15/buEzpo6gcdjy0EiZMBUG0CoV_NxLeiw.ttf' });
+
 
 const signatureFontMap: Record<SignatureFont, string> = { 'Ballet': 'Ballet', 'Great Vibes': 'Great Vibes', 'Sacramento': 'Sacramento' };
 
@@ -66,10 +67,35 @@ const styles = StyleSheet.create({
   signatureStatus: { fontSize: 7, color: '#666', textAlign: 'center' },
 });
 
-const checklistStatusLabels: Record<string, string> = {
-  DONE: '✓',
-  NOT_DONE: '✗',
-  NA: '—',
+const CheckIcon = () => (
+  <Svg width="10" height="10" viewBox="0 0 24 24">
+    <Path d="M5 13l4 4L19 7" stroke="#008000" strokeWidth="3" fill="none" />
+  </Svg>
+);
+
+const CrossIcon = () => (
+  <Svg width="10" height="10" viewBox="0 0 24 24">
+    <Line x1="6" y1="6" x2="18" y2="18" stroke="#CC0000" strokeWidth="3" />
+    <Line x1="18" y1="6" x2="6" y2="18" stroke="#CC0000" strokeWidth="3" />
+  </Svg>
+);
+
+const DashIcon = () => (
+  <Svg width="10" height="10" viewBox="0 0 24 24">
+    <Line x1="5" y1="12" x2="19" y2="12" stroke="#666666" strokeWidth="3" />
+  </Svg>
+);
+
+const statusIconMap: Record<string, React.FC> = {
+  DONE: CheckIcon,
+  NOT_DONE: CrossIcon,
+  NA: DashIcon,
+};
+
+const getStatusIcon = (status: string | null) => {
+  if (!status) return null;
+  const Icon = statusIconMap[status];
+  return Icon ? <Icon /> : null;
 };
 
 interface SignatureInfo { text: string; font: SignatureFont; }
@@ -148,10 +174,7 @@ export const OnboardingPDFTemplate: React.FC<OnboardingPDFTemplateProps> = ({
   const lastApproval = sortedApprovals.length > 0 ? sortedApprovals[sortedApprovals.length - 1] : null;
   const secondToLastApproval = sortedApprovals.length > 1 ? sortedApprovals[sortedApprovals.length - 2] : null;
 
-  const getStatusLabel = (status: string | null) => {
-    if (!status) return '';
-    return checklistStatusLabels[status] || status;
-  };
+
 
   return (
     <Document>
@@ -197,7 +220,7 @@ export const OnboardingPDFTemplate: React.FC<OnboardingPDFTemplateProps> = ({
               <View key={index} style={rowStyle}>
                 <View style={{ ...styles.tableCell, width: 22 }}><Text style={styles.tableCellCenter}>{index + 1}</Text></View>
                 <View style={{ ...styles.tableCell, width: 230 }}><Text style={styles.tableCellText}>{item.label}</Text></View>
-                <View style={{ ...styles.tableCell, width: 45 }}><Text style={styles.tableCellCenter}>{getStatusLabel(onboardingRequest[item.statusKey])}</Text></View>
+                <View style={{ ...styles.tableCell, width: 45, alignItems: 'center' }}>{getStatusIcon(onboardingRequest[item.statusKey])}</View>
                 <View style={{ ...styles.tableCell, width: 80, alignItems: 'center' }}>{sectionEmployeeId ? renderSignature(sectionEmployeeId, true) : null}</View>
                 <View style={{ ...styles.tableCellLast, flex: 1 }}><Text style={styles.tableCellText}>{onboardingRequest[item.notesKey] || ''}</Text></View>
               </View>
