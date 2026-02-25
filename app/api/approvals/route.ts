@@ -51,6 +51,7 @@ export async function GET() {
             *,
             entries:overtime_entries(*)
           ),
+          onboarding_request:onboarding_requests(*),
           approvals:request_approvals(
             id,
             status,

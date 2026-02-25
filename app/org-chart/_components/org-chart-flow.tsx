@@ -17,7 +17,7 @@ import ReactFlow, {
 } from "reactflow";
 import { toPng } from "html-to-image";
 import ExcelJS from "exceljs";
-import { jsPDF } from "jspdf";
+import { PDFDocument } from "pdf-lib";
 import dagre from "dagre";
 import "reactflow/dist/style.css";
 import { UnitNode } from "./unit-node";
@@ -172,15 +172,25 @@ function OrgChartFlowInner({ units }: OrgChartFlowProps) {
       if (!result) return;
 
       const { dataUrl, width, height } = result;
-      const isLandscape = width > height;
-      const pdf = new jsPDF({
-        orientation: isLandscape ? "landscape" : "portrait",
-        unit: "px",
-        format: [width, height],
-      });
 
-      pdf.addImage(dataUrl, "PNG", 0, 0, width, height);
-      pdf.save("organizasyon-semasi.pdf");
+      const pdfDoc = await PDFDocument.create();
+      const page = pdfDoc.addPage([width, height]);
+
+      const base64Data = dataUrl.replace(/^data:image\/png;base64,/, "");
+      const pngBytes = Uint8Array.from(atob(base64Data), (c) =>
+        c.charCodeAt(0)
+      );
+      const pngImage = await pdfDoc.embedPng(pngBytes);
+      page.drawImage(pngImage, { x: 0, y: 0, width, height });
+
+      const pdfBytes = await pdfDoc.save();
+      const blob = new Blob([pdfBytes.buffer as ArrayBuffer], { type: "application/pdf" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "organizasyon-semasi.pdf";
+      a.click();
+      URL.revokeObjectURL(url);
     } catch (error) {
       console.error("PDF export error:", error);
     } finally {

@@ -7,7 +7,9 @@ import { Eye, Loader2, ChevronLeft, ChevronRight, Download } from "lucide-react"
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { SignaturePanel } from "@/components/signature-panel";
+import { AttachmentUploader } from "@/components/attachment-uploader";
 import { SignatureFont } from "@/lib/signature/types";
+import type { WorkflowStepAttachmentConfig, RequestAttachment } from "@/lib/workflow/types";
 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -26,6 +28,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -125,6 +128,7 @@ interface PendingApproval {
   status: string;
   decided_at: string | null;
   workflow_step: {
+    id: string;
     name: string;
     step_order: number;
     action_type: 'FILL_AND_SIGN' | 'SIGN_ONLY';
@@ -150,9 +154,85 @@ interface PendingApproval {
     };
     salary_advance_request?: SalaryAdvanceRequest;
     overtime_request?: OvertimeRequest;
+    onboarding_request?: {
+      id: string;
+      employee_name: string | null;
+      employee_title: string | null;
+      department: string | null;
+      location: string | null;
+      job_description: string | null;
+      reporting_manager: string | null;
+      start_date: string | null;
+      employment_period: string | null;
+      [key: string]: string | null | undefined;
+    };
     approvals?: Approval[];
   };
 }
+
+// Onboarding checklist section tanımları
+interface ChecklistItem {
+  key: string;
+  label: string;
+}
+
+const onboardingSectionConfig: Record<string, { title: string; items: ChecklistItem[] }> = {
+  section_2: {
+    title: "Mail İşlemleri",
+    items: [
+      { key: "mail_setup", label: "Mail Adresinin Açılması" },
+      { key: "mail_groups", label: "Ekleneceği Mail/Sharepoint/Bulut Grupları" },
+    ],
+  },
+  section_3: {
+    title: "İK İşlemleri",
+    items: [
+      { key: "exit_reason_check", label: "İşten Çıkış Sebebi Kontrolü" },
+      { key: "sgk_verification", label: "CV/SGK Kontrolü" },
+      { key: "pdks_card", label: "PDKS Kayıtları" },
+      { key: "guidelines_delivery", label: "Yönergelerin Teslimi" },
+      { key: "stationery_request", label: "Kırtasiye Talepleri" },
+      { key: "desk_cabinet", label: "Masa/Dolap Tanımı" },
+      { key: "phone_setup", label: "Sabit Telefon" },
+      { key: "hiring_announcement", label: "İşe Alım Duyurusu" },
+      { key: "contact_info", label: "Adres/Mobil Bilgileri" },
+      { key: "org_chart", label: "Organizasyon Şeması" },
+      { key: "sgk_iskur_notification", label: "SGK/İşkur/Emniyet Bildirimleri" },
+      { key: "safety_instructions", label: "İş Güvenliği Talimatları" },
+      { key: "entry_registration", label: "İşe Giriş İşlemleri" },
+      { key: "documents_upload", label: "Evrakların Bulut'a Yüklenmesi" },
+    ],
+  },
+  section_4: {
+    title: "Sözleşme İşlemleri",
+    items: [
+      { key: "contract_signature", label: "İş Sözleşmesi/Zimmet İmzalatılması" },
+      { key: "s4_guidelines_delivery", label: "Yönergelerin Teslimi" },
+    ],
+  },
+  section_5: {
+    title: "IT İşlemleri",
+    items: [
+      { key: "computer_setup", label: "Bilgisayar Temini" },
+      { key: "qnap_o365_ip", label: "QNAP/O365/IP Telefon Kaydı" },
+    ],
+  },
+  section_6: {
+    title: "Diğer",
+    items: [
+      { key: "smoking_info", label: "Sigara Kullanımı" },
+      { key: "evaluation_calendar", label: "Değerlendirme Form Tarihlerinin Takvime Kaydı" },
+    ],
+  },
+};
+
+type ChecklistStatus = "DONE" | "NOT_DONE" | "NA";
+
+const checklistStatusLabels: Record<ChecklistStatus, string> = {
+  DONE: "Yapıldı",
+  NOT_DONE: "Yapılmadı",
+  NA: "Uygulanmaz",
+};
 
 const leaveTypeLabels: Record<string, string> = {
   ANNUAL_LEAVE: "Yıllık İzin",
@@ -224,6 +304,15 @@ export default function ApprovalsPage() {
   // Salary deduction consent state (Personel Müdürlüğü - Avans için)
   const [salaryDeductionConsent, setSalaryDeductionConsent] = useState(false);
 
+  // Onboarding checklist state
+  const [onboardingChecklist, setOnboardingChecklist] = useState<
+    Record<string, { status: ChecklistStatus; notes: string }>
+  >({});
+
+  // Attachment states
+  const [attachmentConfigs, setAttachmentConfigs] = useState<WorkflowStepAttachmentConfig[]>([]);
+  const [uploadedAttachments, setUploadedAttachments] = useState<RequestAttachment[]>([]);
+
   // Signature states
   const [signatureAccepted, setSignatureAccepted] = useState(false);
   const [signatureInfo, setSignatureInfo] = useState<SignatureInfo>({
@@ -247,14 +336,35 @@ export default function ApprovalsPage() {
   const isSalaryConsentForm = selectedApproval?.workflow_step?.action_type === 'FILL_AND_SIGN' &&
                               selectedApproval?.workflow_step?.form_section_key === 'salary_deduction_consent';
 
+  // Onboarding section form mu?
+  const onboardingSectionKey = selectedApproval?.workflow_step?.form_section_key || '';
+  const isOnboardingSectionForm = selectedApproval?.workflow_step?.action_type === 'FILL_AND_SIGN' &&
+    selectedApproval?.request?.onboarding_request != null &&
+    ['section_2', 'section_3', 'section_4', 'section_5', 'section_6'].includes(onboardingSectionKey);
+
+  const currentSectionConfig = isOnboardingSectionForm
+    ? onboardingSectionConfig[onboardingSectionKey]
+    : null;
+
   // HR form için remaining_days zorunlu
   const hrFormValid = !isHrForm || (remainingDays.trim() !== "" && !isNaN(Number(remainingDays)));
 
   // Salary consent form için checkbox zorunlu
   const salaryConsentFormValid = !isSalaryConsentForm || salaryDeductionConsent;
 
+  // Onboarding section form için tüm checklist item'ları doldurulmalı
+  const onboardingFormValid = !isOnboardingSectionForm || (
+    currentSectionConfig != null &&
+    currentSectionConfig.items.every((item) => onboardingChecklist[item.key]?.status != null)
+  );
+
+  // Zorunlu attachment'lar yüklenmiş mi?
+  const attachmentsValid = attachmentConfigs
+    .filter((c) => c.is_required)
+    .every((c) => uploadedAttachments.some((f) => f.step_attachment_config_id === c.id));
+
   // Onay için imza kabul edilmeli ve tüm formlar valid olmalı
-  const canApprove = hasValidSignature && signatureAccepted && hrFormValid && salaryConsentFormValid;
+  const canApprove = hasValidSignature && signatureAccepted && hrFormValid && salaryConsentFormValid && onboardingFormValid && attachmentsValid;
 
   const getRequesterFullName = (requester?: Requester): string => {
     if (!requester) return "-";
@@ -279,6 +389,9 @@ export default function ApprovalsPage() {
     if (approval.request.overtime_request) {
       const ot = approval.request.overtime_request;
       return `${ot.month} ${ot.year} - ${overtimeTypeLabels[ot.overtime_type]}`;
+    }
+    if (approval.request.onboarding_request) {
+      return approval.request.onboarding_request.employee_name || "-";
     }
     return "-";
   };
@@ -310,6 +423,40 @@ export default function ApprovalsPage() {
     setRemainingDays("");
     setHrNote("");
     setSalaryDeductionConsent(false);
+    setAttachmentConfigs([]);
+    setUploadedAttachments([]);
+
+    // Onboarding checklist'i sıfırla veya mevcut değerlerle doldur
+    if (selectedApproval?.request?.onboarding_request && selectedApproval?.workflow_step?.form_section_key) {
+      const sectionKey = selectedApproval.workflow_step.form_section_key;
+      const config = onboardingSectionConfig[sectionKey];
+      const ob = selectedApproval.request.onboarding_request;
+      if (config) {
+        const initial: Record<string, { status: ChecklistStatus; notes: string }> = {};
+        config.items.forEach((item) => {
+          const statusVal = ob[`${item.key}_status`] as ChecklistStatus | null;
+          const notesVal = ob[`${item.key}_notes`] as string | null;
+          initial[item.key] = {
+            status: statusVal || "NOT_DONE",
+            notes: notesVal || "",
+          };
+        });
+        setOnboardingChecklist(initial);
+      } else {
+        setOnboardingChecklist({});
+      }
+    } else {
+      setOnboardingChecklist({});
+    }
+
+    // Attachment config ve dosyalarını fetch et
+    if (selectedApproval?.workflow_step?.id && selectedApproval?.request?.id) {
+      fetchAttachmentData(
+        selectedApproval.workflow_step.id,
+        selectedApproval.request.id
+      );
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedApproval]);
 
   const loadSignatureInfo = async () => {
@@ -338,6 +485,31 @@ export default function ApprovalsPage() {
       }
     } catch (error) {
       console.error("Error loading signature:", error);
+    }
+  };
+
+  const fetchAttachmentData = async (workflowStepId: string, requestId: string) => {
+    try {
+      // Attachment config'lerini getir
+      const { data: configs } = await supabase
+        .from("workflow_step_attachments")
+        .select("*")
+        .eq("workflow_step_id", workflowStepId);
+
+      if (configs && configs.length > 0) {
+        setAttachmentConfigs(configs);
+
+        // Mevcut yüklenmiş dosyaları getir
+        const { data: files } = await supabase
+          .from("request_attachments")
+          .select("*")
+          .eq("request_id", requestId)
+          .in("step_attachment_config_id", configs.map((c: { id: string }) => c.id));
+
+        setUploadedAttachments(files || []);
+      }
+    } catch (error) {
+      console.error("Error fetching attachment data:", error);
     }
   };
 
@@ -379,6 +551,30 @@ export default function ApprovalsPage() {
       }
     }
 
+    // Onboarding section form validasyonu (onay durumunda)
+    if (decision === "APPROVED" && isOnboardingSectionForm && currentSectionConfig) {
+      const missingItems = currentSectionConfig.items.filter(
+        (item) => !onboardingChecklist[item.key]?.status
+      );
+      if (missingItems.length > 0) {
+        toast.error("Tüm checklist alanlarının durumu seçilmelidir");
+        return;
+      }
+    }
+
+    // Zorunlu attachment validasyonu (onay durumunda)
+    if (decision === "APPROVED" && attachmentConfigs.length > 0) {
+      const missingAttachments = attachmentConfigs
+        .filter((c) => c.is_required)
+        .filter((c) => !uploadedAttachments.some((f) => f.step_attachment_config_id === c.id));
+
+      if (missingAttachments.length > 0) {
+        const labels = missingAttachments.map((c) => c.label).join(", ");
+        toast.error(`Zorunlu ek dosyalar yüklenmemiş: ${labels}`);
+        return;
+      }
+    }
+
     setIsSubmitting(true);
     try {
       // Request body hazırla
@@ -387,6 +583,7 @@ export default function ApprovalsPage() {
         comment: string;
         hr_fields?: { remaining_days: number; hr_note?: string };
         salary_consent_fields?: { consent: boolean };
+        onboarding_fields?: { section_key: string; items: Record<string, { status: string; notes: string }> };
       } = { decision, comment };
 
       // HR form ise hr_fields ekle
@@ -401,6 +598,14 @@ export default function ApprovalsPage() {
       if (decision === "APPROVED" && isSalaryConsentForm) {
         requestBody.salary_consent_fields = {
           consent: salaryDeductionConsent,
+        };
+      }
+
+      // Onboarding section form ise onboarding_fields ekle
+      if (decision === "APPROVED" && isOnboardingSectionForm) {
+        requestBody.onboarding_fields = {
+          section_key: onboardingSectionKey,
+          items: onboardingChecklist,
         };
       }
 
@@ -421,6 +626,9 @@ export default function ApprovalsPage() {
       setRemainingDays("");
       setHrNote("");
       setSalaryDeductionConsent(false);
+      setOnboardingChecklist({});
+      setAttachmentConfigs([]);
+      setUploadedAttachments([]);
       fetchApprovals();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Bir hata oluştu");
@@ -950,6 +1158,119 @@ export default function ApprovalsPage() {
                 </>
               )}
 
+              {/* Onboarding Request specific fields */}
+              {selectedApproval.request.onboarding_request && (
+                <>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">İşe Başlayacak Kişi</p>
+                      <p className="text-sm font-semibold">
+                        {selectedApproval.request.onboarding_request.employee_name || "-"}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">Unvanı</p>
+                      <p className="text-sm font-semibold">
+                        {selectedApproval.request.onboarding_request.employee_title || "-"}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">Departmanı</p>
+                      <p className="text-sm font-semibold">
+                        {selectedApproval.request.onboarding_request.department || "-"}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">Lokasyonu</p>
+                      <p className="text-sm font-semibold">
+                        {selectedApproval.request.onboarding_request.location || "-"}
+                      </p>
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground">İş Tanımı/Kapsamı/Kodu</p>
+                    <p className="text-sm font-semibold">
+                      {selectedApproval.request.onboarding_request.job_description || "-"}
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">Bağlı Olduğu Yönetici</p>
+                      <p className="text-sm font-semibold">
+                        {selectedApproval.request.onboarding_request.reporting_manager || "-"}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">İşe Giriş Tarihi</p>
+                      <p className="text-sm font-semibold">
+                        {selectedApproval.request.onboarding_request.start_date
+                          ? format(new Date(selectedApproval.request.onboarding_request.start_date), "d MMMM yyyy", { locale: tr })
+                          : "-"}
+                      </p>
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground">Zaman Aralığı</p>
+                    <p className="text-sm font-semibold">
+                      {selectedApproval.request.onboarding_request.employment_period || "-"}
+                    </p>
+                  </div>
+
+                  {/* Daha önce doldurulmuş section'ları göster (read-only) */}
+                  {Object.entries(onboardingSectionConfig).map(([sectionKey, config]) => {
+                    const ob = selectedApproval.request.onboarding_request;
+                    if (!ob) return null;
+                    const sectionNum = parseInt(sectionKey.replace('section_', ''));
+                    const currentNum = parseInt(onboardingSectionKey.replace('section_', '') || '0');
+                    if (sectionNum >= currentNum && currentNum > 0) return null;
+                    const firstItem = config.items[0];
+                    const firstStatus = ob[`${firstItem.key}_status`];
+                    if (!firstStatus || firstStatus === 'NOT_DONE') return null;
+
+                    return (
+                      <div key={sectionKey} className="border-t pt-3 mt-1">
+                        <p className="text-sm font-semibold mb-2">{config.title}</p>
+                        <div className="rounded-md border overflow-hidden">
+                          <Table>
+                            <TableHeader>
+                              <TableRow className="bg-muted/50">
+                                <TableHead className="py-2 text-xs">İş</TableHead>
+                                <TableHead className="py-2 text-xs w-[100px]">Durum</TableHead>
+                                <TableHead className="py-2 text-xs">Açıklama</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {config.items.map((item) => {
+                                const status = ob[`${item.key}_status`] as string;
+                                const notes = ob[`${item.key}_notes`] as string;
+                                return (
+                                  <TableRow key={item.key}>
+                                    <TableCell className="py-2 text-sm">{item.label}</TableCell>
+                                    <TableCell className="py-2">
+                                      <Badge className={
+                                        status === 'DONE' ? 'bg-green-500' :
+                                        status === 'NA' ? 'bg-gray-400' : 'bg-yellow-500'
+                                      }>
+                                        {checklistStatusLabels[status as ChecklistStatus] || status}
+                                      </Badge>
+                                    </TableCell>
+                                    <TableCell className="py-2 text-sm text-muted-foreground">
+                                      {notes || <span className="text-xs text-muted-foreground/50">—</span>}
+                                    </TableCell>
+                                  </TableRow>
+                                );
+                              })}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </>
+              )}
+
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Onay Adımı</p>
@@ -1036,15 +1357,6 @@ export default function ApprovalsPage() {
               {/* Onay İşlemleri - Sadece bekleyen onaylar için göster */}
               {selectedApproval.status === "PENDING" && (
                 <div className="border-t pt-4 mt-6 space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="comment">Yorum (Red için zorunlu)</Label>
-                    <Input
-                      id="comment"
-                      placeholder="Yorumunuzu buraya yazın..."
-                      value={comment}
-                      onChange={(e) => setComment(e.target.value)}
-                    />
-                  </div>
 
                   {/* HR Form Alanları - Sadece Personel Müdürlüğü için */}
                   {isHrForm && (
@@ -1109,6 +1421,88 @@ export default function ApprovalsPage() {
                       </div>
                     </div>
                   )}
+
+                  {/* Onboarding Checklist Form - Section 2-6 için */}
+                  {isOnboardingSectionForm && currentSectionConfig && (
+                    <div className="space-y-4 border-t pt-4">
+                      <div className="text-sm font-medium text-muted-foreground">
+                        {currentSectionConfig.title} <span className="text-red-500">*</span>
+                      </div>
+                      <div className="space-y-3">
+                        {currentSectionConfig.items.map((item) => (
+                          <div key={item.key} className="rounded-md border p-3 space-y-2">
+                            <div className="flex items-center justify-between gap-2">
+                              <Label className="text-sm font-medium flex-1">
+                                {item.label}
+                              </Label>
+                              <Select
+                                value={onboardingChecklist[item.key]?.status || "NOT_DONE"}
+                                onValueChange={(value) => {
+                                  setOnboardingChecklist((prev) => ({
+                                    ...prev,
+                                    [item.key]: {
+                                      ...prev[item.key],
+                                      status: value as ChecklistStatus,
+                                      notes: prev[item.key]?.notes || "",
+                                    },
+                                  }));
+                                }}
+                                disabled={isSubmitting}
+                              >
+                                <SelectTrigger className="w-[140px]">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="DONE">Yapıldı</SelectItem>
+                                  <SelectItem value="NOT_DONE">Yapılmadı</SelectItem>
+                                  <SelectItem value="NA">Uygulanmaz</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <Textarea
+                              placeholder="Açıklama (opsiyonel)..."
+                              className="text-sm min-h-[60px]"
+                              value={onboardingChecklist[item.key]?.notes || ""}
+                              onChange={(e) => {
+                                setOnboardingChecklist((prev) => ({
+                                  ...prev,
+                                  [item.key]: {
+                                    ...prev[item.key],
+                                    status: prev[item.key]?.status || "NOT_DONE",
+                                    notes: e.target.value,
+                                  },
+                                }));
+                              }}
+                              disabled={isSubmitting}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Ek Dosyalar */}
+                  {attachmentConfigs.length > 0 && (
+                    <AttachmentUploader
+                      requestId={selectedApproval.request.id}
+                      configs={attachmentConfigs}
+                      existingFiles={uploadedAttachments}
+                      onUpload={(file) => setUploadedAttachments((prev) => [...prev, file])}
+                      onDelete={(fileId) => setUploadedAttachments((prev) => prev.filter((f) => f.id !== fileId))}
+                      disabled={isSubmitting}
+                    />
+                  )}
+
+                  {/* Yorum Alanı */}
+                  <div className="space-y-2">
+                    <Label htmlFor="comment">Yorum (Red için zorunlu)</Label>
+                    <Input
+                      id="comment"
+                      placeholder="Yorumunuzu buraya yazın..."
+                      value={comment}
+                      onChange={(e) => setComment(e.target.value)}
+                    />
+                  </div>
 
                   {/* İmza Paneli */}
                   <SignaturePanel

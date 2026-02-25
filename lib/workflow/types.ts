@@ -249,3 +249,119 @@ export interface CreateOvertimeStaffShortageInput {
 }
 
 export type CreateOvertimeInput = CreateOvertimeEmergencyInput | CreateOvertimeStaffShortageInput;
+
+// ============================================================================
+// Onboarding (İşe Giriş Takip) Types
+// ============================================================================
+
+export type ChecklistStatus = 'DONE' | 'NOT_DONE' | 'NA';
+
+export interface OnboardingRequest {
+  id: string;
+  request_id: string;
+
+  // Section 1: Temel Bilgiler
+  employee_name: string | null;
+  employee_title: string | null;
+  department: string | null;
+  location: string | null;
+  job_description: string | null;
+  reporting_manager: string | null;
+  start_date: string | null;
+  employment_period: string | null;
+
+  // Section 2: Mail İşlemleri
+  mail_setup_status: ChecklistStatus;
+  mail_setup_notes: string | null;
+  mail_groups_status: ChecklistStatus;
+  mail_groups_notes: string | null;
+
+  // Section 3: İK İşlemleri
+  exit_reason_check_status: ChecklistStatus;
+  exit_reason_check_notes: string | null;
+  sgk_verification_status: ChecklistStatus;
+  sgk_verification_notes: string | null;
+  pdks_card_status: ChecklistStatus;
+  pdks_card_notes: string | null;
+  guidelines_delivery_status: ChecklistStatus;
+  guidelines_delivery_notes: string | null;
+  stationery_request_status: ChecklistStatus;
+  stationery_request_notes: string | null;
+  desk_cabinet_status: ChecklistStatus;
+  desk_cabinet_notes: string | null;
+  phone_setup_status: ChecklistStatus;
+  phone_setup_notes: string | null;
+  hiring_announcement_status: ChecklistStatus;
+  hiring_announcement_notes: string | null;
+  contact_info_status: ChecklistStatus;
+  contact_info_notes: string | null;
+  org_chart_status: ChecklistStatus;
+  org_chart_notes: string | null;
+  sgk_iskur_notification_status: ChecklistStatus;
+  sgk_iskur_notification_notes: string | null;
+  safety_instructions_status: ChecklistStatus;
+  safety_instructions_notes: string | null;
+  entry_registration_status: ChecklistStatus;
+  entry_registration_notes: string | null;
+  documents_upload_status: ChecklistStatus;
+  documents_upload_notes: string | null;
+
+  // Section 4: Sözleşme İşlemleri
+  contract_signature_status: ChecklistStatus;
+  contract_signature_notes: string | null;
+  s4_guidelines_delivery_status: ChecklistStatus;
+  s4_guidelines_delivery_notes: string | null;
+
+  // Section 5: IT İşlemleri
+  computer_setup_status: ChecklistStatus;
+  computer_setup_notes: string | null;
+  qnap_o365_ip_status: ChecklistStatus;
+  qnap_o365_ip_notes: string | null;
+
+  // Section 6: Diğer
+  smoking_info_status: ChecklistStatus;
+  smoking_info_notes: string | null;
+  evaluation_calendar_status: ChecklistStatus;
+  evaluation_calendar_notes: string | null;
+
+  created_at: string;
+  updated_at: string;
+}
+
+// Section 1: IK'nın başlatırken doldurduğu alanlar
+export interface CreateOnboardingInput {
+  employee_name: string;
+  employee_title: string;
+  department: string;
+  location: string;
+  job_description: string;
+  reporting_manager: string;
+  start_date: string;
+  employment_period: string;
+}
+
+// ============================================================================
+// Workflow Attachment Types
+// ============================================================================
+
+export interface WorkflowStepAttachmentConfig {
+  id: string;
+  workflow_step_id: string;
+  label: string;
+  is_required: boolean;
+  allowed_mime_types: string[];
+  max_file_size_bytes: number;
+  max_files: number;
+}
+
+export interface RequestAttachment {
+  id: string;
+  request_id: string;
+  step_attachment_config_id: string;
+  file_name: string;
+  file_path: string;
+  file_size: number;
+  mime_type: string;
+  uploaded_by: string;
+  uploaded_at: string;
+}

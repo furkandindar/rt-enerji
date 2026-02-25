@@ -3,6 +3,7 @@ import { renderToBuffer, DocumentProps } from '@react-pdf/renderer';
 import { RequestPDFTemplate } from './request-pdf-template';
 import { SalaryAdvancePDFTemplate } from './salary-advance-pdf-template';
 import { OvertimePDFTemplate } from './overtime-pdf-template';
+import { OnboardingPDFTemplate } from './onboarding-pdf-template';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { SignatureFont, DEFAULT_SIGNATURE_FONT } from '@/lib/signature/types';
 
@@ -55,6 +56,7 @@ export async function generateRequestPDF(
         *,
         entries:overtime_entries(*)
       ),
+      onboarding_request:onboarding_requests(*),
       approvals:request_approvals(
         id,
         status,
@@ -64,6 +66,7 @@ export async function generateRequestPDF(
         workflow_step:workflow_steps(
           step_order,
           name,
+          form_section_key,
           static_position:positions(
             id,
             title
@@ -129,6 +132,15 @@ export async function generateRequestPDF(
       requester: request.requester,
       overtimeRequest: request.overtime_request,
       entries: request.overtime_request.entries || [],
+      approvals: request.approvals || [],
+      signatures,
+    }) as React.ReactElement<DocumentProps>;
+  } else if (request.onboarding_request) {
+    // İşe Giriş Takip Formu PDF'i
+    pdfDocument = React.createElement(OnboardingPDFTemplate, {
+      request,
+      requester: request.requester,
+      onboardingRequest: request.onboarding_request,
       approvals: request.approvals || [],
       signatures,
     }) as React.ReactElement<DocumentProps>;

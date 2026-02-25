@@ -130,6 +130,18 @@ interface OvertimeRequest {
   entries?: OvertimeEntry[];
 }
 
+interface OnboardingRequestData {
+  id: string;
+  employee_name: string | null;
+  employee_title: string | null;
+  department: string | null;
+  location: string | null;
+  job_description: string | null;
+  reporting_manager: string | null;
+  start_date: string | null;
+  employment_period: string | null;
+}
+
 interface Request {
   id: string;
   status: string;
@@ -139,6 +151,7 @@ interface Request {
   leave_request?: LeaveRequestData;
   salary_advance_request?: SalaryAdvanceRequest;
   overtime_request?: OvertimeRequest;
+  onboarding_request?: OnboardingRequestData;
   requester?: Requester;
   approvals?: Approval[];
 }
@@ -246,6 +259,9 @@ export default function MyRequestsPage() {
     if (request.overtime_request) {
       const ot = request.overtime_request;
       return `${ot.month} ${ot.year} - ${overtimeTypeLabels[ot.overtime_type]}`;
+    }
+    if (request.onboarding_request) {
+      return request.onboarding_request.employee_name || "-";
     }
     return "-";
   };
@@ -633,6 +649,68 @@ export default function MyRequestsPage() {
                       <p className="text-sm font-semibold">{selectedRequest.overtime_request.hr_note}</p>
                     </div>
                   )}
+                </>
+              )}
+
+              {/* Onboarding Request specific fields */}
+              {selectedRequest.onboarding_request && (
+                <>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">İşe Başlayacak Kişi</p>
+                      <p className="text-sm font-semibold">
+                        {selectedRequest.onboarding_request.employee_name || "-"}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">Unvanı</p>
+                      <p className="text-sm font-semibold">
+                        {selectedRequest.onboarding_request.employee_title || "-"}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">Departmanı</p>
+                      <p className="text-sm font-semibold">
+                        {selectedRequest.onboarding_request.department || "-"}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">Lokasyonu</p>
+                      <p className="text-sm font-semibold">
+                        {selectedRequest.onboarding_request.location || "-"}
+                      </p>
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground">İş Tanımı / Kapsamı / Kodu</p>
+                    <p className="text-sm font-semibold">
+                      {selectedRequest.onboarding_request.job_description || "-"}
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">Bağlı Olduğu Yönetici</p>
+                      <p className="text-sm font-semibold">
+                        {selectedRequest.onboarding_request.reporting_manager || "-"}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">İşe Giriş Tarihi</p>
+                      <p className="text-sm font-semibold">
+                        {selectedRequest.onboarding_request.start_date
+                          ? format(new Date(selectedRequest.onboarding_request.start_date), "d MMMM yyyy", { locale: tr })
+                          : "-"}
+                      </p>
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground">Şirketimizde Bulunacağı Zaman Aralığı</p>
+                    <p className="text-sm font-semibold">
+                      {selectedRequest.onboarding_request.employment_period || "-"}
+                    </p>
+                  </div>
                 </>
               )}
 

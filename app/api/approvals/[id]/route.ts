@@ -6,6 +6,7 @@ import {
   notifyRequestRejected
 } from "@/lib/workflow";
 import { generateRequestPDF } from "@/lib/pdf/generate-request-pdf";
+import { mergeAttachments } from "@/lib/pdf/merge-attachments";
 import { uploadRequestPDF } from "@/lib/storage/upload-request-pdf";
 
 // PATCH /api/approvals/[id] - Onay/Red ver
@@ -18,7 +19,7 @@ export async function PATCH(
     const { id } = await params;
     const body = await request.json();
 
-    const { decision, comment, hr_fields, salary_consent_fields } = body as {
+    const { decision, comment, hr_fields, salary_consent_fields, onboarding_fields } = body as {
       decision: 'APPROVED' | 'REJECTED';
       comment?: string;
       hr_fields?: {
@@ -27,6 +28,10 @@ export async function PATCH(
       };
       salary_consent_fields?: {
         consent: boolean;
+      };
+      onboarding_fields?: {
+        section_key: string;
+        items: Record<string, { status: string; notes: string }>;
       };
     };
 
@@ -80,6 +85,34 @@ export async function PATCH(
     const stepData = approval.workflow_step;
     if (requestData.current_step !== stepData.step_order) {
       return NextResponse.json({ error: "Not your turn to approve" }, { status: 400 });
+    }
+
+    // 2b. Zorunlu attachment kontrolü (onay durumunda)
+    if (decision === 'APPROVED') {
+      const { data: requiredConfigs } = await supabase
+        .from("workflow_step_attachments")
+        .select("id, label")
+        .eq("workflow_step_id", stepData.id)
+        .eq("is_required", true);
+
+      if (requiredConfigs && requiredConfigs.length > 0) {
+        const { data: uploadedFiles } = await supabase
+          .from("request_attachments")
+          .select("step_attachment_config_id")
+          .eq("request_id", requestData.id)
+          .in("step_attachment_config_id", requiredConfigs.map((c: { id: string }) => c.id));
+
+        const missingConfigs = requiredConfigs.filter(
+          (c: { id: string }) => !uploadedFiles?.some((f: { step_attachment_config_id: string }) => f.step_attachment_config_id === c.id)
+        );
+
+        if (missingConfigs.length > 0) {
+          const missingLabels = missingConfigs.map((c: { label: string }) => c.label).join(", ");
+          return NextResponse.json({
+            error: `Zorunlu ek dosyalar yüklenmemiş: ${missingLabels}`,
+          }, { status: 400 });
+        }
+      }
     }
 
     // 3. FILL_AND_SIGN adımları için HR alanlarını güncelle (sadece onay durumunda)
@@ -145,6 +178,49 @@ export async function PATCH(
         }
 
         console.log("Salary deduction consent updated successfully for request:", requestData.id);
+      }
+    }
+
+    // 3c. FILL_AND_SIGN adımları için onboarding section alanlarını güncelle (sadece onay durumunda)
+    if (decision === 'APPROVED' && stepData.action_type === 'FILL_AND_SIGN' && onboarding_fields?.section_key) {
+      const validSections = ['section_2', 'section_3', 'section_4', 'section_5', 'section_6'];
+      if (!validSections.includes(onboarding_fields.section_key)) {
+        return NextResponse.json({ error: "Geçersiz section key" }, { status: 400 });
+      }
+
+      if (!onboarding_fields.items || Object.keys(onboarding_fields.items).length === 0) {
+        return NextResponse.json({ error: "Checklist alanları zorunludur" }, { status: 400 });
+      }
+
+      // onboarding_requests kaydını bul
+      const { data: onboardingRequest } = await supabase
+        .from("onboarding_requests")
+        .select("id")
+        .eq("request_id", requestData.id)
+        .single();
+
+      if (onboardingRequest) {
+        // items'dan update objesi oluştur
+        const updateData: Record<string, string | null> = {
+          updated_at: new Date().toISOString(),
+        };
+
+        for (const [key, value] of Object.entries(onboarding_fields.items)) {
+          updateData[`${key}_status`] = value.status;
+          updateData[`${key}_notes`] = value.notes || null;
+        }
+
+        const { error: onboardingUpdateError } = await supabase
+          .from("onboarding_requests")
+          .update(updateData)
+          .eq("id", onboardingRequest.id);
+
+        if (onboardingUpdateError) {
+          console.error("Error updating onboarding fields:", onboardingUpdateError);
+          return NextResponse.json({ error: "Failed to update onboarding fields" }, { status: 500 });
+        }
+
+        console.log("Onboarding fields updated successfully for section:", onboarding_fields.section_key);
       }
     }
 
@@ -229,10 +305,14 @@ export async function PATCH(
             supabase,
           });
 
+          // Ek dosyaları (attachment) ana PDF'e birleştir
+          console.log('Merging attachments...');
+          const finalPdfBuffer = await mergeAttachments(pdfBuffer, requestData.id, supabase);
+
           console.log('Uploading PDF to storage...');
           const pdfPath = await uploadRequestPDF({
             requestId: requestData.id,
-            pdfBuffer,
+            pdfBuffer: finalPdfBuffer,
           });
 
           console.log('PDF uploaded successfully:', pdfPath);
