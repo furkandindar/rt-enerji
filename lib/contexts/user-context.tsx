@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { getAvailableWorkflows } from "@/lib/workflow";
 
 // Rol tipleri
 export type UserRole = "ORG_ADMIN" | "ORG_VIEWER";
@@ -20,6 +21,7 @@ export interface AppUser {
   avatar: string;
   role: UserRole;
   employeeId: string | null;
+  availableWorkflowCodes: string[];
 }
 
 // Context tipi
@@ -82,13 +84,22 @@ export function UserProvider({ children }: UserProviderProps) {
           authUser.email?.split("@")[0] ||
           "User";
 
+      const employeeId = appUserData?.employee_id || null;
+
+      // Çalışanın başlatabileceği workflow kodlarını al
+      const availableWorkflows = employeeId
+        ? await getAvailableWorkflows(supabase, employeeId)
+        : [];
+      const availableWorkflowCodes = availableWorkflows.map((wf) => wf.code);
+
       setUser({
         id: authUser.id,
         name: fullName,
         email: authUser.email || "",
         avatar: authUser.user_metadata?.avatar_url || "",
         role: (appUserData?.role as UserRole) || "ORG_VIEWER",
-        employeeId: appUserData?.employee_id || null,
+        employeeId,
+        availableWorkflowCodes,
       });
     } else {
       setUser(null);

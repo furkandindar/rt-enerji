@@ -126,6 +126,8 @@ const checklistItems: ChecklistItem[] = [
   { label: 'Masa / Dolap Tanımı', statusKey: 'desk_cabinet_status', notesKey: 'desk_cabinet_notes', sectionKey: 'section_3' },
   { label: 'Sabit Telefon Temini ve Tanımı', statusKey: 'phone_setup_status', notesKey: 'phone_setup_notes', sectionKey: 'section_3' },
   { label: 'İşe Alım Duyurusu', statusKey: 'hiring_announcement_status', notesKey: 'hiring_announcement_notes', sectionKey: 'section_3' },
+  { label: 'Anlaşmalı Hastaneye Yeni Personel Bildirimi', statusKey: 'hospital_notification_status', notesKey: 'hospital_notification_notes', sectionKey: 'section_3' },
+  { label: 'Personele, Hastaneye İlişkin Haklarının Bildirimi', statusKey: 'hospital_rights_notification_status', notesKey: 'hospital_rights_notification_notes', sectionKey: 'section_3' },
   { label: 'Adres Bilgileri ve Mobil Numarası Temini', statusKey: 'contact_info_status', notesKey: 'contact_info_notes', sectionKey: 'section_3' },
   { label: 'Organizasyon Şemasına Eklenmesi ve Yayımı', statusKey: 'org_chart_status', notesKey: 'org_chart_notes', sectionKey: 'section_3' },
   { label: 'Yönergelerin Basılı ve Elektronik Olarak Teslimi (İdari, mali işler ve tüm diğer tüm yönergeler)', statusKey: 'guidelines_delivery_status', notesKey: 'guidelines_delivery_notes', sectionKey: 'section_3' },

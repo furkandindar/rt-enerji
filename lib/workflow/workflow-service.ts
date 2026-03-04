@@ -483,24 +483,41 @@ async function getEmployeePositionIds(
   return data.map(ep => ep.position_id);
 }
 
-/**
- * Bir workflow'u başlatabilecek pozisyon ID'lerini getirir
- */
-async function getWorkflowInitiatorPositionIds(
-  supabase: SupabaseClient,
-  workflowDefinitionId: string
-): Promise<string[]> {
-  const { data, error } = await supabase
-    .from('workflow_initiators')
-    .select('position_id')
-    .eq('workflow_definition_id', workflowDefinitionId);
-
-  if (error || !data) return [];
-  return data.map(wi => wi.position_id);
+interface InitiatorRule {
+  position_id: string | null;
+  unit_id: string | null;
 }
 
 /**
- * Çalışanın belirli bir workflow'u başlatıp başlatamayacağını kontrol eder
+ * Bir workflow'u başlatabilecek kuralları getirir (pozisyon veya departman bazlı)
+ */
+async function getWorkflowInitiatorRules(
+  supabase: SupabaseClient,
+  workflowDefinitionId: string
+): Promise<InitiatorRule[]> {
+  const { data, error } = await supabase
+    .from('workflow_initiators')
+    .select('position_id, unit_id')
+    .eq('workflow_definition_id', workflowDefinitionId);
+
+  if (error || !data) return [];
+  return data as InitiatorRule[];
+}
+
+/**
+ * Çalışanın primary pozisyonunun unit_id'sini getirir
+ */
+async function getEmployeeUnitId(
+  supabase: SupabaseClient,
+  employeeId: string
+): Promise<string | null> {
+  const primaryPosition = await getEmployeePrimaryPosition(supabase, employeeId);
+  return primaryPosition?.position.unit_id ?? null;
+}
+
+/**
+ * Çalışanın belirli bir workflow'u başlatıp başlatamayacağını kontrol eder.
+ * Kural bazlı kontrol: position_id eşleşmesi VEYA unit_id eşleşmesi yeterli.
  */
 export async function canStartWorkflow(
   supabase: SupabaseClient,
@@ -520,16 +537,22 @@ export async function canStartWorkflow(
   // 2. Kısıtlı değilse herkes başlatabilir
   if (!workflow.is_restricted) return true;
 
-  // 3. Çalışanın pozisyonlarını al
-  const employeePositionIds = await getEmployeePositionIds(supabase, employeeId);
-  if (employeePositionIds.length === 0) return false;
+  // 3. Initiator kurallarını al
+  const rules = await getWorkflowInitiatorRules(supabase, workflowDefinitionId);
+  if (rules.length === 0) return false;
 
-  // 4. İzin verilen pozisyonları al
-  const allowedPositionIds = await getWorkflowInitiatorPositionIds(supabase, workflowDefinitionId);
-  if (allowedPositionIds.length === 0) return false;
+  // 4. Çalışanın pozisyon ve departman bilgilerini al
+  const [employeePositionIds, employeeUnitId] = await Promise.all([
+    getEmployeePositionIds(supabase, employeeId),
+    getEmployeeUnitId(supabase, employeeId),
+  ]);
 
-  // 5. Kesişim var mı?
-  return employeePositionIds.some(epId => allowedPositionIds.includes(epId));
+  // 5. Herhangi bir kural eşleşiyor mu?
+  return rules.some(rule => {
+    if (rule.position_id && employeePositionIds.includes(rule.position_id)) return true;
+    if (rule.unit_id && employeeUnitId === rule.unit_id) return true;
+    return false;
+  });
 }
 
 /**
@@ -557,8 +580,11 @@ export async function getAvailableWorkflows(
 
   if (error || !workflows) return [];
 
-  // 2. Çalışanın pozisyonlarını al
-  const employeePositionIds = await getEmployeePositionIds(supabase, employeeId);
+  // 2. Çalışanın pozisyon ve departman bilgilerini al
+  const [employeePositionIds, employeeUnitId] = await Promise.all([
+    getEmployeePositionIds(supabase, employeeId),
+    getEmployeeUnitId(supabase, employeeId),
+  ]);
 
   // 3. Her workflow için yetki kontrolü yap
   const availableWorkflows: WorkflowDefinition[] = [];
@@ -570,9 +596,13 @@ export async function getAvailableWorkflows(
       continue;
     }
 
-    // Kısıtlıysa, pozisyon kontrolü yap
-    const allowedPositionIds = await getWorkflowInitiatorPositionIds(supabase, workflow.id);
-    const hasPermission = employeePositionIds.some(epId => allowedPositionIds.includes(epId));
+    // Kısıtlıysa, kural bazlı kontrol yap (pozisyon veya departman)
+    const rules = await getWorkflowInitiatorRules(supabase, workflow.id);
+    const hasPermission = rules.some(rule => {
+      if (rule.position_id && employeePositionIds.includes(rule.position_id)) return true;
+      if (rule.unit_id && employeeUnitId === rule.unit_id) return true;
+      return false;
+    });
 
     if (hasPermission) {
       availableWorkflows.push(workflow as WorkflowDefinition);

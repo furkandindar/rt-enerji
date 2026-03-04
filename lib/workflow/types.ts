@@ -293,6 +293,10 @@ export interface OnboardingRequest {
   phone_setup_notes: string | null;
   hiring_announcement_status: ChecklistStatus;
   hiring_announcement_notes: string | null;
+  hospital_notification_status: ChecklistStatus;
+  hospital_notification_notes: string | null;
+  hospital_rights_notification_status: ChecklistStatus;
+  hospital_rights_notification_notes: string | null;
   contact_info_status: ChecklistStatus;
   contact_info_notes: string | null;
   org_chart_status: ChecklistStatus;

@@ -20,6 +20,8 @@ export const onboardingSectionConfig: Record<string, { title: string; items: Che
       { key: "desk_cabinet", label: "Masa/Dolap Tanımı" },
       { key: "phone_setup", label: "Sabit Telefon" },
       { key: "hiring_announcement", label: "İşe Alım Duyurusu" },
+      { key: "hospital_notification", label: "Anlaşmalı Hastaneye Yeni Personel Bildirimi" },
+      { key: "hospital_rights_notification", label: "Personele, Hastaneye İlişkin Haklarının Bildirimi" },
       { key: "contact_info", label: "Adres/Mobil Bilgileri" },
       { key: "org_chart", label: "Organizasyon Şeması" },
       { key: "sgk_iskur_notification", label: "SGK/İşkur/Emniyet Bildirimleri" },
