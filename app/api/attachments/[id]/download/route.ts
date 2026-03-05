@@ -37,11 +37,7 @@ export async function GET(
       return NextResponse.json({ error: "İndirme linki oluşturulamadı" }, { status: 500 });
     }
 
-    return NextResponse.json({
-      url: signedUrlData.signedUrl,
-      file_name: attachment.file_name,
-      mime_type: attachment.mime_type,
-    });
+    return NextResponse.redirect(signedUrlData.signedUrl);
   } catch (error) {
     console.error("Unexpected error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

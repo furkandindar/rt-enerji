@@ -104,8 +104,12 @@ export async function POST(request: Request) {
 
     // Tip bazlı validasyon
     if (body.overtime_type === 'EMERGENCY') {
-      if (!body.work_location || !body.work_start_date || !body.work_end_date || 
-          !body.previous_shift || !body.next_shift || !body.work_reason) {
+      if (!body.work_location || !body.work_start_date || !body.work_end_date ||
+          !body.previous_shift_start_date || !body.previous_shift_start_time ||
+          !body.previous_shift_end_date || !body.previous_shift_end_time ||
+          !body.next_shift_start_date || !body.next_shift_start_time ||
+          !body.next_shift_end_date || !body.next_shift_end_time ||
+          !body.work_reason) {
         return NextResponse.json({ error: "Acil durum için tüm alanlar zorunludur" }, { status: 400 });
       }
     } else if (body.overtime_type === 'STAFF_SHORTAGE') {
@@ -145,20 +149,26 @@ export async function POST(request: Request) {
 
     // EMERGENCY alanları
     if (body.overtime_type === 'EMERGENCY') {
+      const toTimestamptz = (date: string, time: string) =>
+        `${date}T${time}:00+03:00`;
+
       overtimeData.work_location = body.work_location;
       overtimeData.work_start_date = body.work_start_date;
       overtimeData.work_end_date = body.work_end_date;
-      overtimeData.previous_shift = body.previous_shift;
-      overtimeData.next_shift = body.next_shift;
+      overtimeData.previous_shift_start = toTimestamptz(body.previous_shift_start_date, body.previous_shift_start_time);
+      overtimeData.previous_shift_end = toTimestamptz(body.previous_shift_end_date, body.previous_shift_end_time);
+      overtimeData.next_shift_start = toTimestamptz(body.next_shift_start_date, body.next_shift_start_time);
+      overtimeData.next_shift_end = toTimestamptz(body.next_shift_end_date, body.next_shift_end_time);
       overtimeData.work_reason = body.work_reason;
     }
 
-    // STAFF_SHORTAGE için toplam hesapla
+    // STAFF_SHORTAGE için toplam hesapla ve work_location ekle
     if (body.overtime_type === 'STAFF_SHORTAGE') {
       const totalHours = body.entries.reduce((sum, e) => sum + e.overtime_hours, 0);
       const totalPay = body.entries.reduce((sum, e) => sum + e.overtime_pay, 0);
       overtimeData.total_hours = totalHours;
       overtimeData.total_pay = totalPay;
+      overtimeData.work_location = body.work_location;
     }
 
     const { data: overtimeRequest, error: overtimeError } = await supabase
@@ -178,6 +188,7 @@ export async function POST(request: Request) {
     if (body.overtime_type === 'STAFF_SHORTAGE' && body.entries.length > 0) {
       const entriesData = body.entries.map(entry => ({
         overtime_request_id: overtimeRequest.id,
+        full_name: entry.full_name,
         role_title: entry.role_title,
         overtime_hours: entry.overtime_hours,
         overtime_pay: entry.overtime_pay,

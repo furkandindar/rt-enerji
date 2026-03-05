@@ -4,7 +4,7 @@ import { format } from 'date-fns';
 import { SignatureFont } from '@/lib/signature/types';
 import path from 'path';
 
-const getLogoPath = () => path.join(process.cwd(), 'public', 'logo.png');
+const getLogoPath = () => path.join(process.cwd(), 'public', 'logo-w-text.png');
 
 Font.register({
   family: 'Roboto',
@@ -22,72 +22,63 @@ Font.register({ family: 'Sacramento', src: 'https://fonts.gstatic.com/s/sacramen
 
 const signatureFontMap: Record<SignatureFont, string> = { 'Ballet': 'Ballet', 'Great Vibes': 'Great Vibes', 'Sacramento': 'Sacramento' };
 
-const colors = { orange: '#F97316', orangeLight: '#FFECD2', black: '#000000', white: '#FFFFFF' };
-
-const styles = StyleSheet.create({
-  page: { padding: 20, fontSize: 8, fontFamily: 'Roboto', backgroundColor: colors.white },
-  headerContainer: { flexDirection: 'row', borderWidth: 1, borderColor: colors.black },
-  logoCell: { width: 70, padding: 8, borderRightWidth: 1, borderColor: colors.black, justifyContent: 'center', alignItems: 'center' },
-  logoImage: { width: 45, height: 45 },
-  titleCell: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 8 },
-  titleText: { fontSize: 14, fontWeight: 700 },
-  logoRightCell: { width: 70, padding: 8, borderLeftWidth: 1, borderColor: colors.black, justifyContent: 'center', alignItems: 'center' },
-  sectionHeader: { backgroundColor: colors.orange, padding: 4, borderWidth: 1, borderTopWidth: 0, borderColor: colors.black },
-  sectionHeaderText: { color: colors.white, fontSize: 9, fontWeight: 700, textAlign: 'center' },
-  mainContent: { flexDirection: 'row', borderWidth: 1, borderTopWidth: 0, borderColor: colors.black },
-  leftColumn: { width: '50%', borderRightWidth: 1, borderColor: colors.black },
-  rightColumn: { width: '50%' },
-  tableRow: { flexDirection: 'row', borderBottomWidth: 1, borderColor: colors.black, minHeight: 22 },
-  tableRowLast: { flexDirection: 'row', minHeight: 22 },
-  labelCell: { width: '45%', backgroundColor: colors.orangeLight, padding: 5, borderRightWidth: 1, borderColor: colors.black, justifyContent: 'center' },
-  valueCell: { width: '55%', padding: 5, justifyContent: 'center' },
-  labelText: { fontSize: 8, fontWeight: 500 },
-  valueText: { fontSize: 8 },
-  // Staff shortage table
-  entriesSection: { borderWidth: 1, borderTopWidth: 0, borderColor: colors.black },
-  entriesHeader: { flexDirection: 'row', backgroundColor: colors.orangeLight, borderBottomWidth: 1, borderColor: colors.black },
-  entriesHeaderCell: { padding: 5, borderRightWidth: 1, borderColor: colors.black, justifyContent: 'center' },
-  entriesHeaderCellLast: { padding: 5, justifyContent: 'center' },
-  entriesHeaderText: { fontSize: 8, fontWeight: 700, textAlign: 'center' },
-  entriesRow: { flexDirection: 'row', borderBottomWidth: 1, borderColor: colors.black, minHeight: 20 },
-  entriesRowLast: { flexDirection: 'row', minHeight: 20 },
-  entriesCell: { padding: 4, borderRightWidth: 1, borderColor: colors.black, justifyContent: 'center' },
-  entriesCellLast: { padding: 4, justifyContent: 'center' },
-  entriesCellText: { fontSize: 8, textAlign: 'center' },
-  totalsRow: { flexDirection: 'row', backgroundColor: colors.orangeLight, minHeight: 22 },
-  totalsLabel: { flex: 1, padding: 5, borderRightWidth: 1, borderColor: colors.black, justifyContent: 'center' },
-  totalsValue: { padding: 5, borderRightWidth: 1, borderColor: colors.black, justifyContent: 'center', width: 80 },
-  totalsValueLast: { padding: 5, justifyContent: 'center', width: 100 },
-  totalsText: { fontSize: 8, fontWeight: 700, textAlign: 'center' },
-  // HR Note
-  noteSection: { borderWidth: 1, borderTopWidth: 0, borderColor: colors.black, padding: 6, minHeight: 30 },
-  noteLabel: { fontSize: 8, fontWeight: 700, marginBottom: 3 },
+const staffStyles = StyleSheet.create({
+  page: { padding: 40, paddingTop: 20, fontSize: 9, fontFamily: 'Roboto', backgroundColor: '#FFFFFF' },
+  logoContainer: { alignItems: 'center', marginBottom: 8 },
+  logo: { width: 168, height: 37 },
+  divider: { borderBottomWidth: 2, borderColor: '#F97316', marginBottom: 10 },
+  title: { fontSize: 16, fontWeight: 700, textAlign: 'center', marginBottom: 10 },
+  subjectText: { fontSize: 10, marginBottom: 4 },
+  bodyText: { fontSize: 9, marginBottom: 10, lineHeight: 1.5 },
+  rightBlock: { alignItems: 'flex-end', marginBottom: 14 },
+  rightLabel: { fontSize: 9, fontWeight: 700 },
+  rightName: { fontSize: 9 },
+  table: { borderWidth: 1, borderColor: '#000000', marginBottom: 10 },
+  tableHeaderRow: { flexDirection: 'row', backgroundColor: '#F97316' },
+  tableHeaderCell: { padding: 5, borderRightWidth: 1, borderColor: '#000000', justifyContent: 'center' },
+  tableHeaderCellLast: { padding: 5, justifyContent: 'center' },
+  tableHeaderText: { color: '#FFFFFF', fontSize: 8, fontWeight: 700, textAlign: 'center' },
+  tableDataRow: { flexDirection: 'row', borderTopWidth: 1, borderColor: '#000000' },
+  tableDataCell: { padding: 5, borderRightWidth: 1, borderColor: '#000000', justifyContent: 'center' },
+  tableDataCellLast: { padding: 5, justifyContent: 'center' },
+  tableDataText: { fontSize: 8, textAlign: 'center' },
+  tableTotalsRow: { flexDirection: 'row', backgroundColor: '#FFECD2', borderTopWidth: 1, borderColor: '#000000' },
+  tableTotalsText: { fontSize: 8, fontWeight: 700, textAlign: 'center', padding: 5 },
+  noteBlock: { marginBottom: 8 },
+  noteLabel: { fontSize: 8, fontWeight: 700, marginBottom: 2 },
   noteText: { fontSize: 8 },
-  // Approval section
-  onayHeader: { backgroundColor: colors.orange, padding: 4, borderWidth: 1, borderTopWidth: 0, borderColor: colors.black },
-  onayHeaderText: { color: colors.white, fontSize: 9, fontWeight: 700, textAlign: 'center' },
-  onayContent: { flexDirection: 'row', borderWidth: 1, borderTopWidth: 0, borderColor: colors.black },
-  onayColumn: { flex: 1, borderRightWidth: 1, borderColor: colors.black },
+  onayHeader: { backgroundColor: '#F97316', padding: 4, borderWidth: 1, borderColor: '#000000', marginTop: 4 },
+  onayHeaderText: { color: '#FFFFFF', fontSize: 9, fontWeight: 700, textAlign: 'center' },
+  onayContent: { flexDirection: 'row', borderWidth: 1, borderTopWidth: 0, borderColor: '#000000' },
+  onayColumn: { flex: 1, borderRightWidth: 1, borderColor: '#000000' },
   onayColumnLast: { flex: 1 },
-  onayTitleRow: { backgroundColor: colors.orangeLight, padding: 4, borderBottomWidth: 1, borderColor: colors.black, minHeight: 22, justifyContent: 'center', alignItems: 'center' },
+  onayTitleRow: { backgroundColor: '#FFECD2', padding: 4, borderBottomWidth: 1, borderColor: '#000000', minHeight: 22, justifyContent: 'center', alignItems: 'center' },
   onayTitleText: { fontSize: 7, fontWeight: 700, textAlign: 'center' },
-  onaySignatureRow: { padding: 4, minHeight: 35, justifyContent: 'center', alignItems: 'center', gap: 2 },
-  onayNameText: { fontSize: 7, textAlign: 'center', marginBottom: 2 },
+  onaySignatureRow: { padding: 4, minHeight: 40, justifyContent: 'center', alignItems: 'center', gap: 2 },
+  onayNameText: { fontSize: 7, textAlign: 'center' },
+  onaySignatureText: { fontSize: 14, color: '#1a365d' },
+  onaySignatureStatus: { fontSize: 7, color: '#666' },
   footer: { marginTop: 10, fontSize: 6, color: '#666' },
-  footerText: { marginBottom: 2 },
-  signatureText: { fontSize: 14, color: '#1a365d' },
-  signatureStatus: { fontSize: 7, color: '#666' },
+  // Emergency field rows
+  fieldTable: { borderWidth: 1, borderColor: '#000000', marginBottom: 10 },
+  fieldRow: { flexDirection: 'row', borderBottomWidth: 1, borderColor: '#000000', minHeight: 24 },
+  fieldRowLast: { flexDirection: 'row', minHeight: 24 },
+  fieldLabel: { width: '38%', backgroundColor: '#FFECD2', padding: 5, borderRightWidth: 1, borderColor: '#000000', justifyContent: 'center' },
+  fieldValue: { flex: 1, padding: 5, justifyContent: 'center' },
+  fieldLabelText: { fontSize: 8, fontWeight: 700 },
+  fieldValueText: { fontSize: 9 },
+  shiftGroup: { marginBottom: 8 },
+  shiftGroupTitle: { fontSize: 9, fontWeight: 700, marginBottom: 4, color: '#F97316' },
 });
 
-const overtimeTypeLabels: Record<string, string> = { EMERGENCY: 'Acil Durum / Talep Üzerine', STAFF_SHORTAGE: 'Personel Eksikliği / Raporlama' };
 const reasonCategoryLabels: Record<string, string> = {
-  SHIFT_OUTSIDE: 'Vardiya Dışı Çalışma', NON_CONTINUOUS: 'Aralıklı Çalışma', EMERGENCY_CASE: 'Acil Durum',
+  SHIFT_OUTSIDE: 'Vardiya Dışı', NON_CONTINUOUS: 'Sürekli Olmayan', EMERGENCY_CASE: 'Acil Durum',
   SUDDEN_DEVELOPMENT: 'Ani Gelişme', ON_REQUEST: 'Talep Üzerine', STAFF_SHORTAGE: 'Personel Eksikliği',
   REPORTING: 'Raporlama', ENERGY_PRODUCTION: 'Enerji Üretimi'
 };
 
 interface SignatureInfo { text: string; font: SignatureFont; }
-interface OvertimeEntry { id: string; role_title: string; overtime_hours: number; overtime_pay: number; }
+interface OvertimeEntry { id: string; full_name: string; role_title: string; overtime_hours: number; overtime_pay: number; }
 interface OvertimePDFTemplateProps {
   request: any;
   requester: any;
@@ -97,15 +88,199 @@ interface OvertimePDFTemplateProps {
   signatures?: Record<string, SignatureInfo>;
 }
 
+const MONTH_NAMES: Record<string, string> = {
+  '1': 'Ocak', '2': 'Şubat', '3': 'Mart', '4': 'Nisan', '5': 'Mayıs', '6': 'Haziran',
+  '7': 'Temmuz', '8': 'Ağustos', '9': 'Eylül', '10': 'Ekim', '11': 'Kasım', '12': 'Aralık',
+};
+
+interface StaffShortageProps {
+  request: any;
+  requester: any;
+  overtimeRequest: any;
+  entries: OvertimeEntry[];
+  approvalColumns: { title: string; name: string; employeeId: string }[];
+  signatures: Record<string, SignatureInfo>;
+}
+
+const StaffShortagePDF: React.FC<StaffShortageProps> = ({
+  request, requester, overtimeRequest, entries, approvalColumns, signatures,
+}) => {
+  const renderSig = (employeeId: string) => {
+    const sig = signatures[employeeId];
+    if (sig) return <Text style={[staffStyles.onaySignatureText, { fontFamily: signatureFontMap[sig.font] }]}>{sig.text}</Text>;
+    return <Text style={staffStyles.onaySignatureStatus}>İmza</Text>;
+  };
+
+  const monthName = MONTH_NAMES[String(overtimeRequest.month)] || String(overtimeRequest.month);
+  const requestDate = format(new Date(request.created_at), 'dd/MM/yyyy');
+  const locationLabel = overtimeRequest.work_location || 'Merkez, Şube ve İşletmeler';
+
+  return (
+    <Page size="A4" style={staffStyles.page}>
+      <View style={staffStyles.logoContainer}><Image src={getLogoPath()} style={staffStyles.logo} /></View>
+      <View style={staffStyles.divider} />
+      <Text style={staffStyles.title}>FAZLA MESAİ ONAY FORMU</Text>
+      <Text style={staffStyles.subjectText}>Konu: Fazla Mesai Çalışmaları</Text>
+      <Text style={staffStyles.subjectText}>MERKEZ, ŞUBE ve İŞLETMELER</Text>
+      {/* {overtimeRequest.work_location && <Text style={staffStyles.subjectText}>{overtimeRequest.work_location}</Text>} */}
+      <Text style={[staffStyles.subjectText, { marginBottom: 12 }]}>Personel Eksikliği, Raporlama, 7/24 Enerji Üretimi</Text>
+      {/* <Text style={[staffStyles.subjectText, { marginBottom: 12 }]}>{reasonCategoryLabels[overtimeRequest.reason_category] || overtimeRequest.reason_category}</Text> */}
+      <Text style={staffStyles.bodyText}>
+        {reasonCategoryLabels[overtimeRequest.reason_category] || overtimeRequest.reason_category}{' nedeniyle oluşan '}{overtimeRequest.year}{' yılı '}{monthName}{' ayına ilişkin FAZLA MESAİ çalışmalarının ödenmesini onayınıza sunarım.\n'}{requestDate}
+      </Text>
+      <View style={staffStyles.rightBlock}>
+        <Text style={staffStyles.rightLabel}>İnsan Kaynakları</Text>
+        <Text style={staffStyles.rightName}>{requester.first_name} {requester.last_name}</Text>
+        {renderSig(requester.id)}
+      </View>
+
+      {entries.length > 0 && (
+        <View style={staffStyles.table}>
+          <View style={staffStyles.tableHeaderRow}>
+            <View style={[staffStyles.tableHeaderCell, { flex: 2 }]}><Text style={staffStyles.tableHeaderText}>{locationLabel}</Text></View>
+            <View style={[staffStyles.tableHeaderCell, { flex: 2 }]}><Text style={staffStyles.tableHeaderText}>Ad Soyad</Text></View>
+            <View style={[staffStyles.tableHeaderCell, { width: 80 }]}><Text style={staffStyles.tableHeaderText}>FM Saati</Text></View>
+            <View style={[staffStyles.tableHeaderCellLast, { width: 120 }]}><Text style={staffStyles.tableHeaderText}>Fazla Mesai Ücret Karşılığı</Text></View>
+          </View>
+          {entries.map((entry) => (
+            <View key={entry.id} style={staffStyles.tableDataRow}>
+              <View style={[staffStyles.tableDataCell, { flex: 2 }]}><Text style={staffStyles.tableDataText}>{entry.role_title}</Text></View>
+              <View style={[staffStyles.tableDataCell, { flex: 2 }]}><Text style={staffStyles.tableDataText}>{entry.full_name}</Text></View>
+              <View style={[staffStyles.tableDataCell, { width: 80 }]}><Text style={staffStyles.tableDataText}>{entry.overtime_hours} saat</Text></View>
+              <View style={[staffStyles.tableDataCellLast, { width: 120 }]}><Text style={staffStyles.tableDataText}>{entry.overtime_pay.toLocaleString('tr-TR')} TL</Text></View>
+            </View>
+          ))}
+          <View style={staffStyles.tableTotalsRow}>
+            <View style={[staffStyles.tableDataCell, { flex: 4 }]}><Text style={staffStyles.tableTotalsText}>TOPLAM</Text></View>
+            <View style={[staffStyles.tableDataCell, { width: 80 }]}><Text style={staffStyles.tableTotalsText}>{overtimeRequest.total_hours || 0} saat</Text></View>
+            <View style={[staffStyles.tableDataCellLast, { width: 120 }]}><Text style={staffStyles.tableTotalsText}>{(overtimeRequest.total_pay || 0).toLocaleString('tr-TR')} TL</Text></View>
+          </View>
+        </View>
+      )}
+
+      {overtimeRequest.reason_detail && (
+        <View style={staffStyles.noteBlock}>
+          <Text style={staffStyles.noteLabel}>ÇALIŞMAYI TALEP EDEN KİŞİ VEYA ÇALIŞMAYA NEDEN OLAN DURUM:</Text>
+          <Text style={staffStyles.noteText}>{overtimeRequest.reason_detail}</Text>
+        </View>
+      )}
+      {overtimeRequest.hr_note && (
+        <View style={staffStyles.noteBlock}>
+          <Text style={staffStyles.noteLabel}>İNSAN KAYNAKLARI NOTU:</Text>
+          <Text style={staffStyles.noteText}>{overtimeRequest.hr_note}</Text>
+        </View>
+      )}
+
+      <View style={staffStyles.onayHeader}><Text style={staffStyles.onayHeaderText}>ONAY</Text></View>
+      <View style={staffStyles.onayContent}>
+        {approvalColumns.map((col, idx) => (
+          <View key={idx} style={idx === approvalColumns.length - 1 ? staffStyles.onayColumnLast : staffStyles.onayColumn}>
+            <View style={staffStyles.onayTitleRow}><Text style={staffStyles.onayTitleText}>{col.title}</Text></View>
+            <View style={staffStyles.onaySignatureRow}>
+              <Text style={staffStyles.onayNameText}>{col.name}</Text>
+              {renderSig(col.employeeId)}
+            </View>
+          </View>
+        ))}
+      </View>
+      {/* <View style={staffStyles.footer}><Text>Tüm Formlar SharePoint/İK/Formlar dosyasına kaydedilir.</Text></View> */}
+    </Page>
+  );
+};
+
+interface EmergencyProps {
+  request: any;
+  requester: any;
+  overtimeRequest: any;
+  approvalColumns: { title: string; name: string; employeeId: string }[];
+  signatures: Record<string, SignatureInfo>;
+}
+
+const EmergencyPDF: React.FC<EmergencyProps> = ({
+  request, requester, overtimeRequest, approvalColumns, signatures,
+}) => {
+  const renderSig = (employeeId: string) => {
+    const sig = signatures[employeeId];
+    if (sig) return <Text style={[staffStyles.onaySignatureText, { fontFamily: signatureFontMap[sig.font] }]}>{sig.text}</Text>;
+    return <Text style={staffStyles.onaySignatureStatus}>İmza</Text>;
+  };
+
+  const monthName = MONTH_NAMES[String(overtimeRequest.month)] || String(overtimeRequest.month);
+  const requestDate = format(new Date(request.created_at), 'dd/MM/yyyy');
+  const fmtDate = (val: string | null) => val ? format(new Date(val), 'dd/MM/yyyy HH:mm') : '-';
+
+  return (
+    <Page size="A4" style={staffStyles.page}>
+      <View style={staffStyles.logoContainer}><Image src={getLogoPath()} style={staffStyles.logo} /></View>
+      <View style={staffStyles.divider} />
+      <Text style={staffStyles.title}>FAZLA MESAİ ONAY FORMU</Text>
+      <Text style={staffStyles.subjectText}>Konu: Fazla Mesai Çalışmaları</Text>
+      <Text style={[staffStyles.subjectText, { marginBottom: 12 }]}>{overtimeRequest.work_location || 'Merkez, Şube ve İşletmeler'}</Text>
+      <Text style={staffStyles.bodyText}>
+        {reasonCategoryLabels[overtimeRequest.reason_category] || overtimeRequest.reason_category}{' nedeniyle gerçekleştirilen '}{overtimeRequest.year}{' yılı '}{monthName}{' ayına ilişkin FAZLA MESAİ çalışmasının ödenmesini onayınıza sunarım.\n'}{requestDate}
+      </Text>
+      <View style={staffStyles.rightBlock}>
+        <Text style={staffStyles.rightLabel}>İnsan Kaynakları</Text>
+        <Text style={staffStyles.rightName}>{requester.first_name} {requester.last_name}</Text>
+        {renderSig(requester.id)}
+      </View>
+
+      {/* Çalışma Detayları */}
+      <View style={staffStyles.fieldTable}>
+        <View style={staffStyles.fieldRow}>
+          <View style={staffStyles.fieldLabel}><Text style={staffStyles.fieldLabelText}>Çalışma Yeri</Text></View>
+          <View style={staffStyles.fieldValue}><Text style={staffStyles.fieldValueText}>{overtimeRequest.work_location || '-'}</Text></View>
+        </View>
+        <View style={staffStyles.fieldRow}>
+          <View style={staffStyles.fieldLabel}><Text style={staffStyles.fieldLabelText}>Çalışma Tarihi</Text></View>
+          <View style={staffStyles.fieldValue}><Text style={staffStyles.fieldValueText}>{fmtDate(overtimeRequest.work_start_date)} – {fmtDate(overtimeRequest.work_end_date)}</Text></View>
+        </View>
+        <View style={staffStyles.fieldRow}>
+          <View style={staffStyles.fieldLabel}><Text style={staffStyles.fieldLabelText}>Önceki Vardiya</Text></View>
+          <View style={staffStyles.fieldValue}><Text style={staffStyles.fieldValueText}>{fmtDate(overtimeRequest.previous_shift_start)} – {fmtDate(overtimeRequest.previous_shift_end)}</Text></View>
+        </View>
+        <View style={staffStyles.fieldRow}>
+          <View style={staffStyles.fieldLabel}><Text style={staffStyles.fieldLabelText}>Sonraki Vardiya</Text></View>
+          <View style={staffStyles.fieldValue}><Text style={staffStyles.fieldValueText}>{fmtDate(overtimeRequest.next_shift_start)} – {fmtDate(overtimeRequest.next_shift_end)}</Text></View>
+        </View>
+        <View style={staffStyles.fieldRowLast}>
+          <View style={staffStyles.fieldLabel}><Text style={staffStyles.fieldLabelText}>Çalışma Nedeni</Text></View>
+          <View style={staffStyles.fieldValue}><Text style={staffStyles.fieldValueText}>{overtimeRequest.work_reason || '-'}</Text></View>
+        </View>
+      </View>
+
+      {overtimeRequest.reason_detail && (
+        <View style={staffStyles.noteBlock}>
+          <Text style={staffStyles.noteLabel}>ÇALIŞMAYI TALEP EDEN KİŞİ VEYA ÇALIŞMAYA NEDEN OLAN DURUM:</Text>
+          <Text style={staffStyles.noteText}>{overtimeRequest.reason_detail}</Text>
+        </View>
+      )}
+      {overtimeRequest.hr_note && (
+        <View style={staffStyles.noteBlock}>
+          <Text style={staffStyles.noteLabel}>İNSAN KAYNAKLARI NOTU:</Text>
+          <Text style={staffStyles.noteText}>{overtimeRequest.hr_note}</Text>
+        </View>
+      )}
+
+      <View style={staffStyles.onayHeader}><Text style={staffStyles.onayHeaderText}>ONAY</Text></View>
+      <View style={staffStyles.onayContent}>
+        {approvalColumns.map((col, idx) => (
+          <View key={idx} style={idx === approvalColumns.length - 1 ? staffStyles.onayColumnLast : staffStyles.onayColumn}>
+            <View style={staffStyles.onayTitleRow}><Text style={staffStyles.onayTitleText}>{col.title}</Text></View>
+            <View style={staffStyles.onaySignatureRow}>
+              <Text style={staffStyles.onayNameText}>{col.name}</Text>
+              {renderSig(col.employeeId)}
+            </View>
+          </View>
+        ))}
+      </View>
+    </Page>
+  );
+};
+
 export const OvertimePDFTemplate: React.FC<OvertimePDFTemplateProps> = ({
   request, requester, overtimeRequest, entries = [], approvals, signatures = {},
 }) => {
-  const renderSignature = (employeeId: string) => {
-    const sig = signatures[employeeId];
-    if (sig) return <Text style={[styles.signatureText, { fontFamily: signatureFontMap[sig.font] }]}>{sig.text}</Text>;
-    return <Text style={styles.signatureStatus}>İmza</Text>;
-  };
-
   const getApprovalColumns = () => {
     const columns = [{ title: 'İnsan Kaynakları', name: `${requester.first_name} ${requester.last_name}`, employeeId: requester.id }];
     const sortedApprovals = approvals.filter((a) => a.workflow_step.step_order > 1).sort((a, b) => a.workflow_step.step_order - b.workflow_step.step_order);
@@ -120,96 +295,30 @@ export const OvertimePDFTemplate: React.FC<OvertimePDFTemplateProps> = ({
   const isEmergency = overtimeRequest.overtime_type === 'EMERGENCY';
   const actualEntries = overtimeRequest.entries || entries || [];
 
+  if (!isEmergency) {
+    return (
+      <Document>
+        <StaffShortagePDF
+          request={request}
+          requester={requester}
+          overtimeRequest={overtimeRequest}
+          entries={actualEntries}
+          approvalColumns={approvalColumns.slice(1)}
+          signatures={signatures}
+        />
+      </Document>
+    );
+  }
+
   return (
     <Document>
-      <Page size="A4" orientation="landscape" style={styles.page}>
-        {/* Header */}
-        <View style={styles.headerContainer}>
-          <View style={styles.logoCell}><Image src={getLogoPath()} style={styles.logoImage} /></View>
-          <View style={styles.titleCell}><Text style={styles.titleText}>FAZLA MESAİ ONAY FORMU</Text></View>
-          <View style={styles.logoRightCell}><Image src={getLogoPath()} style={styles.logoImage} /></View>
-        </View>
-
-        {/* GENEL BİLGİLER */}
-        <View style={styles.sectionHeader}><Text style={styles.sectionHeaderText}>GENEL BİLGİLER</Text></View>
-        <View style={styles.mainContent}>
-          <View style={styles.leftColumn}>
-            <View style={styles.tableRow}><View style={styles.labelCell}><Text style={styles.labelText}>Fazla Mesai Tipi</Text></View><View style={styles.valueCell}><Text style={styles.valueText}>{overtimeTypeLabels[overtimeRequest.overtime_type]}</Text></View></View>
-            <View style={styles.tableRow}><View style={styles.labelCell}><Text style={styles.labelText}>Dönem</Text></View><View style={styles.valueCell}><Text style={styles.valueText}>{overtimeRequest.month} {overtimeRequest.year}</Text></View></View>
-            <View style={styles.tableRowLast}><View style={styles.labelCell}><Text style={styles.labelText}>Neden Kategorisi</Text></View><View style={styles.valueCell}><Text style={styles.valueText}>{reasonCategoryLabels[overtimeRequest.reason_category]}</Text></View></View>
-          </View>
-          <View style={styles.rightColumn}>
-            <View style={styles.tableRow}><View style={styles.labelCell}><Text style={styles.labelText}>Talep Tarihi</Text></View><View style={styles.valueCell}><Text style={styles.valueText}>{format(new Date(request.created_at), 'dd/MM/yyyy')}</Text></View></View>
-            <View style={styles.tableRowLast}><View style={{...styles.labelCell, width: '45%'}}><Text style={styles.labelText}>Talep Eden Kişi/Durum</Text></View><View style={{...styles.valueCell, width: '55%'}}><Text style={styles.valueText}>{overtimeRequest.reason_detail}</Text></View></View>
-          </View>
-        </View>
-
-        {/* EMERGENCY - Çalışma Detayları */}
-        {isEmergency && (
-          <>
-            <View style={styles.sectionHeader}><Text style={styles.sectionHeaderText}>ÇALIŞMA DETAYLARI</Text></View>
-            <View style={styles.mainContent}>
-              <View style={styles.leftColumn}>
-                <View style={styles.tableRow}><View style={styles.labelCell}><Text style={styles.labelText}>Çalışma Yeri</Text></View><View style={styles.valueCell}><Text style={styles.valueText}>{overtimeRequest.work_location || '-'}</Text></View></View>
-                <View style={styles.tableRow}><View style={styles.labelCell}><Text style={styles.labelText}>Çalışma Başlangıç</Text></View><View style={styles.valueCell}><Text style={styles.valueText}>{overtimeRequest.work_start_date ? format(new Date(overtimeRequest.work_start_date), 'dd/MM/yyyy HH:mm') : '-'}</Text></View></View>
-                <View style={styles.tableRowLast}><View style={styles.labelCell}><Text style={styles.labelText}>Çalışma Bitiş</Text></View><View style={styles.valueCell}><Text style={styles.valueText}>{overtimeRequest.work_end_date ? format(new Date(overtimeRequest.work_end_date), 'dd/MM/yyyy HH:mm') : '-'}</Text></View></View>
-              </View>
-              <View style={styles.rightColumn}>
-                <View style={styles.tableRow}><View style={styles.labelCell}><Text style={styles.labelText}>Önceki Mesai Saati</Text></View><View style={styles.valueCell}><Text style={styles.valueText}>{overtimeRequest.previous_shift || '-'}</Text></View></View>
-                <View style={styles.tableRow}><View style={styles.labelCell}><Text style={styles.labelText}>Sonraki Mesai Saati</Text></View><View style={styles.valueCell}><Text style={styles.valueText}>{overtimeRequest.next_shift || '-'}</Text></View></View>
-                <View style={styles.tableRowLast}><View style={styles.labelCell}><Text style={styles.labelText}>Çalışma Nedeni</Text></View><View style={styles.valueCell}><Text style={styles.valueText}>{overtimeRequest.work_reason || '-'}</Text></View></View>
-              </View>
-            </View>
-          </>
-        )}
-
-        {/* STAFF_SHORTAGE - Çalışan Listesi */}
-        {!isEmergency && actualEntries.length > 0 && (
-          <>
-            <View style={styles.sectionHeader}><Text style={styles.sectionHeaderText}>ÇALIŞAN LİSTESİ</Text></View>
-            <View style={styles.entriesSection}>
-              <View style={styles.entriesHeader}>
-                <View style={{...styles.entriesHeaderCell, flex: 1}}><Text style={styles.entriesHeaderText}>Rol / Unvan</Text></View>
-                <View style={{...styles.entriesHeaderCell, width: 80}}><Text style={styles.entriesHeaderText}>FM Saati</Text></View>
-                <View style={{...styles.entriesHeaderCellLast, width: 100}}><Text style={styles.entriesHeaderText}>Ücret (TL)</Text></View>
-              </View>
-              {actualEntries.map((entry: OvertimeEntry, index: number) => (
-                <View key={entry.id} style={index === actualEntries.length - 1 ? styles.entriesRowLast : styles.entriesRow}>
-                  <View style={{...styles.entriesCell, flex: 1}}><Text style={styles.entriesCellText}>{entry.role_title}</Text></View>
-                  <View style={{...styles.entriesCell, width: 80}}><Text style={styles.entriesCellText}>{entry.overtime_hours} saat</Text></View>
-                  <View style={{...styles.entriesCellLast, width: 100}}><Text style={styles.entriesCellText}>{entry.overtime_pay.toLocaleString('tr-TR')} TL</Text></View>
-                </View>
-              ))}
-              <View style={styles.totalsRow}>
-                <View style={styles.totalsLabel}><Text style={styles.totalsText}>TOPLAM</Text></View>
-                <View style={styles.totalsValue}><Text style={styles.totalsText}>{overtimeRequest.total_hours || 0} saat</Text></View>
-                <View style={styles.totalsValueLast}><Text style={styles.totalsText}>{(overtimeRequest.total_pay || 0).toLocaleString('tr-TR')} TL</Text></View>
-              </View>
-            </View>
-          </>
-        )}
-
-        {/* İK Notu */}
-        {overtimeRequest.hr_note && (
-          <View style={styles.noteSection}>
-            <Text style={styles.noteLabel}>İK Notu:</Text>
-            <Text style={styles.noteText}>{overtimeRequest.hr_note}</Text>
-          </View>
-        )}
-
-        {/* ONAY */}
-        <View style={styles.onayHeader}><Text style={styles.onayHeaderText}>ONAY</Text></View>
-        <View style={styles.onayContent}>
-          {approvalColumns.map((col, index) => (
-            <View key={index} style={index === approvalColumns.length - 1 ? styles.onayColumnLast : styles.onayColumn}>
-              <View style={styles.onayTitleRow}><Text style={styles.onayTitleText}>{col.title}</Text></View>
-              <View style={styles.onaySignatureRow}><Text style={styles.onayNameText}>{col.name}</Text>{renderSignature(col.employeeId)}</View>
-            </View>
-          ))}
-        </View>
-
-        <View style={styles.footer}><Text style={styles.footerText}>Tüm Formlar SharePoint/İK/Formlar dosyasına kaydedilir.</Text></View>
-      </Page>
+      <EmergencyPDF
+        request={request}
+        requester={requester}
+        overtimeRequest={overtimeRequest}
+        approvalColumns={approvalColumns.slice(1)}
+        signatures={signatures}
+      />
     </Document>
   );
 };

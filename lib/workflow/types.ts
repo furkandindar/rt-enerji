@@ -199,8 +199,10 @@ export interface OvertimeRequest {
   work_location: string | null;
   work_start_date: string | null;
   work_end_date: string | null;
-  previous_shift: string | null;
-  next_shift: string | null;
+  previous_shift_start: string | null;
+  previous_shift_end: string | null;
+  next_shift_start: string | null;
+  next_shift_end: string | null;
   work_reason: string | null;
   // STAFF_SHORTAGE only
   total_hours: number | null;
@@ -212,6 +214,7 @@ export interface OvertimeRequest {
 export interface OvertimeEntry {
   id: string;
   overtime_request_id: string;
+  full_name: string;
   role_title: string;
   overtime_hours: number;
   overtime_pay: number;
@@ -229,8 +232,10 @@ export interface CreateOvertimeEmergencyInput {
   work_location: string;
   work_start_date: string;
   work_end_date: string;
-  previous_shift: string;
-  next_shift: string;
+  previous_shift_start: string;
+  previous_shift_end: string;
+  next_shift_start: string;
+  next_shift_end: string;
   work_reason: string;
 }
 
@@ -241,7 +246,9 @@ export interface CreateOvertimeStaffShortageInput {
   reason_category: 'STAFF_SHORTAGE' | 'REPORTING' | 'ENERGY_PRODUCTION';
   reason_detail: string;
   hr_note?: string;
+  work_location: string;
   entries: Array<{
+    full_name: string;
     role_title: string;
     overtime_hours: number;
     overtime_pay: number;

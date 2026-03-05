@@ -26,7 +26,7 @@ Fazla mesai onay formu, çalışanların fazla mesai taleplerinin yönetilmesini
 
 ## 2. Fazla Mesai Tipleri
 
-### 2.1 Acil Durum (EMERGENCY)
+### 2.1 Olağan Dışı Durumlar (EMERGENCY)
 
 Tek bir çalışan için, acil durumlar veya talep üzerine oluşturulan fazla mesai.
 
@@ -39,7 +39,7 @@ Tek bir çalışan için, acil durumlar veya talep üzerine oluşturulan fazla m
 | `SUDDEN_DEVELOPMENT` | Ani Gelişen |
 | `ON_REQUEST` | Talep Üzerine |
 
-### 2.2 Personel Eksikliği (STAFF_SHORTAGE)
+### 2.2 Olağan Durumlar (STAFF_SHORTAGE)
 
 Birden fazla çalışan için, raporlama amaçlı oluşturulan fazla mesai.
 

@@ -132,7 +132,10 @@ export function ApprovalDetailSheet({
               <SalaryAdvanceDetails approval={selectedApproval} />
             )}
             {selectedApproval.request.overtime_request && (
-              <OvertimeRequestDetails approval={selectedApproval} />
+              <OvertimeRequestDetails
+                approval={selectedApproval}
+                previousStepAttachments={previousStepAttachments}
+              />
             )}
             {selectedApproval.request.onboarding_request && (
               <OnboardingRequestDetails

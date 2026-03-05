@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { format } from "date-fns";
 import { tr } from "date-fns/locale";
-import { Plus, Loader2, Eye, Filter, Download } from "lucide-react";
+import { Plus, Loader2, Eye, Filter, Download, FileIcon } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -43,6 +43,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { overtimeTypeLabels } from "@/lib/approvals/constants";
+import { createClient } from "@/lib/supabase/client";
 
 interface WorkflowDefinition {
   id: string;
@@ -106,6 +108,7 @@ interface SalaryAdvanceRequest {
 
 interface OvertimeEntry {
   id: string;
+  full_name: string;
   role_title: string;
   overtime_hours: number;
   overtime_pay: number;
@@ -122,8 +125,10 @@ interface OvertimeRequest {
   work_location: string | null;
   work_start_date: string | null;
   work_end_date: string | null;
-  previous_shift: string | null;
-  next_shift: string | null;
+  previous_shift_start: string | null;
+  previous_shift_end: string | null;
+  next_shift_start: string | null;
+  next_shift_end: string | null;
   work_reason: string | null;
   total_hours: number | null;
   total_pay: number | null;
@@ -154,6 +159,14 @@ interface Request {
   onboarding_request?: OnboardingRequestData;
   requester?: Requester;
   approvals?: Approval[];
+}
+
+interface Attachment {
+  id: string;
+  file_name: string;
+  file_size: number;
+  mime_type: string;
+  config_label: string;
 }
 
 const statusColors: Record<string, string> = {
@@ -189,11 +202,6 @@ const leaveTypeLabels: Record<string, string> = {
   SHORT_LEAVE: "Kısa Süreli İzin",
 };
 
-const overtimeTypeLabels: Record<string, string> = {
-  EMERGENCY: "Acil Durum / Talep Üzerine",
-  STAFF_SHORTAGE: "Personel Eksikliği / Raporlama",
-};
-
 const overtimeReasonLabels: Record<string, string> = {
   SHIFT_OUTSIDE: "Vardiya Dışı",
   NON_CONTINUOUS: "Sürekli Olmayan",
@@ -211,6 +219,7 @@ export default function MyRequestsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [selectedRequest, setSelectedRequest] = useState<Request | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
 
   // Filters
   const [workflowFilter, setWorkflowFilter] = useState<string>("all");
@@ -244,9 +253,34 @@ export default function MyRequestsPage() {
     }
   };
 
-  const handleViewDetail = (request: Request) => {
+  const handleViewDetail = async (request: Request) => {
     setSelectedRequest(request);
+    setAttachments([]);
     setIsDetailOpen(true);
+
+    // Overtime talepleri için ek dosyaları çek
+    if (request.overtime_request) {
+      try {
+        const supabase = createClient();
+        const { data: files } = await supabase
+          .from("request_attachments")
+          .select("id, file_name, file_size, mime_type, config:workflow_step_attachments(label)")
+          .eq("request_id", request.id);
+
+        if (files && files.length > 0) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          setAttachments(files.map((f: any) => ({
+            id: f.id,
+            file_name: f.file_name,
+            file_size: f.file_size,
+            mime_type: f.mime_type,
+            config_label: f.config?.label || f.file_name,
+          })));
+        }
+      } catch (error) {
+        console.error("Error fetching attachments:", error);
+      }
+    }
   };
 
   const getRequestSummary = (request: Request): string => {
@@ -426,7 +460,7 @@ export default function MyRequestsPage() {
 
       {/* Talep Detay Sheet */}
       <Sheet open={isDetailOpen} onOpenChange={setIsDetailOpen}>
-        <SheetContent className="overflow-y-auto sm:max-w-[550px]">
+        <SheetContent className="overflow-y-auto sm:max-w-[750px]">
           <SheetHeader>
             <SheetTitle>Talep Detayları</SheetTitle>
             <SheetDescription>
@@ -593,14 +627,22 @@ export default function MyRequestsPage() {
                           </p>
                         </div>
                       </div>
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
                         <div>
-                          <p className="text-sm font-medium text-muted-foreground">Önceki Mesai Saati</p>
-                          <p className="text-sm font-semibold">{selectedRequest.overtime_request.previous_shift || "-"}</p>
+                          <p className="text-sm font-medium text-muted-foreground">Önceki Vardiya</p>
+                          <p className="text-sm font-semibold">
+                            {selectedRequest.overtime_request.previous_shift_start
+                              ? `${format(new Date(selectedRequest.overtime_request.previous_shift_start), "dd/MM/yyyy HH:mm", { locale: tr })} – ${selectedRequest.overtime_request.previous_shift_end ? format(new Date(selectedRequest.overtime_request.previous_shift_end), "dd/MM/yyyy HH:mm", { locale: tr }) : "-"}`
+                              : "-"}
+                          </p>
                         </div>
                         <div>
-                          <p className="text-sm font-medium text-muted-foreground">Sonraki Mesai Saati</p>
-                          <p className="text-sm font-semibold">{selectedRequest.overtime_request.next_shift || "-"}</p>
+                          <p className="text-sm font-medium text-muted-foreground">Sonraki Vardiya</p>
+                          <p className="text-sm font-semibold">
+                            {selectedRequest.overtime_request.next_shift_start
+                              ? `${format(new Date(selectedRequest.overtime_request.next_shift_start), "dd/MM/yyyy HH:mm", { locale: tr })} – ${selectedRequest.overtime_request.next_shift_end ? format(new Date(selectedRequest.overtime_request.next_shift_end), "dd/MM/yyyy HH:mm", { locale: tr }) : "-"}`
+                              : "-"}
+                          </p>
                         </div>
                       </div>
                     </>
@@ -608,12 +650,20 @@ export default function MyRequestsPage() {
 
                   {/* STAFF_SHORTAGE specific fields */}
                   {selectedRequest.overtime_request.overtime_type === 'STAFF_SHORTAGE' && selectedRequest.overtime_request.entries && (
-                    <div className="space-y-2">
+                    <div className="space-y-4">
+                      {selectedRequest.overtime_request.work_location && (
+                        <div>
+                          <p className="text-sm font-medium text-muted-foreground">Merkez, Şube ve İşletmeler</p>
+                          <p className="text-sm font-semibold">{selectedRequest.overtime_request.work_location}</p>
+                        </div>
+                      )}
+                      <div className="space-y-2">
                       <p className="text-sm font-medium text-muted-foreground">Çalışan Listesi</p>
                       <div className="rounded-md border">
                         <Table>
                           <TableHeader>
                             <TableRow>
+                              <TableHead>Ad Soyad</TableHead>
                               <TableHead>Rol/Unvan</TableHead>
                               <TableHead>FM Saati</TableHead>
                               <TableHead>Ücret (TL)</TableHead>
@@ -622,6 +672,7 @@ export default function MyRequestsPage() {
                           <TableBody>
                             {selectedRequest.overtime_request.entries.map((entry) => (
                               <TableRow key={entry.id}>
+                                <TableCell>{entry.full_name}</TableCell>
                                 <TableCell>{entry.role_title}</TableCell>
                                 <TableCell>{entry.overtime_hours} saat</TableCell>
                                 <TableCell>{entry.overtime_pay.toLocaleString('tr-TR')} TL</TableCell>
@@ -640,6 +691,7 @@ export default function MyRequestsPage() {
                           <p className="text-sm font-semibold">{(selectedRequest.overtime_request.total_pay || 0).toLocaleString('tr-TR')} TL</p>
                         </div>
                       </div>
+                      </div>
                     </div>
                   )}
 
@@ -647,6 +699,34 @@ export default function MyRequestsPage() {
                     <div>
                       <p className="text-sm font-medium text-muted-foreground">İK Notu</p>
                       <p className="text-sm font-semibold">{selectedRequest.overtime_request.hr_note}</p>
+                    </div>
+                  )}
+
+                  {/* Ek Dosyalar */}
+                  {attachments.length > 0 && (
+                    <div className="space-y-2">
+                      <p className="text-sm font-medium text-muted-foreground">Ek Dosyalar</p>
+                      <div className="space-y-1.5">
+                        {attachments.map((attachment) => (
+                          <div
+                            key={attachment.id}
+                            className="flex items-center justify-between rounded-md border px-3 py-2 bg-muted/30"
+                          >
+                            <div className="flex items-center gap-2 min-w-0">
+                              <FileIcon className="h-4 w-4 text-muted-foreground shrink-0" />
+                              <span className="text-sm truncate">{attachment.config_label}</span>
+                            </div>
+                            <a
+                              href={`/api/attachments/${attachment.id}/download`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="ml-2 shrink-0 text-muted-foreground hover:text-foreground"
+                            >
+                              <Download className="h-4 w-4" />
+                            </a>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </>

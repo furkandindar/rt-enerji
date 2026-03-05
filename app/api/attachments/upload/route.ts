@@ -75,16 +75,26 @@ export async function POST(request: Request) {
       }, { status: 400 });
     }
 
-    // 4. Onaycı kontrolü - bu request'in ilgili adımının onaycısı mı?
-    const { data: approval } = await supabase
-      .from("request_approvals")
-      .select("id, workflow_step:workflow_steps(id)")
-      .eq("request_id", requestId)
-      .eq("approver_employee_id", appUser.employee_id)
-      .eq("status", "PENDING");
+    // 4. Yetki kontrolü - talep sahibi veya bekleyen onaycı mı?
+    const { data: requestData } = await supabase
+      .from("requests")
+      .select("requester_employee_id")
+      .eq("id", requestId)
+      .single();
 
-    if (!approval || approval.length === 0) {
-      return NextResponse.json({ error: "Bu talep için dosya yükleme yetkiniz yok" }, { status: 403 });
+    const isRequester = requestData?.requester_employee_id === appUser.employee_id;
+
+    if (!isRequester) {
+      const { data: approval } = await supabase
+        .from("request_approvals")
+        .select("id")
+        .eq("request_id", requestId)
+        .eq("approver_employee_id", appUser.employee_id)
+        .eq("status", "PENDING");
+
+      if (!approval || approval.length === 0) {
+        return NextResponse.json({ error: "Bu talep için dosya yükleme yetkiniz yok" }, { status: 403 });
+      }
     }
 
     // 5. Storage'a yükle

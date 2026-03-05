@@ -6,7 +6,7 @@ import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
-import { Loader2, Clock, Plus, Trash2 } from "lucide-react";
+import { Loader2, Clock, Plus, Trash2, Upload, X, FileText } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { SignaturePanel } from "@/components/signature-panel";
 import { SignatureFont } from "@/lib/signature/types";
@@ -64,6 +64,7 @@ const STAFF_SHORTAGE_REASONS = [
 
 // Entry schema
 const entrySchema = z.object({
+  full_name: z.string().min(1, "Ad Soyad gerekli"),
   role_title: z.string().min(1, "Rol/Unvan gerekli"),
   overtime_hours: z.number().min(0.5, "En az 0.5 saat"),
   overtime_pay: z.number().min(0, "Geçerli bir tutar girin"),
@@ -85,14 +86,21 @@ const emergencySchema = baseSchema.extend({
   work_location: z.string().min(1, "Çalışma yeri gerekli"),
   work_start_date: z.string().min(1, "Başlangıç tarihi gerekli"),
   work_end_date: z.string().min(1, "Bitiş tarihi gerekli"),
-  previous_shift: z.string().min(1, "Önceki mesai saati gerekli"),
-  next_shift: z.string().min(1, "Sonraki mesai saati gerekli"),
+  previous_shift_start_date: z.string().min(1, "Tarih gerekli"),
+  previous_shift_start_time: z.string().min(1, "Saat gerekli"),
+  previous_shift_end_date: z.string().min(1, "Tarih gerekli"),
+  previous_shift_end_time: z.string().min(1, "Saat gerekli"),
+  next_shift_start_date: z.string().min(1, "Tarih gerekli"),
+  next_shift_start_time: z.string().min(1, "Saat gerekli"),
+  next_shift_end_date: z.string().min(1, "Tarih gerekli"),
+  next_shift_end_time: z.string().min(1, "Saat gerekli"),
   work_reason: z.string().min(1, "Çalışma nedeni gerekli"),
 });
 
 // Staff shortage schema
 const staffShortageSchema = baseSchema.extend({
   overtime_type: z.literal("STAFF_SHORTAGE"),
+  work_location: z.string().min(1, "Merkez/Şube/İşletme adı gerekli"),
   entries: z.array(entrySchema).min(1, "En az bir çalışan ekleyin"),
 });
 
@@ -118,6 +126,12 @@ export default function NewOvertimePage() {
     signatureFont: null,
   });
   const [loadingSignature, setLoadingSignature] = useState(true);
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [attachmentConfigId, setAttachmentConfigId] = useState<string | null>(null);
+  const [attachmentLabel, setAttachmentLabel] = useState<string>("Ek Dosya");
+  const [allowedMimeTypes, setAllowedMimeTypes] = useState<string[]>(["application/pdf", "image/jpeg", "image/png"]);
+  const [maxFileSizeBytes, setMaxFileSizeBytes] = useState<number>(10485760);
+  const [maxFiles, setMaxFiles] = useState<number>(5);
   const supabase = createClient();
 
   const currentYear = new Date().getFullYear();
@@ -159,10 +173,52 @@ export default function NewOvertimePage() {
     loadSignatureInfo();
   }, [supabase]);
 
+  // Overtime step 1 için attachment config'i yükle
+  useEffect(() => {
+    const loadAttachmentConfig = async () => {
+      try {
+        const { data: wfDef } = await supabase
+          .from("workflow_definitions")
+          .select("id")
+          .eq("code", "OVERTIME")
+          .single();
+
+        if (!wfDef) return;
+
+        const { data: step } = await supabase
+          .from("workflow_steps")
+          .select("id")
+          .eq("workflow_definition_id", wfDef.id)
+          .eq("step_order", 1)
+          .single();
+
+        if (!step) return;
+
+        const { data: configs } = await supabase
+          .from("workflow_step_attachments")
+          .select("id, label, allowed_mime_types, max_file_size_bytes, max_files")
+          .eq("workflow_step_id", step.id);
+
+        if (configs && configs.length > 0) {
+          const config = configs[0];
+          setAttachmentConfigId(config.id);
+          setAttachmentLabel(config.label);
+          setAllowedMimeTypes(config.allowed_mime_types);
+          setMaxFileSizeBytes(config.max_file_size_bytes);
+          setMaxFiles(config.max_files);
+        }
+      } catch (error) {
+        console.error("Error loading attachment config:", error);
+      }
+    };
+
+    loadAttachmentConfig();
+  }, [supabase]);
+
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      overtime_type: "EMERGENCY",
+      overtime_type: "STAFF_SHORTAGE",
       month: currentMonth,
       year: currentYear,
       reason_category: "",
@@ -171,9 +227,16 @@ export default function NewOvertimePage() {
       work_location: "",
       work_start_date: "",
       work_end_date: "",
-      previous_shift: "",
-      next_shift: "",
+      previous_shift_start_date: "",
+      previous_shift_start_time: "",
+      previous_shift_end_date: "",
+      previous_shift_end_time: "",
+      next_shift_start_date: "",
+      next_shift_start_time: "",
+      next_shift_end_date: "",
+      next_shift_end_time: "",
       work_reason: "",
+      entries: [{ full_name: "", role_title: "", overtime_hours: 0, overtime_pay: 0 }],
     } as FormValues,
   });
 
@@ -200,9 +263,33 @@ export default function NewOvertimePage() {
     if (value === "STAFF_SHORTAGE") {
       // Entries için başlangıç değeri ekle
       if (!fields.length) {
-        append({ role_title: "", overtime_hours: 0, overtime_pay: 0 });
+        append({ full_name: "", role_title: "", overtime_hours: 0, overtime_pay: 0 });
       }
     }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    const validFiles = files.filter((file) => {
+      if (!allowedMimeTypes.includes(file.type)) {
+        toast.error(`${file.name}: Desteklenmeyen dosya türü`);
+        return false;
+      }
+      if (file.size > maxFileSizeBytes) {
+        toast.error(`${file.name}: Dosya boyutu çok büyük (maks ${Math.round(maxFileSizeBytes / 1048576)} MB)`);
+        return false;
+      }
+      return true;
+    });
+    setPendingFiles((prev) => {
+      const combined = [...prev, ...validFiles];
+      return combined.slice(0, maxFiles);
+    });
+    e.target.value = "";
+  };
+
+  const removeFile = (index: number) => {
+    setPendingFiles((prev) => prev.filter((_, i) => i !== index));
   };
 
   const onSubmit = async (data: FormValues) => {
@@ -217,6 +304,29 @@ export default function NewOvertimePage() {
       if (!response.ok) {
         const error = await response.json();
         throw new Error(error.error || "Talep oluşturulamadı");
+      }
+
+      const result = await response.json();
+      const requestId: string = result.id;
+
+      // Dosyaları yükle (talep oluşturulduktan sonra)
+      if (requestId && pendingFiles.length > 0) {
+        for (const file of pendingFiles) {
+          const formData = new FormData();
+          formData.append("file", file);
+          formData.append("request_id", requestId);
+          if (attachmentConfigId) {
+            formData.append("step_attachment_config_id", attachmentConfigId);
+          }
+          const uploadRes = await fetch("/api/attachments/upload", {
+            method: "POST",
+            body: formData,
+          });
+          if (!uploadRes.ok) {
+            console.error("Dosya yüklenemedi:", file.name);
+            toast.warning(`${file.name} yüklenemedi, talep yine de oluşturuldu`);
+          }
+        }
       }
 
       toast.success("Fazla mesai talebi başarıyla oluşturuldu");
@@ -250,36 +360,63 @@ export default function NewOvertimePage() {
         <CardContent>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-              {/* Fazla Mesai Tipi */}
-              <FormField
-                control={form.control}
-                name="overtime_type"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Fazla Mesai Tipi</FormLabel>
-                    <Select onValueChange={handleTypeChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Tip seçin" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="EMERGENCY">Acil Durum / Talep Üzerine</SelectItem>
-                        <SelectItem value="STAFF_SHORTAGE">Personel Eksikliği / Raporlama</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              {/* Fazla Mesai Tipi + Neden - yan yana */}
+              <div className="flex gap-4">
+                <FormField
+                  control={form.control}
+                  name="overtime_type"
+                  render={({ field }) => (
+                    <FormItem className="w-52">
+                      <FormLabel>Fazla Mesai Tipi</FormLabel>
+                      <Select onValueChange={handleTypeChange} defaultValue={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Tip seçin" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="EMERGENCY">Olağan Dışı Durumlar</SelectItem>
+                          <SelectItem value="STAFF_SHORTAGE">Olağan Durumlar</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="reason_category"
+                  render={({ field }) => (
+                    <FormItem className="w-52">
+                      <FormLabel>Fazla Mesai Nedeni</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Neden seçin" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {reasonOptions.map((reason) => (
+                            <SelectItem key={reason.value} value={reason.value}>
+                              {reason.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
 
               {/* Ay ve Yıl */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="flex gap-4">
                 <FormField
                   control={form.control}
                   name="month"
                   render={({ field }) => (
-                    <FormItem>
+                    <FormItem className="w-40">
                       <FormLabel>Ay</FormLabel>
                       <Select onValueChange={field.onChange} defaultValue={field.value}>
                         <FormControl>
@@ -302,7 +439,7 @@ export default function NewOvertimePage() {
                   control={form.control}
                   name="year"
                   render={({ field }) => (
-                    <FormItem>
+                    <FormItem className="w-28">
                       <FormLabel>Yıl</FormLabel>
                       <FormControl>
                         <Input
@@ -316,50 +453,6 @@ export default function NewOvertimePage() {
                   )}
                 />
               </div>
-
-              {/* Neden Kategorisi */}
-              <FormField
-                control={form.control}
-                name="reason_category"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Fazla Mesai Nedeni</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Neden seçin" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {reasonOptions.map((reason) => (
-                          <SelectItem key={reason.value} value={reason.value}>
-                            {reason.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              {/* Detay Açıklama */}
-              <FormField
-                control={form.control}
-                name="reason_detail"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Çalışmayı Talep Eden Kişi veya Durum</FormLabel>
-                    <FormControl>
-                      <Textarea
-                        placeholder="Açıklama yazın..."
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
 
               {/* EMERGENCY Alanları */}
               {overtimeType === "EMERGENCY" && (
@@ -409,34 +502,134 @@ export default function NewOvertimePage() {
                     />
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
-                    <FormField
-                      control={form.control}
-                      name="previous_shift"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Önceki Mesai Saati</FormLabel>
-                          <FormControl>
-                            <Input placeholder="Örn: 08:00 - 17:00" {...field} value={field.value || ""} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                  {/* Önceki Vardiya */}
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium">Önceki Vardiya</p>
+                    <div className="flex items-start gap-6 pl-2">
+                      <div className="space-y-1">
+                        <p className="text-xs text-muted-foreground">Başlangıç</p>
+                        <div className="flex gap-2">
+                          <FormField
+                            control={form.control}
+                            name="previous_shift_start_date"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormControl>
+                                  <Input type="date" className="w-40" {...field} value={field.value || ""} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <FormField
+                            control={form.control}
+                            name="previous_shift_start_time"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormControl>
+                                  <Input type="time" className="w-28" {...field} value={field.value || ""} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </div>
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-xs text-muted-foreground">Bitiş</p>
+                        <div className="flex gap-2">
+                          <FormField
+                            control={form.control}
+                            name="previous_shift_end_date"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormControl>
+                                  <Input type="date" className="w-40" {...field} value={field.value || ""} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <FormField
+                            control={form.control}
+                            name="previous_shift_end_time"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormControl>
+                                  <Input type="time" className="w-28" {...field} value={field.value || ""} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
 
-                    <FormField
-                      control={form.control}
-                      name="next_shift"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Sonraki Mesai Saati</FormLabel>
-                          <FormControl>
-                            <Input placeholder="Örn: 08:00 - 17:00" {...field} value={field.value || ""} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                  {/* Sonraki Vardiya */}
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium">Sonraki Vardiya</p>
+                    <div className="flex items-start gap-6 pl-2">
+                      <div className="space-y-1">
+                        <p className="text-xs text-muted-foreground">Başlangıç</p>
+                        <div className="flex gap-2">
+                          <FormField
+                            control={form.control}
+                            name="next_shift_start_date"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormControl>
+                                  <Input type="date" className="w-40" {...field} value={field.value || ""} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <FormField
+                            control={form.control}
+                            name="next_shift_start_time"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormControl>
+                                  <Input type="time" className="w-28" {...field} value={field.value || ""} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </div>
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-xs text-muted-foreground">Bitiş</p>
+                        <div className="flex gap-2">
+                          <FormField
+                            control={form.control}
+                            name="next_shift_end_date"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormControl>
+                                  <Input type="date" className="w-40" {...field} value={field.value || ""} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <FormField
+                            control={form.control}
+                            name="next_shift_end_time"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormControl>
+                                  <Input type="time" className="w-28" {...field} value={field.value || ""} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </div>
+                      </div>
+                    </div>
                   </div>
 
                   <FormField
@@ -462,13 +655,29 @@ export default function NewOvertimePage() {
               {/* STAFF_SHORTAGE Alanları - Dinamik Tablo */}
               {overtimeType === "STAFF_SHORTAGE" && (
                 <div className="space-y-4">
+                  {/* Merkez, Şube ve İşletmeler */}
+                  <FormField
+                    control={form.control}
+                    name={"work_location" as never}
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Merkez, Şube ve İşletmeler</FormLabel>
+                        <FormControl>
+                          <Input placeholder="Merkez, şube veya işletme adını girin..." {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  {/* Çalışan Listesi */}
                   <div className="flex items-center justify-between">
                     <FormLabel>Çalışan Listesi</FormLabel>
                     <Button
                       type="button"
                       variant="outline"
                       size="sm"
-                      onClick={() => append({ role_title: "", overtime_hours: 0, overtime_pay: 0 })}
+                      onClick={() => append({ full_name: "", role_title: "", overtime_hours: 0, overtime_pay: 0 })}
                     >
                       <Plus className="h-4 w-4 mr-1" />
                       Satır Ekle
@@ -478,6 +687,7 @@ export default function NewOvertimePage() {
                   <Table>
                     <TableHeader>
                       <TableRow>
+                        <TableHead>Ad Soyad</TableHead>
                         <TableHead>Rol / Unvan</TableHead>
                         <TableHead className="w-32">FM Saati</TableHead>
                         <TableHead className="w-40">Ücret Karşılığı (TL)</TableHead>
@@ -487,6 +697,12 @@ export default function NewOvertimePage() {
                     <TableBody>
                       {fields.map((field, index) => (
                         <TableRow key={field.id}>
+                          <TableCell>
+                            <Input
+                              placeholder="Ad Soyad..."
+                              {...form.register(`entries.${index}.full_name` as const)}
+                            />
+                          </TableCell>
                           <TableCell>
                             <Input
                               placeholder="Mesul Teknisyen, Operatör..."
@@ -529,7 +745,7 @@ export default function NewOvertimePage() {
                     </TableBody>
                     <TableFooter>
                       <TableRow>
-                        <TableCell className="font-semibold">TOPLAM</TableCell>
+                        <TableCell className="font-semibold" colSpan={2}>TOPLAM</TableCell>
                         <TableCell className="font-semibold">{totalHours.toFixed(1)} saat</TableCell>
                         <TableCell className="font-semibold">{totalPay.toFixed(2)} TL</TableCell>
                         <TableCell></TableCell>
@@ -538,6 +754,24 @@ export default function NewOvertimePage() {
                   </Table>
                 </div>
               )}
+
+              {/* Detay Açıklama */}
+              <FormField
+                control={form.control}
+                name="reason_detail"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Çalışmayı Talep Eden Kişi veya Durum</FormLabel>
+                    <FormControl>
+                      <Textarea
+                        placeholder="Açıklama yazın..."
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
               {/* İK Notu */}
               <FormField
@@ -556,6 +790,58 @@ export default function NewOvertimePage() {
                   </FormItem>
                 )}
               />
+
+              {/* Ek Dosyalar */}
+              {attachmentConfigId && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm font-medium">{attachmentLabel}</label>
+                    {/* <span className="text-xs text-muted-foreground">
+                      {pendingFiles.length}/{maxFiles} dosya
+                    </span> */}
+                  </div>
+                  {pendingFiles.length > 0 && (
+                    <div className="space-y-1.5">
+                      {pendingFiles.map((file, index) => (
+                        <div
+                          key={index}
+                          className="flex items-center justify-between rounded-md border px-3 py-2 bg-muted/30"
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                            <span className="text-sm truncate">{file.name}</span>
+                            <span className="text-xs text-muted-foreground shrink-0">
+                              ({(file.size / 1024).toFixed(0)} KB)
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => removeFile(index)}
+                            className="ml-2 shrink-0 text-muted-foreground hover:text-destructive"
+                            disabled={isSubmitting}
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {pendingFiles.length < maxFiles && (
+                    <label className={`flex items-center gap-2 w-full cursor-pointer rounded-md border border-dashed px-4 py-3 text-sm text-muted-foreground hover:bg-muted/30 transition-colors ${isSubmitting ? "opacity-50 pointer-events-none" : ""}`}>
+                      <Upload className="h-4 w-4 shrink-0" />
+                      <span>Dosya seç (PDF, JPG, PNG — maks {Math.round(maxFileSizeBytes / 1048576)} MB)</span>
+                      <input
+                        type="file"
+                        className="hidden"
+                        multiple
+                        accept={allowedMimeTypes.join(",")}
+                        onChange={handleFileChange}
+                        disabled={isSubmitting}
+                      />
+                    </label>
+                  )}
+                </div>
+              )}
 
               {/* İmza Paneli */}
               {!loadingSignature && (

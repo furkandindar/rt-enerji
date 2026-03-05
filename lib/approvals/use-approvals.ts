@@ -342,8 +342,8 @@ export function useApprovals() {
       fetchAttachmentData(selectedApproval.workflow_step.id, selectedApproval.request.id);
     }
 
-    // Onboarding request ise önceki adımlardaki ekleri de çek
-    if (selectedApproval?.request?.onboarding_request && selectedApproval?.request?.id) {
+    // Onboarding veya overtime request ise önceki adımlardaki ekleri de çek
+    if ((selectedApproval?.request?.onboarding_request || selectedApproval?.request?.overtime_request) && selectedApproval?.request?.id) {
       fetchPreviousStepAttachments(selectedApproval.request.id);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps

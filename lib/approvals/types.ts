@@ -47,6 +47,7 @@ export interface SalaryAdvanceRequest {
 
 export interface OvertimeEntry {
   id: string;
+  full_name: string;
   role_title: string;
   overtime_hours: number;
   overtime_pay: number;

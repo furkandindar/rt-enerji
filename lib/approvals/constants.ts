@@ -65,8 +65,8 @@ export const leaveTypeLabels: Record<string, string> = {
 };
 
 export const overtimeTypeLabels: Record<string, string> = {
-  EMERGENCY: "Acil Durum / Talep Üzerine",
-  STAFF_SHORTAGE: "Personel Eksikliği / Raporlama",
+  EMERGENCY: "Olağan Dışı Durumlar",
+  STAFF_SHORTAGE: "Olağan Durumlar",
 };
 
 export const overtimeReasonLabels: Record<string, string> = {
