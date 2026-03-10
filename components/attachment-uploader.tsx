@@ -121,15 +121,15 @@ export function AttachmentUploader({
   const handleDownload = async (fileId: string, fileName: string) => {
     try {
       const response = await fetch(`/api/attachments/${fileId}/download`);
-      if (!response.ok) throw new Error("İndirme linki alınamadı");
-
-      const { url } = await response.json();
+      if (!response.ok) throw new Error("Dosya indirilemedi");
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
       link.download = fileName;
-      link.target = "_blank";
       document.body.appendChild(link);
       link.click();
+      URL.revokeObjectURL(url);
       document.body.removeChild(link);
     } catch {
       toast.error("Dosya indirilemedi");

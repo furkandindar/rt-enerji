@@ -19,7 +19,7 @@ export async function PATCH(
     const { id } = await params;
     const body = await request.json();
 
-    const { decision, comment, hr_fields, salary_consent_fields, onboarding_fields } = body as {
+    const { decision, comment, hr_fields, salary_consent_fields, onboarding_fields, separation_fields } = body as {
       decision: 'APPROVED' | 'REJECTED';
       comment?: string;
       hr_fields?: {
@@ -30,6 +30,10 @@ export async function PATCH(
         consent: boolean;
       };
       onboarding_fields?: {
+        section_key: string;
+        items: Record<string, { status: string; notes: string }>;
+      };
+      separation_fields?: {
         section_key: string;
         items: Record<string, { status: string; notes: string }>;
       };
@@ -221,6 +225,49 @@ export async function PATCH(
         }
 
         console.log("Onboarding fields updated successfully for section:", onboarding_fields.section_key);
+      }
+    }
+
+    // 3d. FILL_AND_SIGN adımları için separation section alanlarını güncelle (sadece onay durumunda)
+    if (decision === 'APPROVED' && stepData.action_type === 'FILL_AND_SIGN' && separation_fields?.section_key) {
+      const validSections = ['section_1', 'section_2', 'section_3', 'section_4', 'section_5', 'section_6', 'section_7', 'section_8'];
+      if (!validSections.includes(separation_fields.section_key)) {
+        return NextResponse.json({ error: "Geçersiz section key" }, { status: 400 });
+      }
+
+      if (!separation_fields.items || Object.keys(separation_fields.items).length === 0) {
+        return NextResponse.json({ error: "Checklist alanları zorunludur" }, { status: 400 });
+      }
+
+      // separation_requests kaydını bul
+      const { data: separationRequest } = await supabase
+        .from("separation_requests")
+        .select("id")
+        .eq("request_id", requestData.id)
+        .single();
+
+      if (separationRequest) {
+        // items'dan update objesi oluştur
+        const updateData: Record<string, string | null> = {
+          updated_at: new Date().toISOString(),
+        };
+
+        for (const [key, value] of Object.entries(separation_fields.items)) {
+          updateData[`${key}_status`] = value.status;
+          updateData[`${key}_notes`] = value.notes || null;
+        }
+
+        const { error: separationUpdateError } = await supabase
+          .from("separation_requests")
+          .update(updateData)
+          .eq("id", separationRequest.id);
+
+        if (separationUpdateError) {
+          console.error("Error updating separation fields:", separationUpdateError);
+          return NextResponse.json({ error: "Failed to update separation fields" }, { status: 500 });
+        }
+
+        console.log("Separation fields updated successfully for section:", separation_fields.section_key);
       }
     }
 

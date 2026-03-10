@@ -40,6 +40,7 @@ export async function GET(request: NextRequest) {
           entries:overtime_entries(*)
         ),
         onboarding_request:onboarding_requests(*),
+        separation_request:separation_requests(*),
         requester:employees!requester_employee_id(
           id,
           first_name,

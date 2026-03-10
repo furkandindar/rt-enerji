@@ -110,3 +110,68 @@ export const requestStatusColors: Record<string, string> = {
 
 export const ONBOARDING_SECTION_KEYS = ['section_2', 'section_3', 'section_4', 'section_5', 'section_6'] as const;
 
+// Separation checklist section tanımları
+export const separationSectionConfig: Record<string, { title: string; items: ChecklistItem[] }> = {
+  section_2: {
+    title: "Bilgi İşlem İşlemleri",
+    items: [
+      { key: "email_closure", label: "E-posta Hesaplarının Kapatılması / Yönlendirilmesi" },
+      { key: "it_access_revocation", label: "Bilgi İşlem Hesaplarının ve Erişimlerin İptali" },
+    ],
+  },
+  section_3: {
+    title: "İK İşlemleri",
+    items: [
+      { key: "exit_documents", label: "İşten Çıkış Evraklarının Hazırlanması" },
+      { key: "personnel_list_removal", label: "Personel Listesine Çıkış Kaydının Yapılması" },
+      { key: "payroll_processing", label: "Bordro ile İlgili İşlemlerin Yapılması" },
+      { key: "advance_check", label: "Personel Avans Kontrolü" },
+      { key: "equipment_return", label: "Zimmetli Eşyaların Teslim Alınması / Tutanak" },
+      { key: "uniform_return", label: "Zimmetli Kıyafetlerin Teslimi / Tutanak" },
+      { key: "hospital_removal", label: "Anlaşmalı Hastane Kayıtlarından Silinmesi İçin Bildirim Yapılması" },
+      { key: "access_card_return", label: "Ana Bina ve Ofis Giriş Kartı Teslimi" },
+      { key: "security_notification", label: "Çalıştığı Lokasyon Güvenliğe Bilgi Verilmesi" },
+      { key: "org_chart_removal", label: "Organizasyon Şemasından Çıkartılması" },
+      { key: "sgk_notification", label: "SGK ve Emniyet Bildirimlerinin Yapılması" },
+    ],
+  },
+  section_4: {
+    title: "Hukuki İşlemler",
+    items: [
+      { key: "poa_uyap_revocation", label: "Vekaletname, Yetki Belgesi ve UYAP Kaydı Kontrolü / Azli" },
+      { key: "mersis_revocation", label: "Mersis Kayıtları Kontrolü / İptali" },
+      { key: "legal_equipment_return", label: "Zimmetli Eşyaların Teslim Alınması / Tutanak" },
+    ],
+  },
+  section_5: {
+    title: "Muhasebe İşlemleri",
+    items: [
+      { key: "expense_form_submission", label: "Personel Harcama Formunun Personel Tarafından Eksiksiz Olarak Teslimi" },
+      { key: "expense_form_review", label: "Personel Harcama Formu Muhasebe Kontrolü" },
+      { key: "accounting_advance_check", label: "Personel Avans Kontrolü" },
+      { key: "bank_institution_access_revocation", label: "Banka ve Kurum Kayıtları Kontrolü / Erişimin Kapatılması (TEİAŞ, EPİAŞ vb.)" },
+    ],
+  },
+  section_6: {
+    title: "IT / İdari İşlemler",
+    items: [
+      { key: "qnap_o365_ip_removal", label: "Bilg/QNAP Arşiv ve Sıfırlama O365 Arşiv IP Telefon Kaydı Kaldırılması" },
+      { key: "pc_check", label: "PC Kontrolü (İhtiyaç Halinde Profesyonel Kontrol)" },
+    ],
+  },
+  section_7: {
+    title: "Belge Tarama",
+    items: [
+      { key: "documents_scan", label: "Tüm Belgelerin Taranması" },
+    ],
+  },
+  section_8: {
+    title: "Takvim İşlemleri",
+    items: [
+      { key: "evaluation_calendar_removal", label: "2/6/12. Aylar Değerlendirme Formlarının Takvimden Silinmesi" },
+    ],
+  },
+};
+
+export const SEPARATION_SECTION_KEYS = ['section_2', 'section_3', 'section_4', 'section_5', 'section_6', 'section_7', 'section_8'] as const;
+

@@ -352,6 +352,118 @@ export interface CreateOnboardingInput {
 }
 
 // ============================================================================
+// Separation (İşten Çıkış Takip) Types
+// ============================================================================
+
+export interface SeparationRequest {
+  id: string;
+  request_id: string;
+
+  // Section 1: Temel Bilgiler
+  employee_name: string | null;
+  employee_title: string | null;
+  department: string | null;
+  location: string | null;
+  job_description: string | null;
+  reporting_manager: string | null;
+  separation_date: string | null;
+  separation_reason: string | null;
+  employment_period: string | null;
+
+  // Section 1: Mali Tablo
+  annual_leave_days: number;
+  annual_leave_amount: number;
+  severance_days: number;
+  severance_amount: number;
+  notice_weeks: number;
+  notice_amount: number;
+
+  // Section 2: Bilgi İşlem İşlemleri (CEO)
+  email_closure_status: ChecklistStatus;
+  email_closure_notes: string | null;
+  it_access_revocation_status: ChecklistStatus;
+  it_access_revocation_notes: string | null;
+
+  // Section 3: İK İşlemleri (Requester)
+  exit_documents_status: ChecklistStatus;
+  exit_documents_notes: string | null;
+  personnel_list_removal_status: ChecklistStatus;
+  personnel_list_removal_notes: string | null;
+  payroll_processing_status: ChecklistStatus;
+  payroll_processing_notes: string | null;
+  advance_check_status: ChecklistStatus;
+  advance_check_notes: string | null;
+  equipment_return_status: ChecklistStatus;
+  equipment_return_notes: string | null;
+  uniform_return_status: ChecklistStatus;
+  uniform_return_notes: string | null;
+  hospital_removal_status: ChecklistStatus;
+  hospital_removal_notes: string | null;
+  access_card_return_status: ChecklistStatus;
+  access_card_return_notes: string | null;
+  security_notification_status: ChecklistStatus;
+  security_notification_notes: string | null;
+  org_chart_removal_status: ChecklistStatus;
+  org_chart_removal_notes: string | null;
+  sgk_notification_status: ChecklistStatus;
+  sgk_notification_notes: string | null;
+
+  // Section 4: Hukuki İşlemler
+  poa_uyap_revocation_status: ChecklistStatus;
+  poa_uyap_revocation_notes: string | null;
+  mersis_revocation_status: ChecklistStatus;
+  mersis_revocation_notes: string | null;
+  legal_equipment_return_status: ChecklistStatus;
+  legal_equipment_return_notes: string | null;
+
+  // Section 5: Muhasebe İşlemleri
+  expense_form_submission_status: ChecklistStatus;
+  expense_form_submission_notes: string | null;
+  expense_form_review_status: ChecklistStatus;
+  expense_form_review_notes: string | null;
+  accounting_advance_check_status: ChecklistStatus;
+  accounting_advance_check_notes: string | null;
+  bank_institution_access_revocation_status: ChecklistStatus;
+  bank_institution_access_revocation_notes: string | null;
+
+  // Section 6: IT / İdari İşlemler
+  qnap_o365_ip_removal_status: ChecklistStatus;
+  qnap_o365_ip_removal_notes: string | null;
+  pc_check_status: ChecklistStatus;
+  pc_check_notes: string | null;
+
+  // Section 7: Belge Tarama
+  documents_scan_status: ChecklistStatus;
+  documents_scan_notes: string | null;
+
+  // Section 8: Takvim İşlemleri
+  evaluation_calendar_removal_status: ChecklistStatus;
+  evaluation_calendar_removal_notes: string | null;
+
+  created_at: string;
+  updated_at: string;
+}
+
+// Section 1: IK'nın başlatırken doldurduğu alanlar
+export interface CreateSeparationInput {
+  employee_name: string;
+  employee_title: string;
+  department: string;
+  location: string;
+  job_description: string;
+  reporting_manager: string;
+  separation_date: string;
+  separation_reason: string;
+  employment_period: string;
+  annual_leave_days?: number;
+  annual_leave_amount?: number;
+  severance_days?: number;
+  severance_amount?: number;
+  notice_weeks?: number;
+  notice_amount?: number;
+}
+
+// ============================================================================
 // Workflow Attachment Types
 // ============================================================================
 

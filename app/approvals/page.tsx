@@ -21,6 +21,7 @@ export default function ApprovalsPage() {
     hrNote,
     salaryDeductionConsent,
     onboardingChecklist,
+    separationChecklist,
     attachmentConfigs,
     uploadedAttachments,
     previousStepAttachments,
@@ -29,6 +30,9 @@ export default function ApprovalsPage() {
     isOnboardingSectionForm,
     currentSectionConfig,
     onboardingSectionKey,
+    isSeparationSectionForm,
+    currentSeparationSectionConfig,
+    separationSectionKey,
     canApprove,
     currentPage,
     pageSize,
@@ -40,6 +44,7 @@ export default function ApprovalsPage() {
     setHrNote,
     setSalaryDeductionConsent,
     setOnboardingChecklist,
+    setSeparationChecklist,
     setUploadedAttachments,
     handleDecision,
     handleDownloadPDF,
@@ -115,6 +120,11 @@ export default function ApprovalsPage() {
         onboardingSectionKey={onboardingSectionKey}
         onboardingChecklist={onboardingChecklist}
         setOnboardingChecklist={setOnboardingChecklist}
+        isSeparationSectionForm={isSeparationSectionForm}
+        currentSeparationSectionConfig={currentSeparationSectionConfig}
+        separationSectionKey={separationSectionKey}
+        separationChecklist={separationChecklist}
+        setSeparationChecklist={setSeparationChecklist}
         attachmentConfigs={attachmentConfigs}
         uploadedAttachments={uploadedAttachments}
         setUploadedAttachments={setUploadedAttachments}

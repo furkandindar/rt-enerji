@@ -44,7 +44,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { overtimeTypeLabels } from "@/lib/approvals/constants";
-import { createClient } from "@/lib/supabase/client";
 
 interface WorkflowDefinition {
   id: string;
@@ -147,6 +146,25 @@ interface OnboardingRequestData {
   employment_period: string | null;
 }
 
+interface SeparationRequestData {
+  id: string;
+  employee_name: string | null;
+  employee_title: string | null;
+  department: string | null;
+  location: string | null;
+  job_description: string | null;
+  reporting_manager: string | null;
+  separation_date: string | null;
+  separation_reason: string | null;
+  employment_period: string | null;
+  annual_leave_days: number | null;
+  annual_leave_amount: number | null;
+  severance_days: number | null;
+  severance_amount: number | null;
+  notice_weeks: number | null;
+  notice_amount: number | null;
+}
+
 interface Request {
   id: string;
   status: string;
@@ -157,6 +175,7 @@ interface Request {
   salary_advance_request?: SalaryAdvanceRequest;
   overtime_request?: OvertimeRequest;
   onboarding_request?: OnboardingRequestData;
+  separation_request?: SeparationRequestData;
   requester?: Requester;
   approvals?: Approval[];
 }
@@ -258,28 +277,17 @@ export default function MyRequestsPage() {
     setAttachments([]);
     setIsDetailOpen(true);
 
-    // Overtime talepleri için ek dosyaları çek
-    if (request.overtime_request) {
-      try {
-        const supabase = createClient();
-        const { data: files } = await supabase
-          .from("request_attachments")
-          .select("id, file_name, file_size, mime_type, config:workflow_step_attachments(label)")
-          .eq("request_id", request.id);
-
-        if (files && files.length > 0) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          setAttachments(files.map((f: any) => ({
-            id: f.id,
-            file_name: f.file_name,
-            file_size: f.file_size,
-            mime_type: f.mime_type,
-            config_label: f.config?.label || f.file_name,
-          })));
+    // Tüm talep tipleri için server-side API üzerinden ek dosyaları çek
+    try {
+      const res = await fetch(`/api/attachments?request_id=${request.id}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.attachments && data.attachments.length > 0) {
+          setAttachments(data.attachments);
         }
-      } catch (error) {
-        console.error("Error fetching attachments:", error);
       }
+    } catch (error) {
+      console.error("Error fetching attachments:", error);
     }
   };
 
@@ -297,6 +305,9 @@ export default function MyRequestsPage() {
     if (request.onboarding_request) {
       return request.onboarding_request.employee_name || "-";
     }
+    if (request.separation_request) {
+      return request.separation_request.employee_name || "-";
+    }
     return "-";
   };
 
@@ -311,6 +322,24 @@ export default function MyRequestsPage() {
       (ep) => ep.is_primary && !ep.end_date
     );
     return primaryPosition?.position?.title || "-";
+  };
+
+  const handleDownloadAttachment = async (attachmentId: string, fileName: string) => {
+    try {
+      const response = await fetch(`/api/attachments/${attachmentId}/download`);
+      if (!response.ok) throw new Error("Dosya indirilemedi");
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      URL.revokeObjectURL(url);
+      document.body.removeChild(link);
+    } catch {
+      toast.error("Dosya indirilemedi");
+    }
   };
 
   const handleDownloadPDF = async (requestId: string) => {
@@ -701,34 +730,6 @@ export default function MyRequestsPage() {
                       <p className="text-sm font-semibold">{selectedRequest.overtime_request.hr_note}</p>
                     </div>
                   )}
-
-                  {/* Ek Dosyalar */}
-                  {attachments.length > 0 && (
-                    <div className="space-y-2">
-                      <p className="text-sm font-medium text-muted-foreground">Ek Dosyalar</p>
-                      <div className="space-y-1.5">
-                        {attachments.map((attachment) => (
-                          <div
-                            key={attachment.id}
-                            className="flex items-center justify-between rounded-md border px-3 py-2 bg-muted/30"
-                          >
-                            <div className="flex items-center gap-2 min-w-0">
-                              <FileIcon className="h-4 w-4 text-muted-foreground shrink-0" />
-                              <span className="text-sm truncate">{attachment.config_label}</span>
-                            </div>
-                            <a
-                              href={`/api/attachments/${attachment.id}/download`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="ml-2 shrink-0 text-muted-foreground hover:text-foreground"
-                            >
-                              <Download className="h-4 w-4" />
-                            </a>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
                 </>
               )}
 
@@ -792,6 +793,88 @@ export default function MyRequestsPage() {
                     </p>
                   </div>
                 </>
+              )}
+
+              {/* Separation Request specific fields */}
+              {selectedRequest.separation_request && (
+                <>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">İşten Ayrılan Kişi</p>
+                      <p className="text-sm font-semibold">
+                        {selectedRequest.separation_request.employee_name || "-"}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">Unvanı</p>
+                      <p className="text-sm font-semibold">
+                        {selectedRequest.separation_request.employee_title || "-"}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">Departmanı / Lokasyonu</p>
+                      <p className="text-sm font-semibold">
+                        {[selectedRequest.separation_request.department, selectedRequest.separation_request.location].filter(Boolean).join(" / ") || "-"}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">Bağlı Olduğu Yönetici</p>
+                      <p className="text-sm font-semibold">
+                        {selectedRequest.separation_request.reporting_manager || "-"}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">İşten Çıkış Tarihi</p>
+                      <p className="text-sm font-semibold">
+                        {selectedRequest.separation_request.separation_date
+                          ? format(new Date(selectedRequest.separation_request.separation_date), "d MMMM yyyy", { locale: tr })
+                          : "-"}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">Çalışma Süresi</p>
+                      <p className="text-sm font-semibold">
+                        {selectedRequest.separation_request.employment_period || "-"}
+                      </p>
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground">Ayrılış Sebebi</p>
+                    <p className="text-sm font-semibold">
+                      {selectedRequest.separation_request.separation_reason || "-"}
+                    </p>
+                  </div>
+                </>
+              )}
+
+              {/* Ek Dosyalar - tüm talep tipleri için */}
+              {attachments.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-muted-foreground">Ek Dosyalar</p>
+                  <div className="space-y-1.5">
+                    {attachments.map((attachment) => (
+                      <div
+                        key={attachment.id}
+                        className="flex items-center justify-between rounded-md border px-3 py-2 bg-muted/30"
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <FileIcon className="h-4 w-4 text-muted-foreground shrink-0" />
+                          <span className="text-sm truncate">{attachment.config_label}</span>
+                        </div>
+                        <button
+                          onClick={() => handleDownloadAttachment(attachment.id, attachment.file_name || attachment.config_label)}
+                          className="ml-2 shrink-0 text-muted-foreground hover:text-foreground"
+                        >
+                          <Download className="h-4 w-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               )}
 
               <div className="grid grid-cols-2 gap-4">

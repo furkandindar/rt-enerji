@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import type { WorkflowStepAttachmentConfig, RequestAttachment, PreviousStepAttachment } from "@/lib/workflow/types";
 import type { PendingApproval, ChecklistStatus, SignatureInfo } from "./types";
-import { onboardingSectionConfig, ONBOARDING_SECTION_KEYS } from "./constants";
+import { onboardingSectionConfig, ONBOARDING_SECTION_KEYS, separationSectionConfig, SEPARATION_SECTION_KEYS } from "./constants";
 
 export function useApprovals() {
   const [pendingApprovals, setPendingApprovals] = useState<PendingApproval[]>([]);
@@ -24,6 +24,11 @@ export function useApprovals() {
 
   // Onboarding checklist state
   const [onboardingChecklist, setOnboardingChecklist] = useState<
+    Record<string, { status: ChecklistStatus; notes: string }>
+  >({});
+
+  // Separation checklist state
+  const [separationChecklist, setSeparationChecklist] = useState<
     Record<string, { status: ChecklistStatus; notes: string }>
   >({});
 
@@ -54,13 +59,24 @@ export function useApprovals() {
   const isSalaryConsentForm = selectedApproval?.workflow_step?.action_type === 'FILL_AND_SIGN' &&
                               selectedApproval?.workflow_step?.form_section_key === 'salary_deduction_consent';
 
-  const onboardingSectionKey = selectedApproval?.workflow_step?.form_section_key || '';
+  const formSectionKey = selectedApproval?.workflow_step?.form_section_key || '';
+
+  const onboardingSectionKey = formSectionKey;
   const isOnboardingSectionForm = selectedApproval?.workflow_step?.action_type === 'FILL_AND_SIGN' &&
     selectedApproval?.request?.onboarding_request != null &&
-    (ONBOARDING_SECTION_KEYS as readonly string[]).includes(onboardingSectionKey);
+    (ONBOARDING_SECTION_KEYS as readonly string[]).includes(formSectionKey);
 
   const currentSectionConfig = isOnboardingSectionForm
-    ? onboardingSectionConfig[onboardingSectionKey]
+    ? onboardingSectionConfig[formSectionKey]
+    : null;
+
+  const separationSectionKey = formSectionKey;
+  const isSeparationSectionForm = selectedApproval?.workflow_step?.action_type === 'FILL_AND_SIGN' &&
+    selectedApproval?.request?.separation_request != null &&
+    (SEPARATION_SECTION_KEYS as readonly string[]).includes(formSectionKey);
+
+  const currentSeparationSectionConfig = isSeparationSectionForm
+    ? separationSectionConfig[formSectionKey]
     : null;
 
   const hrFormValid = !isHrForm || (remainingDays.trim() !== "" && !isNaN(Number(remainingDays)));
@@ -69,11 +85,15 @@ export function useApprovals() {
     currentSectionConfig != null &&
     currentSectionConfig.items.every((item) => onboardingChecklist[item.key]?.status != null)
   );
+  const separationFormValid = !isSeparationSectionForm || (
+    currentSeparationSectionConfig != null &&
+    currentSeparationSectionConfig.items.every((item) => separationChecklist[item.key]?.status != null)
+  );
   const attachmentsValid = attachmentConfigs
     .filter((c) => c.is_required)
     .every((c) => uploadedAttachments.some((f) => f.step_attachment_config_id === c.id));
 
-  const canApprove = hasValidSignature && signatureAccepted && hrFormValid && salaryConsentFormValid && onboardingFormValid && attachmentsValid;
+  const canApprove = hasValidSignature && signatureAccepted && hrFormValid && salaryConsentFormValid && onboardingFormValid && separationFormValid && attachmentsValid;
 
   // Pagination
   const totalPages = Math.ceil(approvalHistory.length / pageSize);
@@ -230,6 +250,7 @@ export function useApprovals() {
         hr_fields?: { remaining_days: number; hr_note?: string };
         salary_consent_fields?: { consent: boolean };
         onboarding_fields?: { section_key: string; items: Record<string, { status: string; notes: string }> };
+        separation_fields?: { section_key: string; items: Record<string, { status: string; notes: string }> };
       } = { decision, comment };
 
       if (decision === "APPROVED" && isHrForm) {
@@ -245,6 +266,12 @@ export function useApprovals() {
         requestBody.onboarding_fields = {
           section_key: onboardingSectionKey,
           items: onboardingChecklist,
+        };
+      }
+      if (decision === "APPROVED" && isSeparationSectionForm) {
+        requestBody.separation_fields = {
+          section_key: separationSectionKey,
+          items: separationChecklist,
         };
       }
 
@@ -266,6 +293,7 @@ export function useApprovals() {
       setHrNote("");
       setSalaryDeductionConsent(false);
       setOnboardingChecklist({});
+      setSeparationChecklist({});
       setAttachmentConfigs([]);
       setUploadedAttachments([]);
       fetchApprovals();
@@ -338,12 +366,34 @@ export function useApprovals() {
       setOnboardingChecklist({});
     }
 
+    if (selectedApproval?.request?.separation_request && selectedApproval?.workflow_step?.form_section_key) {
+      const sectionKey = selectedApproval.workflow_step.form_section_key;
+      const config = separationSectionConfig[sectionKey];
+      const sr = selectedApproval.request.separation_request;
+      if (config) {
+        const initial: Record<string, { status: ChecklistStatus; notes: string }> = {};
+        config.items.forEach((item) => {
+          const statusVal = sr[`${item.key}_status`] as ChecklistStatus | null;
+          const notesVal = sr[`${item.key}_notes`] as string | null;
+          initial[item.key] = {
+            status: statusVal || "NOT_DONE",
+            notes: notesVal || "",
+          };
+        });
+        setSeparationChecklist(initial);
+      } else {
+        setSeparationChecklist({});
+      }
+    } else {
+      setSeparationChecklist({});
+    }
+
     if (selectedApproval?.workflow_step?.id && selectedApproval?.request?.id) {
       fetchAttachmentData(selectedApproval.workflow_step.id, selectedApproval.request.id);
     }
 
-    // Onboarding veya overtime request ise önceki adımlardaki ekleri de çek
-    if ((selectedApproval?.request?.onboarding_request || selectedApproval?.request?.overtime_request) && selectedApproval?.request?.id) {
+    // Onboarding, separation veya overtime request ise önceki adımlardaki ekleri de çek
+    if ((selectedApproval?.request?.onboarding_request || selectedApproval?.request?.separation_request || selectedApproval?.request?.overtime_request) && selectedApproval?.request?.id) {
       fetchPreviousStepAttachments(selectedApproval.request.id);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -364,6 +414,7 @@ export function useApprovals() {
     hrNote,
     salaryDeductionConsent,
     onboardingChecklist,
+    separationChecklist,
     attachmentConfigs,
     uploadedAttachments,
     previousStepAttachments,
@@ -374,6 +425,9 @@ export function useApprovals() {
     isOnboardingSectionForm,
     currentSectionConfig,
     onboardingSectionKey,
+    isSeparationSectionForm,
+    currentSeparationSectionConfig,
+    separationSectionKey,
     canApprove,
     hasValidSignature,
     hrFormValid,
@@ -391,6 +445,7 @@ export function useApprovals() {
     setHrNote,
     setSalaryDeductionConsent,
     setOnboardingChecklist,
+    setSeparationChecklist,
     setUploadedAttachments,
 
     // Handlers

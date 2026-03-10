@@ -37,6 +37,12 @@ interface ApprovalActionsProps {
   onboardingChecklist: Record<string, { status: ChecklistStatus; notes: string }>;
   setOnboardingChecklist: React.Dispatch<React.SetStateAction<Record<string, { status: ChecklistStatus; notes: string }>>>;
 
+  // Separation checklist
+  isSeparationSectionForm: boolean;
+  currentSeparationSectionConfig: { title: string; items: ChecklistItem[] } | null;
+  separationChecklist: Record<string, { status: ChecklistStatus; notes: string }>;
+  setSeparationChecklist: React.Dispatch<React.SetStateAction<Record<string, { status: ChecklistStatus; notes: string }>>>;
+
   // Attachments
   requestId: string;
   attachmentConfigs: WorkflowStepAttachmentConfig[];
@@ -71,6 +77,10 @@ export function ApprovalActions({
   currentSectionConfig,
   onboardingChecklist,
   setOnboardingChecklist,
+  isSeparationSectionForm,
+  currentSeparationSectionConfig,
+  separationChecklist,
+  setSeparationChecklist,
   requestId,
   attachmentConfigs,
   uploadedAttachments,
@@ -192,6 +202,65 @@ export function ApprovalActions({
                   value={onboardingChecklist[item.key]?.notes || ""}
                   onChange={(e) => {
                     setOnboardingChecklist((prev) => ({
+                      ...prev,
+                      [item.key]: {
+                        ...prev[item.key],
+                        status: prev[item.key]?.status || "NOT_DONE",
+                        notes: e.target.value,
+                      },
+                    }));
+                  }}
+                  disabled={isSubmitting}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Separation Checklist Form */}
+      {isSeparationSectionForm && currentSeparationSectionConfig && (
+        <div className="space-y-4 border-t pt-4">
+          <div className="text-sm font-medium text-muted-foreground">
+            {currentSeparationSectionConfig.title} <span className="text-red-500">*</span>
+          </div>
+          <div className="space-y-3">
+            {currentSeparationSectionConfig.items.map((item) => (
+              <div key={item.key} className="rounded-md border p-3 space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <Label className="text-sm font-medium flex-1">
+                    {item.label}
+                  </Label>
+                  <Select
+                    value={separationChecklist[item.key]?.status || "NOT_DONE"}
+                    onValueChange={(value) => {
+                      setSeparationChecklist((prev) => ({
+                        ...prev,
+                        [item.key]: {
+                          ...prev[item.key],
+                          status: value as ChecklistStatus,
+                          notes: prev[item.key]?.notes || "",
+                        },
+                      }));
+                    }}
+                    disabled={isSubmitting}
+                  >
+                    <SelectTrigger className="w-[140px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="DONE">Yapıldı</SelectItem>
+                      <SelectItem value="NOT_DONE">Yapılmadı</SelectItem>
+                      <SelectItem value="NA">Uygulanmaz</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Textarea
+                  placeholder="Açıklama (opsiyonel)..."
+                  className="text-sm min-h-[60px]"
+                  value={separationChecklist[item.key]?.notes || ""}
+                  onChange={(e) => {
+                    setSeparationChecklist((prev) => ({
                       ...prev,
                       [item.key]: {
                         ...prev[item.key],

@@ -115,6 +115,25 @@ export interface PendingApproval {
       employment_period: string | null;
       [key: string]: string | null | undefined;
     };
+    separation_request?: {
+      id: string;
+      employee_name: string | null;
+      employee_title: string | null;
+      department: string | null;
+      location: string | null;
+      job_description: string | null;
+      reporting_manager: string | null;
+      separation_date: string | null;
+      separation_reason: string | null;
+      employment_period: string | null;
+      annual_leave_days: number | null;
+      annual_leave_amount: number | null;
+      severance_days: number | null;
+      severance_amount: number | null;
+      notice_weeks: number | null;
+      notice_amount: number | null;
+      [key: string]: string | number | null | undefined;
+    };
     approvals?: Approval[];
   };
 }

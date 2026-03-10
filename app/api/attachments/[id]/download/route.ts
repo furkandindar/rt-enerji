@@ -1,7 +1,7 @@
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 
-// GET /api/attachments/[id]/download - Dosya indir (signed URL ile yönlendir)
+// GET /api/attachments/[id]/download - Dosya indir (server-side stream)
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -16,10 +16,21 @@ export async function GET(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // 2. Attachment kaydını getir (RLS zaten yetki kontrolü yapıyor)
-    const { data: attachment, error: fetchError } = await supabase
+    const { data: appUser } = await supabase
+      .from("app_users")
+      .select("employee_id")
+      .eq("id", user.id)
+      .single();
+
+    if (!appUser?.employee_id) {
+      return NextResponse.json({ error: "User not linked to employee" }, { status: 400 });
+    }
+
+    // 2. Attachment kaydını getir (service role - RLS bypass)
+    const supabaseAdmin = createServiceRoleClient();
+    const { data: attachment, error: fetchError } = await supabaseAdmin
       .from("request_attachments")
-      .select("file_path, file_name, mime_type")
+      .select("file_path, file_name, mime_type, request_id")
       .eq("id", id)
       .single();
 
@@ -27,17 +38,52 @@ export async function GET(
       return NextResponse.json({ error: "Dosya bulunamadı" }, { status: 404 });
     }
 
-    // 3. Signed URL oluştur (1 saat geçerli)
-    const { data: signedUrlData, error: urlError } = await supabase.storage
-      .from("workflow-attachments")
-      .createSignedUrl(attachment.file_path, 3600);
+    // 3. Yetki kontrolü: talep sahibi veya onaylayıcı mı?
+    const { data: req } = await supabaseAdmin
+      .from("requests")
+      .select("requester_employee_id")
+      .eq("id", attachment.request_id)
+      .single();
 
-    if (urlError || !signedUrlData) {
-      console.error("Signed URL error:", urlError);
-      return NextResponse.json({ error: "İndirme linki oluşturulamadı" }, { status: 500 });
+    if (!req) {
+      return NextResponse.json({ error: "Talep bulunamadı" }, { status: 404 });
     }
 
-    return NextResponse.redirect(signedUrlData.signedUrl);
+    const isRequester = req.requester_employee_id === appUser.employee_id;
+    if (!isRequester) {
+      const { data: approval } = await supabaseAdmin
+        .from("request_approvals")
+        .select("id")
+        .eq("request_id", attachment.request_id)
+        .eq("approver_employee_id", appUser.employee_id)
+        .limit(1);
+
+      if (!approval || approval.length === 0) {
+        return NextResponse.json({ error: "Bu dosyayı indirme yetkiniz yok" }, { status: 403 });
+      }
+    }
+
+    // 4. Dosyayı storage'dan indir ve direkt stream et
+    const { data: fileData, error: downloadError } = await supabaseAdmin.storage
+      .from("workflow-attachments")
+      .download(attachment.file_path);
+
+    if (downloadError || !fileData) {
+      console.error("Storage download error:", downloadError);
+      return NextResponse.json({ error: "Dosya indirilemedi" }, { status: 500 });
+    }
+
+    const fileBuffer = await fileData.arrayBuffer();
+    const fileName = encodeURIComponent(attachment.file_name);
+
+    return new NextResponse(fileBuffer, {
+      status: 200,
+      headers: {
+        "Content-Type": attachment.mime_type || "application/octet-stream",
+        "Content-Disposition": `attachment; filename*=UTF-8''${fileName}`,
+        "Content-Length": fileBuffer.byteLength.toString(),
+      },
+    });
   } catch (error) {
     console.error("Unexpected error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

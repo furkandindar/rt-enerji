@@ -20,6 +20,7 @@ import { LeaveRequestDetails } from "./leave-request-details";
 import { SalaryAdvanceDetails } from "./salary-advance-details";
 import { OvertimeRequestDetails } from "./overtime-request-details";
 import { OnboardingRequestDetails } from "./onboarding-request-details";
+import { SeparationRequestDetails } from "./separation-request-details";
 import { ApprovalHistoryAccordion } from "./approval-history-accordion";
 import { ApprovalActions } from "./approval-actions";
 
@@ -41,6 +42,11 @@ interface ApprovalDetailSheetProps {
   onboardingSectionKey: string;
   onboardingChecklist: Record<string, { status: ChecklistStatus; notes: string }>;
   setOnboardingChecklist: React.Dispatch<React.SetStateAction<Record<string, { status: ChecklistStatus; notes: string }>>>;
+  isSeparationSectionForm: boolean;
+  currentSeparationSectionConfig: { title: string; items: ChecklistItem[] } | null;
+  separationSectionKey: string;
+  separationChecklist: Record<string, { status: ChecklistStatus; notes: string }>;
+  setSeparationChecklist: React.Dispatch<React.SetStateAction<Record<string, { status: ChecklistStatus; notes: string }>>>;
   attachmentConfigs: WorkflowStepAttachmentConfig[];
   uploadedAttachments: RequestAttachment[];
   setUploadedAttachments: React.Dispatch<React.SetStateAction<RequestAttachment[]>>;
@@ -72,6 +78,11 @@ export function ApprovalDetailSheet({
   onboardingSectionKey,
   onboardingChecklist,
   setOnboardingChecklist,
+  isSeparationSectionForm,
+  currentSeparationSectionConfig,
+  separationSectionKey,
+  separationChecklist,
+  setSeparationChecklist,
   attachmentConfigs,
   uploadedAttachments,
   setUploadedAttachments,
@@ -144,6 +155,13 @@ export function ApprovalDetailSheet({
                 previousStepAttachments={previousStepAttachments}
               />
             )}
+            {selectedApproval.request.separation_request && (
+              <SeparationRequestDetails
+                approval={selectedApproval}
+                separationSectionKey={separationSectionKey}
+                previousStepAttachments={previousStepAttachments}
+              />
+            )}
 
             {/* Onay Adımı ve Oluşturulma */}
             <div className="grid grid-cols-2 gap-4">
@@ -181,6 +199,10 @@ export function ApprovalDetailSheet({
                 currentSectionConfig={currentSectionConfig}
                 onboardingChecklist={onboardingChecklist}
                 setOnboardingChecklist={setOnboardingChecklist}
+                isSeparationSectionForm={isSeparationSectionForm}
+                currentSeparationSectionConfig={currentSeparationSectionConfig}
+                separationChecklist={separationChecklist}
+                setSeparationChecklist={setSeparationChecklist}
                 requestId={selectedApproval.request.id}
                 attachmentConfigs={attachmentConfigs}
                 uploadedAttachments={uploadedAttachments}

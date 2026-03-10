@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarPlus, FileCheck, ClipboardList, Banknote, Clock, UserPlus, type LucideIcon } from "lucide-react";
+import { CalendarPlus, FileCheck, ClipboardList, Banknote, Clock, UserPlus, UserMinus, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -34,6 +34,7 @@ const personalItems: NavItem[] = [
 const departmentItems: NavItem[] = [
   { title: "Fazla Mesai Formu",    url: "/overtime/new",   icon: Clock,    workflowCodes: ["OVERTIME"],           group: "İnsan Kaynakları" },
   { title: "İşe Giriş Takip Formu", url: "/onboarding/new", icon: UserPlus, workflowCodes: ["EMPLOYEE_ONBOARDING"], group: "İnsan Kaynakları" },
+  { title: "İşten Çıkış Takip Formu", url: "/separation/new", icon: UserMinus, workflowCodes: ["EMPLOYEE_SEPARATION"], group: "İnsan Kaynakları" },
 ];
 
 // Her zaman görünen takip ekranları

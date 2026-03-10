@@ -28,6 +28,9 @@ export const getRequestSummary = (approval: PendingApproval): string => {
   if (approval.request.onboarding_request) {
     return approval.request.onboarding_request.employee_name || "-";
   }
+  if (approval.request.separation_request) {
+    return approval.request.separation_request.employee_name || "-";
+  }
   return "-";
 };
 
