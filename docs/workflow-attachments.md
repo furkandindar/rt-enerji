@@ -10,7 +10,9 @@
 
 Bazı workflow adımlarında onaycıdan ek dosya yüklenmesi gerekiyor. Örneğin:
 
-- **İşe Giriş Takip Formu** → Adım 4 (Muhasebe Müdürü): Zimmet Tutanağı PDF'i
+- **İşe Giriş Takip Formu** → Adım 1 (İnsan Kaynakları): CV PDF'i
+- **İşe Giriş Takip Formu** → Adım 3 (İnsan Kaynakları): Zimmet Tutanağı PDF'i
+- **İşten Çıkış Takip Formu** → Adım 3 (İnsan Kaynakları): Zimmet Tutanağı PDF'i
 - İleride başka süreçlerde de benzer ihtiyaçlar olacak
 
 Bu ihtiyaç süreç-spesifik değil, **workflow engine seviyesinde generic** bir çözüm gerektiriyor.
@@ -149,15 +151,29 @@ CREATE POLICY "ra_delete" ON public.request_attachments
   );
 ```
 
-### 4.4 Seed Data: İşe Giriş Adım 4
+### 4.4 Seed Data
 
 ```sql
--- Onboarding Adım 4 (Muhasebe Müdürü) için "Zimmet Tutanağı" attachment config'i
+-- Onboarding Adım 1 (İnsan Kaynakları) için "CV" attachment config'i
+INSERT INTO public.workflow_step_attachments (workflow_step_id, label, is_required, allowed_mime_types, max_file_size_bytes, max_files)
+SELECT ws.id, 'CV', true, '{application/pdf}', 10485760, 1
+FROM public.workflow_steps ws
+JOIN public.workflow_definitions wd ON wd.id = ws.workflow_definition_id
+WHERE wd.code = 'EMPLOYEE_ONBOARDING' AND ws.step_order = 1;
+
+-- Onboarding Adım 3 (İnsan Kaynakları) için "Zimmet Tutanağı" attachment config'i
 INSERT INTO public.workflow_step_attachments (workflow_step_id, label, is_required, allowed_mime_types, max_file_size_bytes, max_files)
 SELECT ws.id, 'Zimmet Tutanağı', true, '{application/pdf}', 10485760, 1
 FROM public.workflow_steps ws
 JOIN public.workflow_definitions wd ON wd.id = ws.workflow_definition_id
-WHERE wd.code = 'EMPLOYEE_ONBOARDING' AND ws.step_order = 4;
+WHERE wd.code = 'EMPLOYEE_ONBOARDING' AND ws.step_order = 3;
+
+-- Separation Adım 3 (İnsan Kaynakları) için "Zimmet Tutanağı" attachment config'i
+INSERT INTO public.workflow_step_attachments (workflow_step_id, label, is_required, allowed_mime_types, max_file_size_bytes, max_files)
+SELECT ws.id, 'Zimmet Tutanağı', true, '{application/pdf}', 10485760, 1
+FROM public.workflow_steps ws
+JOIN public.workflow_definitions wd ON wd.id = ws.workflow_definition_id
+WHERE wd.code = 'EMPLOYEE_SEPARATION' AND ws.step_order = 3;
 ```
 
 ---
@@ -496,7 +512,9 @@ rt-enerji-frontend/
 - [ ] RLS politikaları ekle
 - [ ] `workflow-attachments` Storage bucket oluştur
 - [ ] Storage RLS politikaları ekle
-- [ ] Onboarding Adım 4 seed data ekle
+- [ ] Onboarding Adım 1 (CV) seed data ekle
+- [ ] Onboarding Adım 3 (Zimmet Tutanağı) seed data ekle
+- [ ] Separation Adım 3 seed data ekle
 
 ### Faz 2: Backend
 - [ ] `lib/workflow/types.ts` → Attachment type'ları ekle

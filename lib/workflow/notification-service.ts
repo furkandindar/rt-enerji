@@ -3,8 +3,7 @@
 
 import { SupabaseClient } from '@supabase/supabase-js';
 import { NotificationType } from './types';
-// TEST için geçici olarak devre dışı
-// import { sendNotificationEmail } from '@/lib/email/email-service';
+import { sendNotificationEmail } from '@/lib/email/email-service';
 
 // ============================================================================
 // Types
@@ -109,15 +108,15 @@ export async function notifyApprover(
     referenceId: requestId,
   });
 
-  // Email gönder - TEST için geçici olarak devre dışı
-  // if (userInfo.email) {
-  //   await sendNotificationEmail({
-  //     to: userInfo.email,
-  //     title,
-  //     message,
-  //     type,
-  //   });
-  // }
+  // Email gönder
+  if (userInfo.email) {
+    await sendNotificationEmail({
+      to: userInfo.email,
+      title,
+      message,
+      type,
+    });
+  }
 }
 
 /**
@@ -145,15 +144,15 @@ export async function notifyRequestApproved(
     referenceId: requestId,
   });
 
-  // Email gönder - TEST için geçici olarak devre dışı
-  // if (userInfo.email) {
-  //   await sendNotificationEmail({
-  //     to: userInfo.email,
-  //     title,
-  //     message,
-  //     type,
-  //   });
-  // }
+  // Email gönder
+  if (userInfo.email) {
+    await sendNotificationEmail({
+      to: userInfo.email,
+      title,
+      message,
+      type,
+    });
+  }
 }
 
 /**
@@ -182,15 +181,15 @@ export async function notifyRequestRejected(
     referenceId: requestId,
   });
 
-  // Email gönder - TEST için geçici olarak devre dışı
-  // if (userInfo.email) {
-  //   await sendNotificationEmail({
-  //     to: userInfo.email,
-  //     title,
-  //     message,
-  //     type,
-  //   });
-  // }
+  // Email gönder
+  if (userInfo.email) {
+    await sendNotificationEmail({
+      to: userInfo.email,
+      title,
+      message,
+      type,
+    });
+  }
 }
 
 /**

@@ -49,12 +49,12 @@ const separationSchema = z.object({
   separation_date: z.date({ message: "Ayrılış tarihi zorunludur" }),
   separation_reason: z.string().min(1, "Ayrılış sebebi zorunludur"),
   employment_period: z.string().min(1, "Çalışma süresi zorunludur"),
-  annual_leave_days: z.coerce.number().int().min(0).default(0),
-  annual_leave_amount: z.coerce.number().min(0).default(0),
-  severance_days: z.coerce.number().int().min(0).default(0),
-  severance_amount: z.coerce.number().min(0).default(0),
-  notice_weeks: z.coerce.number().int().min(0).default(0),
-  notice_amount: z.coerce.number().min(0).default(0),
+  annual_leave_days: z.coerce.number().int().min(0),
+  annual_leave_amount: z.coerce.number().min(0),
+  severance_days: z.coerce.number().int().min(0),
+  severance_amount: z.coerce.number().min(0),
+  notice_weeks: z.coerce.number().int().min(0),
+  notice_amount: z.coerce.number().min(0),
 });
 
 type SeparationFormValues = z.infer<typeof separationSchema>;
@@ -100,7 +100,7 @@ export default function NewSeparationPage() {
   }, [supabase]);
 
   const form = useForm<SeparationFormValues>({
-    resolver: zodResolver(separationSchema),
+    resolver: zodResolver(separationSchema) as any,
     defaultValues: {
       employee_name: "", employee_title: "", department: "", location: "",
       job_description: "", reporting_manager: "", separation_reason: "", employment_period: "",

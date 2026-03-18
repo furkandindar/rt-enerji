@@ -44,6 +44,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { overtimeTypeLabels } from "@/lib/approvals/constants";
+import { PdfViewerDialog } from "@/components/pdf-viewer-dialog";
 
 interface WorkflowDefinition {
   id: string;
@@ -239,6 +240,7 @@ export default function MyRequestsPage() {
   const [selectedRequest, setSelectedRequest] = useState<Request | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [showPdfPreview, setShowPdfPreview] = useState(false);
 
   // Filters
   const [workflowFilter, setWorkflowFilter] = useState<string>("all");
@@ -960,12 +962,20 @@ export default function MyRequestsPage() {
                 </Accordion>
               )}
 
-              {/* PDF İndirme Butonu - Sadece onaylanmış talepler için */}
+              {/* PDF Butonları - Sadece onaylanmış talepler için */}
               {selectedRequest.status === "APPROVED" && (
-                <div className="border-t pt-4 mt-6">
+                <div className="border-t pt-4 mt-6 flex gap-2">
                   <Button
                     variant="outline"
-                    className="w-full"
+                    className="flex-1"
+                    onClick={() => setShowPdfPreview(true)}
+                  >
+                    <Eye className="mr-2 h-4 w-4" />
+                    PDF Görüntüle
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="flex-1"
                     onClick={() => handleDownloadPDF(selectedRequest.id)}
                   >
                     <Download className="mr-2 h-4 w-4" />
@@ -977,6 +987,16 @@ export default function MyRequestsPage() {
           )}
         </SheetContent>
       </Sheet>
+
+      {selectedRequest && showPdfPreview && (
+        <PdfViewerDialog
+          open={showPdfPreview}
+          onOpenChange={setShowPdfPreview}
+          previewUrl={`/api/requests/${selectedRequest.id}/pdf/preview`}
+          downloadUrl={`/api/requests/${selectedRequest.id}/pdf`}
+          fileName={`talep_${selectedRequest.id}.pdf`}
+        />
+      )}
     </div>
   );
 }

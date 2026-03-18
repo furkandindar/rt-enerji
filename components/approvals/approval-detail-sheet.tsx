@@ -2,7 +2,8 @@
 
 import { format } from "date-fns";
 import { tr } from "date-fns/locale";
-import { Download } from "lucide-react";
+import { useState } from "react";
+import { Download, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -23,6 +24,7 @@ import { OnboardingRequestDetails } from "./onboarding-request-details";
 import { SeparationRequestDetails } from "./separation-request-details";
 import { ApprovalHistoryAccordion } from "./approval-history-accordion";
 import { ApprovalActions } from "./approval-actions";
+import { PdfViewerDialog } from "@/components/pdf-viewer-dialog";
 
 interface ApprovalDetailSheetProps {
   selectedApproval: PendingApproval | null;
@@ -97,6 +99,8 @@ export function ApprovalDetailSheet({
   handleDecision,
   handleDownloadPDF,
 }: ApprovalDetailSheetProps) {
+  const [showPdfPreview, setShowPdfPreview] = useState(false);
+
   return (
     <Sheet open={selectedApproval !== null} onOpenChange={(open) => {
       if (!open) onClose();
@@ -233,22 +237,42 @@ export function ApprovalDetailSheet({
                   </p>
                 )}
 
-                {/* PDF İndirme Butonu */}
+                {/* PDF Butonları */}
                 {selectedApproval.request.status === "APPROVED" && (
-                  <Button
-                    variant="outline"
-                    className="w-full"
-                    onClick={() => handleDownloadPDF(selectedApproval.request.id)}
-                  >
-                    <Download className="mr-2 h-4 w-4" />
-                    PDF İndir
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      className="flex-1"
+                      onClick={() => setShowPdfPreview(true)}
+                    >
+                      <Eye className="mr-2 h-4 w-4" />
+                      PDF Görüntüle
+                    </Button>
+                    <Button
+                      variant="outline"
+                      className="flex-1"
+                      onClick={() => handleDownloadPDF(selectedApproval.request.id)}
+                    >
+                      <Download className="mr-2 h-4 w-4" />
+                      PDF İndir
+                    </Button>
+                  </div>
                 )}
               </div>
             )}
           </div>
         )}
       </SheetContent>
+
+      {selectedApproval && showPdfPreview && (
+        <PdfViewerDialog
+          open={showPdfPreview}
+          onOpenChange={setShowPdfPreview}
+          previewUrl={`/api/requests/${selectedApproval.request.id}/pdf/preview`}
+          downloadUrl={`/api/requests/${selectedApproval.request.id}/pdf`}
+          fileName={`talep_${selectedApproval.request.id}.pdf`}
+        />
+      )}
     </Sheet>
   );
 }

@@ -1,11 +1,12 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { Upload, X, FileText, Download, Loader2, Paperclip } from "lucide-react";
+import { Upload, X, FileText, Download, Loader2, Paperclip, Eye } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import type { WorkflowStepAttachmentConfig, RequestAttachment } from "@/lib/workflow/types";
+import { PdfViewerDialog } from "@/components/pdf-viewer-dialog";
 
 interface AttachmentUploaderProps {
   requestId: string;
@@ -28,6 +29,7 @@ export function AttachmentUploader({
 }: AttachmentUploaderProps) {
   const [uploadingConfigId, setUploadingConfigId] = useState<string | null>(null);
   const [deletingFileId, setDeletingFileId] = useState<string | null>(null);
+  const [previewFile, setPreviewFile] = useState<{ id: string; name: string } | null>(null);
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   const formatFileSize = (bytes: number): string => {
@@ -182,6 +184,17 @@ export function AttachmentUploader({
                       </p>
                     </div>
                     <div className="flex items-center gap-1 shrink-0">
+                      {file.mime_type === "application/pdf" && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          onClick={() => setPreviewFile({ id: file.id, name: file.file_name })}
+                          title="Görüntüle"
+                        >
+                          <Eye className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
                       <Button
                         variant="ghost"
                         size="icon"
@@ -251,6 +264,15 @@ export function AttachmentUploader({
           </div>
         );
       })}
+
+      {previewFile && (
+        <PdfViewerDialog
+          open={!!previewFile}
+          onOpenChange={(open) => { if (!open) setPreviewFile(null); }}
+          attachmentId={previewFile.id}
+          fileName={previewFile.name}
+        />
+      )}
     </div>
   );
 }

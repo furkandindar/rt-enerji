@@ -232,10 +232,14 @@ export interface CreateOvertimeEmergencyInput {
   work_location: string;
   work_start_date: string;
   work_end_date: string;
-  previous_shift_start: string;
-  previous_shift_end: string;
-  next_shift_start: string;
-  next_shift_end: string;
+  previous_shift_start_date: string;
+  previous_shift_start_time: string;
+  previous_shift_end_date: string;
+  previous_shift_end_time: string;
+  next_shift_start_date: string;
+  next_shift_start_time: string;
+  next_shift_end_date: string;
+  next_shift_end_time: string;
   work_reason: string;
 }
 

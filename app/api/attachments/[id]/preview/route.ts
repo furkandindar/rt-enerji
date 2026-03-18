@@ -1,0 +1,95 @@
+import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
+import { NextResponse } from "next/server";
+
+// GET /api/attachments/[id]/preview - PDF dosyasını inline görüntüle
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const supabase = await createClient();
+    const { id } = await params;
+
+    // 1. Kullanıcı kontrolü
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { data: appUser } = await supabase
+      .from("app_users")
+      .select("employee_id")
+      .eq("id", user.id)
+      .single();
+
+    if (!appUser?.employee_id) {
+      return NextResponse.json({ error: "User not linked to employee" }, { status: 400 });
+    }
+
+    // 2. Attachment kaydını getir (service role - RLS bypass)
+    const supabaseAdmin = createServiceRoleClient();
+    const { data: attachment, error: fetchError } = await supabaseAdmin
+      .from("request_attachments")
+      .select("file_path, file_name, mime_type, request_id")
+      .eq("id", id)
+      .single();
+
+    if (fetchError || !attachment) {
+      return NextResponse.json({ error: "Dosya bulunamadı" }, { status: 404 });
+    }
+
+    // 3. Sadece PDF dosyaları için izin ver
+    if (attachment.mime_type !== "application/pdf") {
+      return NextResponse.json({ error: "Sadece PDF dosyaları önizlenebilir" }, { status: 400 });
+    }
+
+    // 4. Yetki kontrolü: talep sahibi veya onaylayıcı mı?
+    const { data: req } = await supabaseAdmin
+      .from("requests")
+      .select("requester_employee_id")
+      .eq("id", attachment.request_id)
+      .single();
+
+    if (!req) {
+      return NextResponse.json({ error: "Talep bulunamadı" }, { status: 404 });
+    }
+
+    const isRequester = req.requester_employee_id === appUser.employee_id;
+    if (!isRequester) {
+      const { data: approval } = await supabaseAdmin
+        .from("request_approvals")
+        .select("id")
+        .eq("request_id", attachment.request_id)
+        .eq("approver_employee_id", appUser.employee_id)
+        .limit(1);
+
+      if (!approval || approval.length === 0) {
+        return NextResponse.json({ error: "Bu dosyayı görüntüleme yetkiniz yok" }, { status: 403 });
+      }
+    }
+
+    // 5. Dosyayı storage'dan indir ve inline olarak sun
+    const { data: fileData, error: downloadError } = await supabaseAdmin.storage
+      .from("workflow-attachments")
+      .download(attachment.file_path);
+
+    if (downloadError || !fileData) {
+      console.error("Storage download error:", downloadError);
+      return NextResponse.json({ error: "Dosya yüklenemedi" }, { status: 500 });
+    }
+
+    const fileBuffer = await fileData.arrayBuffer();
+
+    return new NextResponse(fileBuffer, {
+      status: 200,
+      headers: {
+        "Content-Type": "application/pdf",
+        "Content-Disposition": "inline",
+        "Content-Length": fileBuffer.byteLength.toString(),
+      },
+    });
+  } catch (error) {
+    console.error("Unexpected error:", error);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
+}

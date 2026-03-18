@@ -1,20 +1,14 @@
-// Email Service - Resend ile email gönderimi
-// https://resend.com/docs
+// Email Service - Microsoft Graph API ile email gönderimi
+// https://learn.microsoft.com/en-us/graph/api/user-sendmail
 
-import { Resend } from 'resend';
+// ============================================================================
+// Config
+// ============================================================================
 
-// Resend client - server-side only
-const resend = new Resend(process.env.RESEND_API_KEY);
-
-// Email gönderen adres (Resend'de doğrulanmış domain gerekir)
-// Domain doğrulanmamışsa sadece RESEND_TEST_EMAIL'e gönderim yapılabilir
-const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'RT Enerji <onboarding@resend.dev>';
-
-// Test modu: Domain doğrulanmamışsa sadece bu adrese gönder
-const TEST_EMAIL = process.env.RESEND_TEST_EMAIL || null;
-
-// Domain doğrulanmış mı?
-const IS_DOMAIN_VERIFIED = !!process.env.RESEND_FROM_EMAIL;
+const TENANT_ID = process.env.AZURE_TENANT_ID;
+const CLIENT_ID = process.env.AZURE_CLIENT_ID;
+const CLIENT_SECRET = process.env.AZURE_CLIENT_SECRET;
+const MAIL_FROM = process.env.AZURE_MAIL_FROM; // ör: deneme.admin@rtenerji.com
 
 // ============================================================================
 // Types
@@ -29,6 +23,52 @@ export interface SendNotificationEmailParams {
 }
 
 // ============================================================================
+// Microsoft Graph Auth - Client Credentials Flow
+// ============================================================================
+
+let cachedToken: { token: string; expiresAt: number } | null = null;
+
+/**
+ * Client Credentials flow ile access token alır.
+ * Token'ı cache'ler, süresi dolmadan yeniden kullanır.
+ */
+async function getAccessToken(): Promise<string> {
+  // Cache'de geçerli token varsa kullan
+  if (cachedToken && Date.now() < cachedToken.expiresAt - 60_000) {
+    return cachedToken.token;
+  }
+
+  const tokenUrl = `https://login.microsoftonline.com/${TENANT_ID}/oauth2/v2.0/token`;
+
+  const body = new URLSearchParams({
+    client_id: CLIENT_ID!,
+    client_secret: CLIENT_SECRET!,
+    scope: 'https://graph.microsoft.com/.default',
+    grant_type: 'client_credentials',
+  });
+
+  const response = await fetch(tokenUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: body.toString(),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Token alınamadı: ${response.status} ${errorText}`);
+  }
+
+  const data = await response.json();
+
+  cachedToken = {
+    token: data.access_token,
+    expiresAt: Date.now() + data.expires_in * 1000,
+  };
+
+  return cachedToken.token;
+}
+
+// ============================================================================
 // Email Templates
 // ============================================================================
 
@@ -40,13 +80,13 @@ function getEmailSubject(type: string, title: string): string {
     REQUEST_CANCELLED: '🚫 İptal Edildi',
     INFO: 'ℹ️ Bilgi',
   };
-  
+
   return `${prefixes[type] || '📬'} ${title}`;
 }
 
 function getEmailHtml(params: SendNotificationEmailParams): string {
   const { title, message, type, appUrl } = params;
-  
+
   const colors: Record<string, string> = {
     APPROVAL_REQUIRED: '#f59e0b', // yellow
     REQUEST_APPROVED: '#22c55e',  // green
@@ -54,10 +94,10 @@ function getEmailHtml(params: SendNotificationEmailParams): string {
     REQUEST_CANCELLED: '#6b7280', // gray
     INFO: '#3b82f6',              // blue
   };
-  
+
   const color = colors[type] || '#6b7280';
   const actionUrl = appUrl || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-  
+
   return `
 <!DOCTYPE html>
 <html>
@@ -71,22 +111,22 @@ function getEmailHtml(params: SendNotificationEmailParams): string {
     <div style="background: ${color}; padding: 20px; text-align: center;">
       <h1 style="color: white; margin: 0; font-size: 20px;">${title}</h1>
     </div>
-    
+
     <!-- Content -->
     <div style="padding: 30px;">
       <p style="color: #374151; font-size: 16px; line-height: 1.6; margin: 0 0 20px;">
         ${message}
       </p>
-      
+
       <!-- CTA Button -->
       <div style="text-align: center; margin-top: 30px;">
-        <a href="${actionUrl}/approvals" 
+        <a href="${actionUrl}/approvals"
            style="display: inline-block; background: ${color}; color: white; text-decoration: none; padding: 12px 30px; border-radius: 6px; font-weight: 500;">
           Uygulamada Görüntüle
         </a>
       </div>
     </div>
-    
+
     <!-- Footer -->
     <div style="background: #f9fafb; padding: 20px; text-align: center; border-top: 1px solid #e5e7eb;">
       <p style="color: #6b7280; font-size: 12px; margin: 0;">
@@ -104,52 +144,63 @@ function getEmailHtml(params: SendNotificationEmailParams): string {
 // ============================================================================
 
 /**
- * Bildirim emaili gönderir
+ * Microsoft Graph API ile bildirim emaili gönderir
  * @returns success: true/false ve error mesajı
  */
 export async function sendNotificationEmail(
   params: SendNotificationEmailParams
 ): Promise<{ success: boolean; error?: string }> {
-  // API key yoksa skip et
-  if (!process.env.RESEND_API_KEY) {
-    console.warn('RESEND_API_KEY not set, skipping email');
-    return { success: false, error: 'RESEND_API_KEY not configured' };
-  }
-
-  // Domain doğrulanmamışsa ve test email tanımlıysa, sadece test email'e gönder
-  // Domain doğrulanmamış ve test email de yoksa, email gönderimini skip et
-  let targetEmail = params.to;
-
-  if (!IS_DOMAIN_VERIFIED) {
-    if (TEST_EMAIL) {
-      console.log(`[Email] Domain not verified. Redirecting email to test address: ${TEST_EMAIL}`);
-      targetEmail = TEST_EMAIL;
-    } else {
-      console.log(`[Email] Domain not verified and no TEST_EMAIL set. Skipping email to: ${params.to}`);
-      return { success: false, error: 'Domain not verified. Set RESEND_FROM_EMAIL or RESEND_TEST_EMAIL' };
-    }
+  // Gerekli env variables kontrolü
+  if (!TENANT_ID || !CLIENT_ID || !CLIENT_SECRET || !MAIL_FROM) {
+    console.warn('[Email] Microsoft Graph config eksik, email gönderilmiyor');
+    return { success: false, error: 'Microsoft Graph config eksik (AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, AZURE_MAIL_FROM)' };
   }
 
   try {
-    const { data, error } = await resend.emails.send({
-      from: FROM_EMAIL,
-      to: targetEmail,
-      subject: getEmailSubject(params.type, params.title),
-      html: getEmailHtml(params),
+    const accessToken = await getAccessToken();
+
+    const graphUrl = `https://graph.microsoft.com/v1.0/users/${MAIL_FROM}/sendMail`;
+
+    const emailPayload = {
+      message: {
+        subject: getEmailSubject(params.type, params.title),
+        body: {
+          contentType: 'HTML',
+          content: getEmailHtml(params),
+        },
+        toRecipients: [
+          {
+            emailAddress: {
+              address: params.to,
+            },
+          },
+        ],
+      },
+      saveToSentItems: false,
+    };
+
+    const response = await fetch(graphUrl, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(emailPayload),
     });
 
-    if (error) {
-      console.error('Resend error:', error);
-      return { success: false, error: error.message };
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('[Email] Graph API error:', response.status, errorText);
+      return { success: false, error: `Graph API error: ${response.status} ${errorText}` };
     }
 
-    console.log('Email sent successfully:', data?.id);
+    console.log(`[Email] Sent successfully to ${params.to} from ${MAIL_FROM}`);
     return { success: true };
   } catch (error) {
-    console.error('Failed to send email:', error);
-    return { 
-      success: false, 
-      error: error instanceof Error ? error.message : 'Unknown error' 
+    console.error('[Email] Failed to send:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error'
     };
   }
 }

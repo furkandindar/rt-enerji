@@ -2,7 +2,8 @@
 
 import { format } from "date-fns";
 import { tr } from "date-fns/locale";
-import { FileText, Download } from "lucide-react";
+import { useState } from "react";
+import { FileText, Download, Eye } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -17,6 +18,7 @@ import {
 import type { PendingApproval, ChecklistStatus } from "@/lib/approvals/types";
 import type { PreviousStepAttachment } from "@/lib/workflow/types";
 import { separationSectionConfig, checklistStatusLabels } from "@/lib/approvals/constants";
+import { PdfViewerDialog } from "@/components/pdf-viewer-dialog";
 
 interface SeparationRequestDetailsProps {
   approval: PendingApproval;
@@ -25,6 +27,7 @@ interface SeparationRequestDetailsProps {
 }
 
 export function SeparationRequestDetails({ approval, separationSectionKey, previousStepAttachments = [] }: SeparationRequestDetailsProps) {
+  const [previewFile, setPreviewFile] = useState<{ id: string; name: string } | null>(null);
   const sr = approval.request.separation_request;
   if (!sr) return null;
 
@@ -203,14 +206,26 @@ export function SeparationRequestDetails({ approval, separationSectionKey, previ
                             </p>
                           </div>
                         </div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="shrink-0 ml-2"
-                          onClick={() => handleDownload(attachment.id, attachment.file_name)}
-                        >
-                          <Download className="h-4 w-4" />
-                        </Button>
+                        <div className="flex items-center gap-1 shrink-0 ml-2">
+                          {attachment.mime_type === "application/pdf" && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setPreviewFile({ id: attachment.id, name: attachment.file_name })}
+                              title="Görüntüle"
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                          )}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDownload(attachment.id, attachment.file_name)}
+                            title="İndir"
+                          >
+                            <Download className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </div>
                     ))}
                 </div>
@@ -219,6 +234,15 @@ export function SeparationRequestDetails({ approval, separationSectionKey, previ
           </div>
         );
       })}
+
+      {previewFile && (
+        <PdfViewerDialog
+          open={!!previewFile}
+          onOpenChange={(open) => { if (!open) setPreviewFile(null); }}
+          attachmentId={previewFile.id}
+          fileName={previewFile.name}
+        />
+      )}
     </>
   );
 }
