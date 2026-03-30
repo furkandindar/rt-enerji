@@ -332,10 +332,46 @@ export async function PATCH(
         .select("id")
         .eq("workflow_definition_id", requestData.workflow_definition_id);
 
-      const isLastStep = requestData.current_step >= (totalSteps?.length || 0);
+      const totalStepCount = totalSteps?.length || 0;
 
-      if (isLastStep) {
-        // Son adım - talep onaylandı
+      // Sonraki adıma ilerle — zaten APPROVED olan adımları atla
+      let nextStep = requestData.current_step + 1;
+
+      // Tüm approval kayıtlarını al (otomatik onaylanmış adımları kontrol etmek için)
+      const { data: allApprovals } = await supabase
+        .from("request_approvals")
+        .select(`
+          id,
+          status,
+          approver_employee_id,
+          workflow_step:workflow_steps(step_order)
+        `)
+        .eq("request_id", requestData.id);
+
+      // Zaten APPROVED olan adımları atla (while döngüsü)
+      while (nextStep <= totalStepCount) {
+        const stepApproval = allApprovals?.find((a: { workflow_step: { step_order: number } | { step_order: number }[] | null }) => {
+          const stepOrder = Array.isArray(a.workflow_step)
+            ? a.workflow_step[0]?.step_order
+            : a.workflow_step?.step_order;
+          return stepOrder === nextStep;
+        });
+
+        // Bu adım zaten APPROVED ise atla
+        if (stepApproval && stepApproval.status === 'APPROVED') {
+          console.log(`Step ${nextStep} already APPROVED, skipping...`);
+          nextStep++;
+          continue;
+        }
+
+        // PENDING adıma ulaştık, dur
+        break;
+      }
+
+      const isCompleted = nextStep > totalStepCount;
+
+      if (isCompleted) {
+        // Tüm adımlar tamamlandı - talep onaylandı
         await supabase
           .from("requests")
           .update({
@@ -374,7 +410,6 @@ export async function PATCH(
         } catch (pdfError) {
           // PDF oluşturma hatası - loglayalım ama işlemi durdurmayalım
           console.error('Error generating/uploading PDF:', pdfError);
-          // İsteğe bağlı: Hata bildirimi gönderilebilir
         }
 
         // Talep edene "onaylandı" bildirimi gönder
@@ -385,9 +420,7 @@ export async function PATCH(
           workflowName
         );
       } else {
-        // Sonraki adıma geç
-        const nextStep = requestData.current_step + 1;
-
+        // Sonraki PENDING adıma geç
         await supabase
           .from("requests")
           .update({
@@ -396,23 +429,11 @@ export async function PATCH(
           .eq("id", requestData.id);
 
         // Sonraki onaycıya bildirim gönder
-        const { data: nextApprovalData, error: nextApprovalError } = await supabase
-          .from("request_approvals")
-          .select(`
-            approver_employee_id,
-            workflow_step:workflow_steps(step_order)
-          `)
-          .eq("request_id", requestData.id)
-          .eq("status", "PENDING");
-
-        console.log("Next approval query result:", nextApprovalData, "Error:", nextApprovalError);
-
-        // step_order'a göre filtrele
-        const nextApproval = nextApprovalData?.find((a: { workflow_step: { step_order: number } | { step_order: number }[] | null }) => {
+        const nextApproval = allApprovals?.find((a: { status: string; workflow_step: { step_order: number } | { step_order: number }[] | null }) => {
           const stepOrder = Array.isArray(a.workflow_step)
             ? a.workflow_step[0]?.step_order
             : a.workflow_step?.step_order;
-          return stepOrder === nextStep;
+          return stepOrder === nextStep && a.status === 'PENDING';
         });
 
         console.log("Found next approval for step", nextStep, ":", nextApproval);

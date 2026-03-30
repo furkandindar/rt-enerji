@@ -131,119 +131,7 @@ async function getEmployeeByPosition(
   return assignment?.employee_id || null;
 }
 
-/**
- * Bir pozisyonun unit_id'sini getirir
- */
-async function getPositionUnitId(
-  supabase: SupabaseClient,
-  positionId: string
-): Promise<string | null> {
-  const { data } = await supabase
-    .from('positions')
-    .select('unit_id')
-    .eq('id', positionId)
-    .single();
 
-  return data?.unit_id || null;
-}
-
-/**
- * Bir birimde, belirtilen kişi hariç, alternatif bir çalışan bulur.
- * Önce aynı birimde herhangi biri aranır (level_band sıralaması ile).
- * Bulunamazsa null döner.
- */
-async function findAlternativeInUnit(
-  supabase: SupabaseClient,
-  unitId: string,
-  excludeEmployeeId: string
-): Promise<string | null> {
-  // Birimde aktif pozisyonları ve çalışanları bul (level_band sıralı - düşük önce)
-  const { data: assignments } = await supabase
-    .from('employee_positions')
-    .select(`
-      employee_id,
-      position:positions!inner (
-        id,
-        unit_id,
-        level_band,
-        is_active
-      )
-    `)
-    .eq('position.unit_id', unitId)
-    .eq('position.is_active', true)
-    .is('end_date', null)
-    .neq('employee_id', excludeEmployeeId);
-
-  if (!assignments || assignments.length === 0) {
-    return null;
-  }
-
-  // Level band'e göre sırala (100 en üst, 500 en alt - düşük değer önce)
-  const sorted = assignments.sort((a, b) => {
-    const levelA = (a.position as unknown as { level_band: number }).level_band;
-    const levelB = (b.position as unknown as { level_band: number }).level_band;
-    return levelA - levelB;
-  });
-
-  // İlk bulunanı döndür
-  return sorted[0].employee_id;
-}
-
-/**
- * STATIC_POSITION için alternatif onaycı bulur.
- *
- * Kural:
- * 1. Pozisyondaki kişiyi bul
- * 2. Eğer talep eden = onaycı ise → Aynı birimde alternatif ara
- * 3. Alternatif yoksa → Üst birime escalate et
- * 4. Üst birimde de yoksa → Kendi kendini onaylar (self-approval)
- */
-async function findAlternativeForStaticPosition(
-  supabase: SupabaseClient,
-  positionId: string,
-  requesterEmployeeId: string
-): Promise<string | null> {
-  // 1. Pozisyonun birimini al
-  const unitId = await getPositionUnitId(supabase, positionId);
-  if (!unitId) {
-    return null;
-  }
-
-  let currentUnitId: string | null = unitId;
-  let iterations = 0;
-  const maxIterations = 10; // Sonsuz döngü koruması
-
-  while (currentUnitId && iterations < maxIterations) {
-    iterations++;
-
-    // 2. Bu birimde alternatif ara
-    const alternativeEmployeeId = await findAlternativeInUnit(
-      supabase,
-      currentUnitId,
-      requesterEmployeeId
-    );
-
-    if (alternativeEmployeeId) {
-      return alternativeEmployeeId;
-    }
-
-    // 3. Bulunamadı, üst birime bak
-    const parentUnit = await getParentUnit(supabase, currentUnitId);
-    if (!parentUnit) {
-      // En üst birime ulaşıldı, alternatif yok
-      break;
-    }
-
-    currentUnitId = parentUnit.id;
-  }
-
-  // 4. Hiç alternatif bulunamadı - self-approval (talep eden kendi kendini onaylar)
-  console.warn(
-    `No alternative approver found for position ${positionId}. ` +
-    `Requester ${requesterEmployeeId} will self-approve.`
-  );
-  return requesterEmployeeId;
-}
 
 // ============================================================================
 // Main Functions
@@ -269,26 +157,15 @@ export async function determineApprover(
   }
 
   // STATIC_POSITION: Belirtilen pozisyondaki kişi
-  // Eğer onaycı = talep eden ise VE action_type SIGN_ONLY ise, alternatif ara
-  // FILL_AND_SIGN için alternatif arama - kişi formu doldurup imzalıyor
+  // Talep eden = pozisyondaki kişi ise → self-approval (alternatif aranmaz)
   if (step.approver_type === 'STATIC_POSITION') {
     if (!step.static_position_id) {
       throw new Error(`Step "${step.name}" requires static_position_id`);
     }
 
-    // Pozisyondaki kişiyi bul
+    // Pozisyondaki kişiyi bul ve direkt döndür
+    // Eğer talep eden kendisiyse, self-approval olarak işaretlenecek (createApprovalChain'de)
     const approverEmployeeId = await getEmployeeByPosition(supabase, step.static_position_id);
-
-    // Eğer onaycı = talep eden ise VE SIGN_ONLY ise, alternatif bul
-    // FILL_AND_SIGN için alternatif aramıyoruz çünkü kişi formu doldurup imzalıyor
-    if (approverEmployeeId === requesterEmployeeId && step.action_type !== 'FILL_AND_SIGN') {
-      return findAlternativeForStaticPosition(
-        supabase,
-        step.static_position_id,
-        requesterEmployeeId
-      );
-    }
-
     return approverEmployeeId;
   }
 
@@ -337,8 +214,8 @@ async function determineUnitHeadApprover(
         currentUnitId = parentUnit.id;
         continue;
       }
-      // Üst birim de yoksa, hata fırlat
-      throw new Error('No unit head found in the hierarchy');
+      // Üst birim de yoksa, en tepeye ulaştık → self-approval
+      return requesterEmployeeId;
     }
 
     // 3. Talep eden ≠ Birim müdürü → Bu kişi onaycı
@@ -363,9 +240,13 @@ async function determineUnitHeadApprover(
 
 /**
  * Bir talep için tüm approval kayıtlarını oluşturur.
- * Eğer ilk adım aşağıdaki koşullardan birini sağlıyorsa otomatik olarak onaylar:
- * 1. REQUESTER tipinde ise (talep eden kendi formunu imzalıyor)
- * 2. FILL_AND_SIGN action'ı ile talep eden = onaycı ise (örn: İK kendi formu dolduruyor)
+ *
+ * Otomatik onaylama koşulları:
+ * 1. İlk adım REQUESTER tipinde ise (talep eden kendi formunu imzalıyor)
+ * 2. İlk adım FILL_AND_SIGN action'ı ile talep eden = onaycı ise
+ * 3. Talep eden = onaycı ve adım REQUESTER tipinde ise (self-approval)
+ * 4. Mükerrer onaycı: Aynı kişi daha önceki bir adımda zaten onaycıysa VE bu adım SIGN_ONLY ise
+ *    (FILL_AND_SIGN adımları her zaman manuel müdahale gerektirir)
  */
 export async function createApprovalChain(
   supabase: SupabaseClient,
@@ -387,7 +268,7 @@ export async function createApprovalChain(
 
   // 2. Her adım için onaycıyı belirle ve approval kaydı oluştur
   const approvals = [];
-  let shouldAutoApproveFirstStep = false;
+  const previousApprovers = new Set<string>(); // Daha önce atanan onaycıları takip et
 
   for (const step of steps) {
     const approverEmployeeId = await determineApprover(
@@ -400,27 +281,38 @@ export async function createApprovalChain(
       throw new Error(`Could not determine approver for step: ${step.name}`);
     }
 
-    // İlk adımı otomatik onaylama koşulları:
-    // 1. REQUESTER tipinde ise
-    // 2. FILL_AND_SIGN action'ı ile talep eden = onaycı ise
+    // Otomatik onaylama koşulları:
+    // 1. İlk adım REQUESTER tipinde ise
     const isFirstRequesterStep = step.step_order === 1 && step.approver_type === 'REQUESTER';
+
+    // 2. İlk adım FILL_AND_SIGN ve talep eden = onaycı ise
     const isFirstFillAndSignByRequester = step.step_order === 1 &&
                                            step.action_type === 'FILL_AND_SIGN' &&
                                            approverEmployeeId === requesterEmployeeId;
-    const autoApproveThisStep = isFirstRequesterStep || isFirstFillAndSignByRequester;
+
+    // 3. Talep eden = onaycı ve adım REQUESTER tipinde ise (herhangi bir adımda)
+    const isSelfRequester = step.approver_type === 'REQUESTER' && approverEmployeeId === requesterEmployeeId;
+
+    // 4. Mükerrer onaycı: Bu kişi daha önceki bir adımda zaten onaycıydı VE bu adım SIGN_ONLY
+    //    FILL_AND_SIGN adımları her zaman manuel müdahale gerektirir (veri girişi var)
+    const isDuplicateSignOnly = previousApprovers.has(approverEmployeeId) &&
+                                 step.action_type === 'SIGN_ONLY';
+
+    const autoApproveThisStep = isFirstRequesterStep ||
+                                 isFirstFillAndSignByRequester ||
+                                 isSelfRequester ||
+                                 isDuplicateSignOnly;
 
     approvals.push({
       request_id: requestId,
       workflow_step_id: step.id,
       approver_employee_id: approverEmployeeId,
-      // Koşul sağlanıyorsa otomatik onayla
       status: autoApproveThisStep ? 'APPROVED' : 'PENDING',
       decided_at: autoApproveThisStep ? new Date().toISOString() : null,
     });
 
-    if (autoApproveThisStep) {
-      shouldAutoApproveFirstStep = true;
-    }
+    // Bu onaycıyı takip listesine ekle
+    previousApprovers.add(approverEmployeeId);
   }
 
   // 3. Tüm approval kayıtlarını ekle
@@ -432,11 +324,21 @@ export async function createApprovalChain(
     throw new Error(`Failed to create approval chain: ${insertError.message}`);
   }
 
-  // 4. Eğer ilk adım otomatik onaylandıysa, current_step'i 2'ye güncelle
-  if (shouldAutoApproveFirstStep) {
+  // 4. Baştan itibaren ardışık APPROVED adımları atla ve current_step'i ayarla
+  let currentStep = 1;
+  for (const approval of approvals) {
+    if (approval.status === 'APPROVED') {
+      currentStep++;
+    } else {
+      break; // İlk PENDING adıma ulaştık
+    }
+  }
+
+  // current_step 1'den farklıysa güncelle
+  if (currentStep > 1) {
     const { error: updateError } = await supabase
       .from('requests')
-      .update({ current_step: 2 })
+      .update({ current_step: currentStep })
       .eq('id', requestId);
 
     if (updateError) {
