@@ -13,8 +13,10 @@ interface Position {
   job_code: string;
   is_unit_head: boolean;
   unit_id: string;
+  level_band: number | null;
   employees: Employee[];
   color: string | null;
+  _sortOrder: number;
 }
 
 interface UnitData {
@@ -36,7 +38,7 @@ export default async function OrgChartPage() {
     supabase.from("employees").select("*").eq("status", "ACTIVE"),
     supabase.from("employee_positions").select("*").is("end_date", null),
     supabase.from("unit_types").select("*"),
-    supabase.from("position_types").select("id, color"),
+    supabase.from("position_types").select("id, color, display_order"),
   ]);
 
   if (unitsRes.error || positionsRes.error || employeesRes.error || assignmentsRes.error) {
@@ -65,7 +67,7 @@ export default async function OrgChartPage() {
     }
   });
 
-  // 2. Map positions to units (with color from position_types)
+  // 2. Map positions to units (with color from position_types), sorted by hierarchy
   const unitPositionMap = new Map<string, Position[]>();
   positions.forEach((p) => {
     const positionType = positionTypes.find((pt) => pt.id === p.position_type_id);
@@ -73,10 +75,22 @@ export default async function OrgChartPage() {
       ...p,
       employees: positionEmployeeMap.get(p.id) || [],
       color: positionType?.color || null,
+      _sortOrder: positionType?.display_order ?? 999,
     };
     const existing = unitPositionMap.get(p.unit_id) || [];
     existing.push(posWithEmp);
     unitPositionMap.set(p.unit_id, existing);
+  });
+
+  // Sort positions within each unit: position_type.display_order → level_band → job_code
+  unitPositionMap.forEach((positions) => {
+    positions.sort((a, b) => {
+      const orderDiff = a._sortOrder - b._sortOrder;
+      if (orderDiff !== 0) return orderDiff;
+      const bandDiff = (a.level_band ?? 999) - (b.level_band ?? 999);
+      if (bandDiff !== 0) return bandDiff;
+      return (a.job_code || '').localeCompare(b.job_code || '');
+    });
   });
 
   // 3. Build flat unit list with positions
