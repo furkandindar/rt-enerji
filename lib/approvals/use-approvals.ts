@@ -392,8 +392,8 @@ export function useApprovals() {
       fetchAttachmentData(selectedApproval.workflow_step.id, selectedApproval.request.id);
     }
 
-    // Onboarding, separation veya overtime request ise önceki adımlardaki ekleri de çek
-    if ((selectedApproval?.request?.onboarding_request || selectedApproval?.request?.separation_request || selectedApproval?.request?.overtime_request) && selectedApproval?.request?.id) {
+    // Onboarding, separation, overtime veya request form ise önceki adımlardaki ekleri de çek
+    if ((selectedApproval?.request?.onboarding_request || selectedApproval?.request?.separation_request || selectedApproval?.request?.overtime_request || selectedApproval?.request?.request_form_request) && selectedApproval?.request?.id) {
       fetchPreviousStepAttachments(selectedApproval.request.id);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps

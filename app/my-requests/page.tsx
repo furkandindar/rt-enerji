@@ -147,6 +147,25 @@ interface OnboardingRequestData {
   employment_period: string | null;
 }
 
+interface RequestFormRequestData {
+  id: string;
+  requester_name: string;
+  company: string;
+  request_date: string;
+  subject: string;
+  content: string;
+  quantity: string | null;
+  amount: number | null;
+  reason: string | null;
+  request_type: string;
+}
+
+const requestFormTypeLabels: Record<string, string> = {
+  MUTFAK: "Mutfak",
+  KIRTASIYE: "Kırtasiye",
+  DIGER: "Diğer",
+};
+
 interface SeparationRequestData {
   id: string;
   employee_name: string | null;
@@ -177,6 +196,7 @@ interface Request {
   overtime_request?: OvertimeRequest;
   onboarding_request?: OnboardingRequestData;
   separation_request?: SeparationRequestData;
+  request_form_request?: RequestFormRequestData;
   requester?: Requester;
   approvals?: Approval[];
 }
@@ -309,6 +329,9 @@ export default function MyRequestsPage() {
     }
     if (request.separation_request) {
       return request.separation_request.employee_name || "-";
+    }
+    if (request.request_form_request) {
+      return request.request_form_request.subject || "-";
     }
     return "-";
   };
@@ -850,6 +873,78 @@ export default function MyRequestsPage() {
                       {selectedRequest.separation_request.separation_reason || "-"}
                     </p>
                   </div>
+                </>
+              )}
+
+              {/* Request Form specific fields */}
+              {selectedRequest.request_form_request && (
+                <>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">Talep Eden</p>
+                      <p className="text-sm font-semibold">
+                        {selectedRequest.request_form_request.requester_name || "-"}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">Şirket</p>
+                      <p className="text-sm font-semibold">
+                        {selectedRequest.request_form_request.company || "-"}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">Talep Tarihi</p>
+                      <p className="text-sm font-semibold">
+                        {selectedRequest.request_form_request.request_date
+                          ? format(new Date(selectedRequest.request_form_request.request_date), "d MMMM yyyy", { locale: tr })
+                          : "-"}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">Talep Türü</p>
+                      <p className="text-sm font-semibold">
+                        {requestFormTypeLabels[selectedRequest.request_form_request.request_type] || selectedRequest.request_form_request.request_type}
+                      </p>
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground">Konu</p>
+                    <p className="text-sm font-semibold">
+                      {selectedRequest.request_form_request.subject || "-"}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground">Talep İçeriği</p>
+                    <p className="text-sm font-semibold whitespace-pre-wrap">
+                      {selectedRequest.request_form_request.content || "-"}
+                    </p>
+                  </div>
+                  {selectedRequest.request_form_request.quantity && (
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">Talep Miktarı</p>
+                      <p className="text-sm font-semibold">
+                        {selectedRequest.request_form_request.quantity}
+                      </p>
+                    </div>
+                  )}
+                  {selectedRequest.request_form_request.amount != null && (
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">Talep Tutarı</p>
+                      <p className="text-sm font-semibold">
+                        {selectedRequest.request_form_request.amount.toLocaleString("tr-TR")} TL
+                      </p>
+                    </div>
+                  )}
+                  {selectedRequest.request_form_request.reason && (
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">Talep Nedeni</p>
+                      <p className="text-sm font-semibold whitespace-pre-wrap">
+                        {selectedRequest.request_form_request.reason}
+                      </p>
+                    </div>
+                  )}
                 </>
               )}
 

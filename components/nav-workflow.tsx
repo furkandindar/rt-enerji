@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarPlus, FileCheck, ClipboardList, Banknote, Clock, UserPlus, UserMinus, type LucideIcon } from "lucide-react";
+import { CalendarPlus, FileCheck, ClipboardList, Banknote, Clock, UserPlus, UserMinus, FileText, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -28,6 +28,7 @@ interface NavItem {
 const personalItems: NavItem[] = [
   { title: "İzin Talebi", url: "/leave-requests/new", icon: CalendarPlus },
   { title: "Maaş Avans Talebi",   url: "/salary-advance/new", icon: Banknote },
+  { title: "Talep Formu",         url: "/request-form/new",   icon: FileText },
 ];
 
 // Departmana özel kısıtlı süreçler

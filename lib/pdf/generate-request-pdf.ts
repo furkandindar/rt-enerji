@@ -5,6 +5,7 @@ import { SalaryAdvancePDFTemplate } from './salary-advance-pdf-template';
 import { OvertimePDFTemplate } from './overtime-pdf-template';
 import { OnboardingPDFTemplate } from './onboarding-pdf-template';
 import { SeparationPDFTemplate } from './separation-pdf-template';
+import { RequestFormPDFTemplate } from './request-form-pdf-template';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { SignatureFont, DEFAULT_SIGNATURE_FONT } from '@/lib/signature/types';
 
@@ -59,6 +60,7 @@ export async function generateRequestPDF(
       ),
       onboarding_request:onboarding_requests(*),
       separation_request:separation_requests(*),
+      request_form_request:request_form_requests(*),
       approvals:request_approvals(
         id,
         status,
@@ -152,6 +154,15 @@ export async function generateRequestPDF(
       request,
       requester: request.requester,
       separationRequest: request.separation_request,
+      approvals: request.approvals || [],
+      signatures,
+    }) as React.ReactElement<DocumentProps>;
+  } else if (request.request_form_request) {
+    // Talep Formu PDF'i
+    pdfDocument = React.createElement(RequestFormPDFTemplate, {
+      request,
+      requester: request.requester,
+      requestFormRequest: request.request_form_request,
       approvals: request.approvals || [],
       signatures,
     }) as React.ReactElement<DocumentProps>;

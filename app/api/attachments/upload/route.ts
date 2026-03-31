@@ -43,8 +43,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Attachment config bulunamadı" }, { status: 404 });
     }
 
-    // 3a. Dosya tipi kontrolü
-    if (!config.allowed_mime_types.includes(file.type)) {
+    // 3a. Dosya tipi kontrolü (null veya boş ise tüm tipler kabul edilir)
+    if (config.allowed_mime_types && config.allowed_mime_types.length > 0 && !config.allowed_mime_types.includes(file.type)) {
       return NextResponse.json({
         error: `Geçersiz dosya tipi. İzin verilen: ${config.allowed_mime_types.join(", ")}`,
       }, { status: 400 });

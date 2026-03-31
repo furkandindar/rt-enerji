@@ -50,8 +50,8 @@ export function AttachmentUploader({
     const config = configs.find((c) => c.id === configId);
     if (!config) return;
 
-    // Client-side validasyon
-    if (!config.allowed_mime_types.includes(file.type)) {
+    // Client-side validasyon (null veya boş ise tüm tipler kabul edilir)
+    if (config.allowed_mime_types && config.allowed_mime_types.length > 0 && !config.allowed_mime_types.includes(file.type)) {
       toast.error(`Geçersiz dosya tipi. İzin verilen: ${getMimeTypeLabel(config.allowed_mime_types)}`);
       return;
     }
@@ -164,7 +164,7 @@ export function AttachmentUploader({
                 {config.is_required && <span className="text-red-500 ml-1">*</span>}
               </Label>
               <span className="text-xs text-muted-foreground">
-                {getMimeTypeLabel(config.allowed_mime_types)} · Maks {maxMB}MB
+                {config.allowed_mime_types && config.allowed_mime_types.length > 0 ? getMimeTypeLabel(config.allowed_mime_types) : 'Tüm dosya türleri'} · Maks {maxMB}MB
               </span>
             </div>
 
@@ -232,7 +232,7 @@ export function AttachmentUploader({
                 <input
                   ref={(el) => { fileInputRefs.current[config.id] = el; }}
                   type="file"
-                  accept={config.allowed_mime_types.join(",")}
+                  accept={config.allowed_mime_types && config.allowed_mime_types.length > 0 ? config.allowed_mime_types.join(",") : undefined}
                   className="hidden"
                   onChange={(e) => {
                     const file = e.target.files?.[0];

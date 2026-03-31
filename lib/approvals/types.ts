@@ -134,6 +134,18 @@ export interface PendingApproval {
       notice_amount: number | null;
       [key: string]: string | number | null | undefined;
     };
+    request_form_request?: {
+      id: string;
+      requester_name: string;
+      company: string;
+      request_date: string;
+      subject: string;
+      content: string;
+      quantity: string | null;
+      amount: number | null;
+      reason: string | null;
+      request_type: string;
+    };
     approvals?: Approval[];
   };
 }

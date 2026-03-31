@@ -31,6 +31,9 @@ export const getRequestSummary = (approval: PendingApproval): string => {
   if (approval.request.separation_request) {
     return approval.request.separation_request.employee_name || "-";
   }
+  if (approval.request.request_form_request) {
+    return approval.request.request_form_request.subject || "-";
+  }
   return "-";
 };
 

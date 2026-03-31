@@ -362,7 +362,7 @@ export const RequestPDFTemplate: React.FC<RequestPDFTemplateProps> = ({
         title: positionTitle,
         name: `${approval.approver.first_name} ${approval.approver.last_name}`,
         employeeId: approval.approver.id,
-        note: '',
+        note: approval.comment || '',
       });
     });
 
@@ -520,10 +520,12 @@ export const RequestPDFTemplate: React.FC<RequestPDFTemplateProps> = ({
                 <Text style={styles.onayNameText}>{col.name}</Text>
                 {renderSignature(col.employeeId)}
               </View>
-              {/* Note Row */}
-              {/* <View style={styles.onayNoteRow}>
-                <Text style={styles.onayNoteText}>{col.note}</Text>
-              </View> */}
+              {/* Note Row - Yorum varsa göster */}
+              {col.note ? (
+                <View style={styles.onayNoteRow}>
+                  <Text style={styles.onayNoteText}>{col.note}</Text>
+                </View>
+              ) : null}
             </View>
           ))}
         </View>
@@ -532,7 +534,7 @@ export const RequestPDFTemplate: React.FC<RequestPDFTemplateProps> = ({
         <View style={styles.footer}>
           {/* <Text style={styles.footerText}>Bildirim Yetkilisi:Yönetici Asistanı</Text>
           <Text style={styles.footerText}>Bildirilecek Kişiler:Çalışan/Amiri/Muhasebe/Personel Müdürlüğü/İK(SharePoint)</Text> */}
-          <Text style={styles.footerText}>Tüm Formlar SharePoint/İK/Formlar dosyasına kaydedilir.</Text>
+          {/* <Text style={styles.footerText}>Tüm Formlar SharePoint/İK/Formlar dosyasına kaydedilir.</Text> */}
         </View>
       </Page>
     </Document>

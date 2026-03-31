@@ -468,6 +468,40 @@ export interface CreateSeparationInput {
 }
 
 // ============================================================================
+// Request Form (Talep Formu) Types
+// ============================================================================
+
+export type RequestFormType = 'MUTFAK' | 'KIRTASIYE' | 'DIGER';
+
+export interface RequestFormRequest {
+  id: string;
+  request_id: string;
+  requester_name: string;
+  company: string;
+  request_date: string;
+  subject: string;
+  content: string;
+  quantity: string | null;
+  amount: number | null;
+  reason: string | null;
+  request_type: RequestFormType;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateRequestFormInput {
+  requester_name: string;
+  company: string;
+  request_date: string;
+  subject: string;
+  content: string;
+  quantity?: string;
+  amount?: number;
+  reason?: string;
+  request_type: RequestFormType;
+}
+
+// ============================================================================
 // Workflow Attachment Types
 // ============================================================================
 

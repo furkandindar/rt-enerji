@@ -41,6 +41,7 @@ export async function GET(request: NextRequest) {
         ),
         onboarding_request:onboarding_requests(*),
         separation_request:separation_requests(*),
+        request_form_request:request_form_requests(*),
         requester:employees!requester_employee_id(
           id,
           first_name,

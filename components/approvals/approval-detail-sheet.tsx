@@ -22,6 +22,7 @@ import { SalaryAdvanceDetails } from "./salary-advance-details";
 import { OvertimeRequestDetails } from "./overtime-request-details";
 import { OnboardingRequestDetails } from "./onboarding-request-details";
 import { SeparationRequestDetails } from "./separation-request-details";
+import { RequestFormDetails } from "./request-form-details";
 import { ApprovalHistoryAccordion } from "./approval-history-accordion";
 import { ApprovalActions } from "./approval-actions";
 import { PdfViewerDialog } from "@/components/pdf-viewer-dialog";
@@ -163,6 +164,12 @@ export function ApprovalDetailSheet({
               <SeparationRequestDetails
                 approval={selectedApproval}
                 separationSectionKey={separationSectionKey}
+                previousStepAttachments={previousStepAttachments}
+              />
+            )}
+            {selectedApproval.request.request_form_request && (
+              <RequestFormDetails
+                approval={selectedApproval}
                 previousStepAttachments={previousStepAttachments}
               />
             )}

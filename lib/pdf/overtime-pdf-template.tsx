@@ -56,6 +56,8 @@ const staffStyles = StyleSheet.create({
   onayTitleText: { fontSize: 7, fontWeight: 700, textAlign: 'center' },
   onaySignatureRow: { padding: 4, minHeight: 40, justifyContent: 'center', alignItems: 'center', gap: 2 },
   onayNameText: { fontSize: 7, textAlign: 'center' },
+  onayNoteRow: { padding: 4, minHeight: 20 },
+  onayNoteText: { fontSize: 5.5, color: '#666', lineHeight: 1.3 },
   onaySignatureText: { fontSize: 14, color: '#1a365d' },
   onaySignatureStatus: { fontSize: 7, color: '#666' },
   footer: { marginTop: 10, fontSize: 6, color: '#666' },
@@ -98,7 +100,7 @@ interface StaffShortageProps {
   requester: any;
   overtimeRequest: any;
   entries: OvertimeEntry[];
-  approvalColumns: { title: string; name: string; employeeId: string }[];
+  approvalColumns: { title: string; name: string; employeeId: string; note: string }[];
   signatures: Record<string, SignatureInfo>;
 }
 
@@ -180,6 +182,7 @@ const StaffShortagePDF: React.FC<StaffShortageProps> = ({
               <Text style={staffStyles.onayNameText}>{col.name}</Text>
               {renderSig(col.employeeId)}
             </View>
+            {col.note ? (<View style={staffStyles.onayNoteRow}><Text style={staffStyles.onayNoteText}>{col.note}</Text></View>) : null}
           </View>
         ))}
       </View>
@@ -192,7 +195,7 @@ interface EmergencyProps {
   request: any;
   requester: any;
   overtimeRequest: any;
-  approvalColumns: { title: string; name: string; employeeId: string }[];
+  approvalColumns: { title: string; name: string; employeeId: string; note: string }[];
   signatures: Record<string, SignatureInfo>;
 }
 
@@ -271,6 +274,7 @@ const EmergencyPDF: React.FC<EmergencyProps> = ({
               <Text style={staffStyles.onayNameText}>{col.name}</Text>
               {renderSig(col.employeeId)}
             </View>
+            {col.note ? (<View style={staffStyles.onayNoteRow}><Text style={staffStyles.onayNoteText}>{col.note}</Text></View>) : null}
           </View>
         ))}
       </View>
@@ -282,11 +286,11 @@ export const OvertimePDFTemplate: React.FC<OvertimePDFTemplateProps> = ({
   request, requester, overtimeRequest, entries = [], approvals, signatures = {},
 }) => {
   const getApprovalColumns = () => {
-    const columns = [{ title: 'İnsan Kaynakları', name: `${requester.first_name} ${requester.last_name}`, employeeId: requester.id }];
+    const columns: { title: string; name: string; employeeId: string; note: string }[] = [{ title: 'İnsan Kaynakları', name: `${requester.first_name} ${requester.last_name}`, employeeId: requester.id, note: '' }];
     const sortedApprovals = approvals.filter((a) => a.workflow_step.step_order > 1).sort((a, b) => a.workflow_step.step_order - b.workflow_step.step_order);
     sortedApprovals.forEach((approval) => {
       const positionTitle = approval.workflow_step.static_position ? approval.workflow_step.static_position.title : approval.workflow_step.name;
-      columns.push({ title: positionTitle, name: `${approval.approver.first_name} ${approval.approver.last_name}`, employeeId: approval.approver.id });
+      columns.push({ title: positionTitle, name: `${approval.approver.first_name} ${approval.approver.last_name}`, employeeId: approval.approver.id, note: approval.comment || '' });
     });
     return columns;
   };
