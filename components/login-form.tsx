@@ -49,7 +49,7 @@ export function LoginForm({
           </div>
           <CardTitle className="text-2xl font-bold tracking-tight text-slate-900 drop-shadow-sm dark:text-white">Hoş Geldiniz</CardTitle>
           <CardDescription className="text-center text-slate-600 dark:text-slate-300">
-            RT Enerji İK Yönetim Platformuna<br />giriş yapmak için devam edin
+            RT Enerji Süreç Yönetim Sistemine<br />giriş yapmak için devam edin
           </CardDescription>
         </CardHeader>
         <CardContent>
