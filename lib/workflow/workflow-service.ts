@@ -420,12 +420,17 @@ async function getEmployeeUnitId(
 /**
  * Çalışanın belirli bir workflow'u başlatıp başlatamayacağını kontrol eder.
  * Kural bazlı kontrol: position_id eşleşmesi VEYA unit_id eşleşmesi yeterli.
+ * ORG_ADMIN rolü tüm workflow'ları başlatabilir.
  */
 export async function canStartWorkflow(
   supabase: SupabaseClient,
   employeeId: string,
-  workflowDefinitionId: string
+  workflowDefinitionId: string,
+  userRole?: string
 ): Promise<boolean> {
+  // ORG_ADMIN her workflow'u başlatabilir
+  if (userRole === 'ORG_ADMIN') return true;
+
   // 1. Workflow'u al
   const { data: workflow } = await supabase
     .from('workflow_definitions')
@@ -458,11 +463,13 @@ export async function canStartWorkflow(
 }
 
 /**
- * Çalışanın başlatabileceği tüm workflow'ları getirir
+ * Çalışanın başlatabileceği tüm workflow'ları getirir.
+ * ORG_ADMIN rolü tüm aktif workflow'ları görebilir.
  */
 export async function getAvailableWorkflows(
   supabase: SupabaseClient,
-  employeeId: string
+  employeeId: string,
+  userRole?: string
 ): Promise<WorkflowDefinition[]> {
   // 1. Tüm aktif workflow'ları al
   const { data: workflows, error } = await supabase
@@ -481,6 +488,11 @@ export async function getAvailableWorkflows(
     .order('name');
 
   if (error || !workflows) return [];
+
+  // ORG_ADMIN tüm aktif workflow'ları görebilir
+  if (userRole === 'ORG_ADMIN') {
+    return workflows as WorkflowDefinition[];
+  }
 
   // 2. Çalışanın pozisyon ve departman bilgilerini al
   const [employeePositionIds, employeeUnitId] = await Promise.all([

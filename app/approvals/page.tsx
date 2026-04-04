@@ -17,6 +17,7 @@ export default function ApprovalsPage() {
     comment,
     signatureInfo,
     signatureAccepted,
+    signatureDataUrl,
     remainingDays,
     hrNote,
     salaryDeductionConsent,
@@ -33,6 +34,7 @@ export default function ApprovalsPage() {
     isSeparationSectionForm,
     currentSeparationSectionConfig,
     separationSectionKey,
+    isStampApproval,
     canApprove,
     currentPage,
     pageSize,
@@ -40,6 +42,7 @@ export default function ApprovalsPage() {
     setSelectedApproval,
     setComment,
     setSignatureAccepted,
+    setSignatureDataUrl,
     setRemainingDays,
     setHrNote,
     setSalaryDeductionConsent,
@@ -134,6 +137,9 @@ export default function ApprovalsPage() {
         signatureInfo={signatureInfo}
         signatureAccepted={signatureAccepted}
         setSignatureAccepted={setSignatureAccepted}
+        isStampApproval={isStampApproval}
+        signatureDataUrl={signatureDataUrl}
+        setSignatureDataUrl={setSignatureDataUrl}
         canApprove={canApprove}
         isSubmitting={isSubmitting}
         handleDecision={handleDecision}

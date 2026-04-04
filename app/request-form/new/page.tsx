@@ -367,7 +367,7 @@ export default function NewRequestFormPage() {
                         {...field}
                       />
                     </FormControl>
-                    <FormDescription>Opsiyonel - talep edilen miktarı girin</FormDescription>
+                    <FormDescription>Talep edilen miktarı girin</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -389,7 +389,7 @@ export default function NewRequestFormPage() {
                         onChange={(e) => field.onChange(e.target.value === "" ? undefined : parseFloat(e.target.value))}
                       />
                     </FormControl>
-                    <FormDescription>Opsiyonel - bir tutar varsa girin</FormDescription>
+                    <FormDescription>Nokta kullanmadan girin, kuruş için virgül kullanın (Örn: 10080 veya 10080,50)</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}

@@ -34,6 +34,9 @@ export const getRequestSummary = (approval: PendingApproval): string => {
   if (approval.request.request_form_request) {
     return approval.request.request_form_request.subject || "-";
   }
+  if (approval.request.stamp_request) {
+    return approval.request.stamp_request.subject || approval.request.stamp_request.stamp?.name || "Kaşeli Belge";
+  }
   return "-";
 };
 

@@ -166,6 +166,14 @@ const requestFormTypeLabels: Record<string, string> = {
   DIGER: "Diğer",
 };
 
+const stampPositionLabels: Record<string, string> = {
+  "top-left": "Sol Üst",
+  "top-right": "Sağ Üst",
+  center: "Orta",
+  "bottom-left": "Sol Alt",
+  "bottom-right": "Sağ Alt",
+};
+
 interface SeparationRequestData {
   id: string;
   employee_name: string | null;
@@ -197,6 +205,19 @@ interface Request {
   onboarding_request?: OnboardingRequestData;
   separation_request?: SeparationRequestData;
   request_form_request?: RequestFormRequestData;
+  stamp_request?: {
+    id: string;
+    original_pdf_path: string;
+    stamped_pdf_path: string | null;
+    selected_pages: string;
+    stamp_position: string;
+    subject: string | null;
+    description: string | null;
+    stamp: {
+      id: string;
+      name: string;
+    };
+  };
   requester?: Requester;
   approvals?: Approval[];
 }
@@ -332,6 +353,9 @@ export default function MyRequestsPage() {
     }
     if (request.request_form_request) {
       return request.request_form_request.subject || "-";
+    }
+    if (request.stamp_request) {
+      return request.stamp_request.subject || request.stamp_request.stamp?.name || "Kaşeli Belge";
     }
     return "-";
   };
@@ -942,6 +966,56 @@ export default function MyRequestsPage() {
                       <p className="text-sm font-medium text-muted-foreground">Talep Nedeni</p>
                       <p className="text-sm font-semibold whitespace-pre-wrap">
                         {selectedRequest.request_form_request.reason}
+                      </p>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* Stamp Request specific fields */}
+              {selectedRequest.stamp_request && (
+                <>
+                  {selectedRequest.stamp_request.subject && (
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">Konu</p>
+                      <p className="text-sm font-semibold">{selectedRequest.stamp_request.subject}</p>
+                    </div>
+                  )}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">Kaşe</p>
+                      <p className="text-sm font-semibold">
+                        {selectedRequest.stamp_request.stamp?.name || "-"}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">Kaşe Konumu</p>
+                      <p className="text-sm font-semibold">
+                        {stampPositionLabels[selectedRequest.stamp_request.stamp_position] || selectedRequest.stamp_request.stamp_position}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">Kaşelenecek Sayfalar</p>
+                      <p className="text-sm font-semibold">
+                        {selectedRequest.stamp_request.selected_pages === "all"
+                          ? "Tüm sayfalar"
+                          : `Sayfa: ${selectedRequest.stamp_request.selected_pages}`}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">Durum</p>
+                      <p className="text-sm font-semibold">
+                        {selectedRequest.stamp_request.stamped_pdf_path ? "Kaşelenmiş ✓" : "Kaşelenmedi"}
+                      </p>
+                    </div>
+                  </div>
+                  {selectedRequest.stamp_request.description && (
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">Açıklama</p>
+                      <p className="text-sm font-semibold whitespace-pre-wrap">
+                        {selectedRequest.stamp_request.description}
                       </p>
                     </div>
                   )}

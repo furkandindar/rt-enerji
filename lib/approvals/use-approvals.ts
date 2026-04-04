@@ -44,6 +44,9 @@ export function useApprovals() {
     signatureFont: null,
   });
 
+  // Canvas signature state (stamp approval için)
+  const [signatureDataUrl, setSignatureDataUrl] = useState<string | null>(null);
+
   // Pagination states
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
@@ -51,7 +54,10 @@ export function useApprovals() {
   const supabase = createClient();
 
   // Derived values
-  const hasValidSignature = Boolean(signatureInfo.signatureText && signatureInfo.signatureFont);
+  const isStampApproval = selectedApproval?.request?.stamp_request != null;
+  const hasValidSignature = isStampApproval
+    ? Boolean(signatureDataUrl)
+    : Boolean(signatureInfo.signatureText && signatureInfo.signatureFont);
 
   const isHrForm = selectedApproval?.workflow_step?.action_type === 'FILL_AND_SIGN' &&
                    selectedApproval?.workflow_step?.form_section_key === 'hr_details';
@@ -251,7 +257,13 @@ export function useApprovals() {
         salary_consent_fields?: { consent: boolean };
         onboarding_fields?: { section_key: string; items: Record<string, { status: string; notes: string }> };
         separation_fields?: { section_key: string; items: Record<string, { status: string; notes: string }> };
+        signature_data_url?: string;
       } = { decision, comment };
+
+      // Stamp approval ise canvas imzasını gönder
+      if (decision === "APPROVED" && isStampApproval && signatureDataUrl) {
+        requestBody.signature_data_url = signatureDataUrl;
+      }
 
       if (decision === "APPROVED" && isHrForm) {
         requestBody.hr_fields = {
@@ -337,6 +349,7 @@ export function useApprovals() {
 
   useEffect(() => {
     setSignatureAccepted(false);
+    setSignatureDataUrl(null);
     setRemainingDays("");
     setHrNote("");
     setSalaryDeductionConsent(false);
@@ -410,6 +423,7 @@ export function useApprovals() {
     comment,
     signatureInfo,
     signatureAccepted,
+    signatureDataUrl,
     remainingDays,
     hrNote,
     salaryDeductionConsent,
@@ -428,6 +442,7 @@ export function useApprovals() {
     isSeparationSectionForm,
     currentSeparationSectionConfig,
     separationSectionKey,
+    isStampApproval,
     canApprove,
     hasValidSignature,
     hrFormValid,
@@ -441,6 +456,7 @@ export function useApprovals() {
     setSelectedApproval,
     setComment,
     setSignatureAccepted,
+    setSignatureDataUrl,
     setRemainingDays,
     setHrNote,
     setSalaryDeductionConsent,

@@ -23,6 +23,7 @@ import { OvertimeRequestDetails } from "./overtime-request-details";
 import { OnboardingRequestDetails } from "./onboarding-request-details";
 import { SeparationRequestDetails } from "./separation-request-details";
 import { RequestFormDetails } from "./request-form-details";
+import { StampRequestDetails } from "./stamp-request-details";
 import { ApprovalHistoryAccordion } from "./approval-history-accordion";
 import { ApprovalActions } from "./approval-actions";
 import { PdfViewerDialog } from "@/components/pdf-viewer-dialog";
@@ -59,6 +60,9 @@ interface ApprovalDetailSheetProps {
   signatureInfo: SignatureInfo;
   signatureAccepted: boolean;
   setSignatureAccepted: (value: boolean) => void;
+  isStampApproval: boolean;
+  signatureDataUrl: string | null;
+  setSignatureDataUrl: (dataUrl: string | null) => void;
   canApprove: boolean;
   isSubmitting: boolean;
   handleDecision: (decision: "APPROVED" | "REJECTED") => void;
@@ -95,6 +99,9 @@ export function ApprovalDetailSheet({
   signatureInfo,
   signatureAccepted,
   setSignatureAccepted,
+  isStampApproval,
+  signatureDataUrl,
+  setSignatureDataUrl,
   canApprove,
   isSubmitting,
   handleDecision,
@@ -173,6 +180,9 @@ export function ApprovalDetailSheet({
                 previousStepAttachments={previousStepAttachments}
               />
             )}
+            {selectedApproval.request.stamp_request && (
+              <StampRequestDetails approval={selectedApproval} />
+            )}
 
             {/* Onay Adımı ve Oluşturulma */}
             <div className="grid grid-cols-2 gap-4">
@@ -223,6 +233,9 @@ export function ApprovalDetailSheet({
                 signatureInfo={signatureInfo}
                 signatureAccepted={signatureAccepted}
                 setSignatureAccepted={setSignatureAccepted}
+                isStampApproval={isStampApproval}
+                signatureDataUrl={signatureDataUrl}
+                setSignatureDataUrl={setSignatureDataUrl}
                 canApprove={canApprove}
                 isSubmitting={isSubmitting}
                 handleDecision={handleDecision}

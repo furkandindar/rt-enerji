@@ -13,10 +13,10 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // 2. Employee ID'yi al
+    // 2. Employee ID ve role'ü al
     const { data: appUser } = await supabase
       .from("app_users")
-      .select("employee_id")
+      .select("employee_id, role")
       .eq("id", user.id)
       .single();
 
@@ -24,8 +24,8 @@ export async function GET() {
       return NextResponse.json({ error: "User not linked to employee" }, { status: 400 });
     }
 
-    // 3. Kullanıcının başlatabileceği workflow'ları getir
-    const workflows = await getAvailableWorkflows(supabase, appUser.employee_id);
+    // 3. Kullanıcının başlatabileceği workflow'ları getir (ORG_ADMIN tümünü görür)
+    const workflows = await getAvailableWorkflows(supabase, appUser.employee_id, appUser.role);
 
     return NextResponse.json(workflows);
   } catch (error) {

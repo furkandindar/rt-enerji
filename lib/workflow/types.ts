@@ -535,3 +535,41 @@ export interface PreviousStepAttachment {
   config_label: string;
   section_key: string;
 }
+
+// ============================================================================
+// Stamp Approval (Kaşeli Belge Onayı) Types
+// ============================================================================
+
+export type StampPosition = 'bottom-right' | 'bottom-left' | 'top-right' | 'top-left' | 'center';
+
+export interface Stamp {
+  id: string;
+  name: string;
+  image_path: string;
+  width: number;
+  height: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface StampRequest {
+  id: string;
+  request_id: string;
+  stamp_id: string;
+  original_pdf_path: string;
+  stamped_pdf_path: string | null;
+  selected_pages: string; // "all" veya "1,3,5"
+  stamp_position: StampPosition;
+  subject: string | null;
+  description: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateStampApprovalInput {
+  stamp_id: string;
+  selected_pages: string;
+  stamp_position: StampPosition;
+  description?: string;
+}

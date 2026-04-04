@@ -66,7 +66,7 @@ export async function POST(request: Request) {
 
     const { data: appUser } = await supabase
       .from("app_users")
-      .select("employee_id")
+      .select("employee_id, role")
       .eq("id", user.id)
       .single();
 
@@ -80,8 +80,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Workflow not found" }, { status: 400 });
     }
 
-    // 3. Workflow başlatma yetkisi kontrolü
-    const hasPermission = await canStartWorkflow(supabase, appUser.employee_id, workflowDef.id);
+    // 3. Workflow başlatma yetkisi kontrolü (ORG_ADMIN tümüne erişebilir)
+    const hasPermission = await canStartWorkflow(supabase, appUser.employee_id, workflowDef.id, appUser.role);
     if (!hasPermission) {
       return NextResponse.json({ error: "Bu formu başlatma yetkiniz yok" }, { status: 403 });
     }

@@ -90,13 +90,15 @@ export async function notifyApprover(
   approverEmployeeId: string,
   requesterName: string,
   requestId: string,
-  workflowName: string
+  workflowName: string,
+  subject?: string
 ): Promise<void> {
   const userInfo = await getUserInfoByEmployeeId(supabase, approverEmployeeId);
   if (!userInfo) return;
 
   const title = 'Onay Bekleyen Talep';
-  const message = `${requesterName} tarafından oluşturulan ${workflowName} talebi onayınızı bekliyor.`;
+  const subjectLine = subject ? `\nKonu: ${subject}` : '';
+  const message = `${requesterName} tarafından oluşturulan ${workflowName} talebi onayınızı bekliyor.${subjectLine}`;
   const type = 'APPROVAL_REQUIRED';
 
   // In-app bildirim oluştur
@@ -126,13 +128,15 @@ export async function notifyRequestApproved(
   supabase: SupabaseClient,
   requesterEmployeeId: string,
   requestId: string,
-  workflowName: string
+  workflowName: string,
+  subject?: string
 ): Promise<void> {
   const userInfo = await getUserInfoByEmployeeId(supabase, requesterEmployeeId);
   if (!userInfo) return;
 
   const title = 'Talep Onaylandı';
-  const message = `${workflowName} talebiniz onaylandı.`;
+  const subjectLine = subject ? `\nKonu: ${subject}` : '';
+  const message = `${workflowName} talebiniz onaylandı.${subjectLine}`;
   const type = 'REQUEST_APPROVED';
 
   // In-app bildirim oluştur
@@ -163,13 +167,15 @@ export async function notifyRequestRejected(
   requesterEmployeeId: string,
   requestId: string,
   workflowName: string,
-  rejectedBy: string
+  rejectedBy: string,
+  subject?: string
 ): Promise<void> {
   const userInfo = await getUserInfoByEmployeeId(supabase, requesterEmployeeId);
   if (!userInfo) return;
 
   const title = 'Talep Reddedildi';
-  const message = `${workflowName} talebiniz ${rejectedBy} tarafından reddedildi.`;
+  const subjectLine = subject ? `\nKonu: ${subject}` : '';
+  const message = `${workflowName} talebiniz ${rejectedBy} tarafından reddedildi.${subjectLine}`;
   const type = 'REQUEST_REJECTED';
 
   // In-app bildirim oluştur

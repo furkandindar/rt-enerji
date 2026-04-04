@@ -146,6 +146,22 @@ export interface PendingApproval {
       reason: string | null;
       request_type: string;
     };
+    stamp_request?: {
+      id: string;
+      original_pdf_path: string;
+      stamped_pdf_path: string | null;
+      selected_pages: string;
+      stamp_position: string;
+      subject: string | null;
+      description: string | null;
+      stamp: {
+        id: string;
+        name: string;
+        image_path: string;
+        width: number;
+        height: number;
+      };
+    };
     approvals?: Approval[];
   };
 }

@@ -85,10 +85,12 @@ export function UserProvider({ children }: UserProviderProps) {
           "User";
 
       const employeeId = appUserData?.employee_id || null;
+      const userRole = (appUserData?.role as UserRole) || "ORG_VIEWER";
 
       // Çalışanın başlatabileceği workflow kodlarını al
+      // ORG_ADMIN tüm workflow'ları görebilir
       const availableWorkflows = employeeId
-        ? await getAvailableWorkflows(supabase, employeeId)
+        ? await getAvailableWorkflows(supabase, employeeId, userRole)
         : [];
       const availableWorkflowCodes = availableWorkflows.map((wf) => wf.code);
 

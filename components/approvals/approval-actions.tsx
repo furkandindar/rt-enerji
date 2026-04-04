@@ -14,6 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { SignaturePanel } from "@/components/signature-panel";
+import { SignatureCanvasPanel } from "@/components/signature-canvas-panel";
 import { AttachmentUploader } from "@/components/attachment-uploader";
 import type { WorkflowStepAttachmentConfig, RequestAttachment } from "@/lib/workflow/types";
 import type { ChecklistStatus, ChecklistItem, SignatureInfo } from "@/lib/approvals/types";
@@ -58,6 +59,11 @@ interface ApprovalActionsProps {
   signatureAccepted: boolean;
   setSignatureAccepted: (value: boolean) => void;
 
+  // Canvas signature (stamp approval)
+  isStampApproval: boolean;
+  signatureDataUrl: string | null;
+  setSignatureDataUrl: (dataUrl: string | null) => void;
+
   // Actions
   canApprove: boolean;
   isSubmitting: boolean;
@@ -90,6 +96,9 @@ export function ApprovalActions({
   signatureInfo,
   signatureAccepted,
   setSignatureAccepted,
+  isStampApproval,
+  signatureDataUrl,
+  setSignatureDataUrl,
   canApprove,
   isSubmitting,
   handleDecision,
@@ -301,15 +310,27 @@ export function ApprovalActions({
       </div>
 
       {/* İmza Paneli */}
-      <SignaturePanel
-        signatureText={signatureInfo.signatureText}
-        signatureFont={signatureInfo.signatureFont}
-        isAccepted={signatureAccepted}
-        onAcceptChange={setSignatureAccepted}
-        title="ONAY İMZASI"
-        description="Bu talebi imzanızla onaylayacaksınız:"
-        disabled={isSubmitting}
-      />
+      {isStampApproval ? (
+        <SignatureCanvasPanel
+          signatureDataUrl={signatureDataUrl}
+          onSignatureChange={setSignatureDataUrl}
+          isAccepted={signatureAccepted}
+          onAcceptChange={setSignatureAccepted}
+          title="İMZA / PARAF"
+          description="Kaşenin üzerine basılacak imzanızı veya parafınızı aşağıdaki alana çizin:"
+          disabled={isSubmitting}
+        />
+      ) : (
+        <SignaturePanel
+          signatureText={signatureInfo.signatureText}
+          signatureFont={signatureInfo.signatureFont}
+          isAccepted={signatureAccepted}
+          onAcceptChange={setSignatureAccepted}
+          title="ONAY İMZASI"
+          description="Bu talebi imzanızla onaylayacaksınız:"
+          disabled={isSubmitting}
+        />
+      )}
 
       <div className="flex gap-2">
         <Button

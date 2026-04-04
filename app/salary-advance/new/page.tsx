@@ -165,7 +165,7 @@ export default function NewSalaryAdvancePage() {
                       />
                     </FormControl>
                     <FormDescription>
-                      Talep etmek istediğiniz avans miktarını girin
+                      Nokta kullanmadan girin, kuruş için virgül kullanın (Örn: 10080 veya 10080,50)
                     </FormDescription>
                     <FormMessage />
                   </FormItem>

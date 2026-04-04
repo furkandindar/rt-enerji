@@ -8,6 +8,9 @@ import {
 import { generateRequestPDF } from "@/lib/pdf/generate-request-pdf";
 import { mergeAttachments } from "@/lib/pdf/merge-attachments";
 import { uploadRequestPDF } from "@/lib/storage/upload-request-pdf";
+import { stampPDF } from "@/lib/pdf/stamp-pdf";
+import { createServiceRoleClient } from "@/lib/supabase/server";
+import { StampPosition } from "@/lib/workflow/types";
 
 // PATCH /api/approvals/[id] - Onay/Red ver
 export async function PATCH(
@@ -19,7 +22,7 @@ export async function PATCH(
     const { id } = await params;
     const body = await request.json();
 
-    const { decision, comment, hr_fields, salary_consent_fields, onboarding_fields, separation_fields } = body as {
+    const { decision, comment, hr_fields, salary_consent_fields, onboarding_fields, separation_fields, signature_data_url } = body as {
       decision: 'APPROVED' | 'REJECTED';
       comment?: string;
       hr_fields?: {
@@ -37,6 +40,7 @@ export async function PATCH(
         section_key: string;
         items: Record<string, { status: string; notes: string }>;
       };
+      signature_data_url?: string;
     };
 
     if (!decision || !['APPROVED', 'REJECTED'].includes(decision)) {
@@ -289,11 +293,23 @@ export async function PATCH(
     // 4. Workflow bilgilerini al (bildirimler için)
     const { data: workflowDef } = await supabase
       .from("workflow_definitions")
-      .select("name")
+      .select("code, name")
       .eq("id", requestData.workflow_definition_id)
       .single();
 
     const workflowName = workflowDef?.name || "Talep";
+    const workflowCode = workflowDef?.code || "";
+
+    // Stamp approval ise konu bilgisini al (bildirimde kullanılacak)
+    let stampSubject: string | undefined;
+    if (workflowCode === 'STAMP_APPROVAL') {
+      const { data: stampReq } = await supabase
+        .from("stamp_requests")
+        .select("subject")
+        .eq("request_id", requestData.id)
+        .single();
+      stampSubject = stampReq?.subject || undefined;
+    }
 
     // Onaycının adını al
     const { data: approverEmployee } = await supabase
@@ -323,7 +339,8 @@ export async function PATCH(
         requestData.requester_employee_id,
         requestData.id,
         workflowName,
-        approverName
+        approverName,
+        stampSubject
       );
     } else {
       // Onaylandı - sonraki adıma geç veya tamamla
@@ -382,31 +399,104 @@ export async function PATCH(
 
         // PDF oluştur ve Storage'a yükle
         try {
-          console.log('Generating PDF for request:', requestData.id);
-          const pdfBuffer = await generateRequestPDF({
-            requestId: requestData.id,
-            supabase,
-          });
+          if (workflowCode === 'STAMP_APPROVAL') {
+            // ===== STAMP APPROVAL: Kaşelenmiş PDF oluştur =====
+            console.log('Stamp approval completed, generating stamped PDF for request:', requestData.id);
 
-          // Ek dosyaları (attachment) ana PDF'e birleştir
-          console.log('Merging attachments...');
-          const finalPdfBuffer = await mergeAttachments(pdfBuffer, requestData.id, supabase);
+            // stamp_request detaylarını al
+            const { data: stampRequest } = await supabase
+              .from("stamp_requests")
+              .select("*, stamp:stamps(*)")
+              .eq("request_id", requestData.id)
+              .single();
 
-          console.log('Uploading PDF to storage...');
-          const pdfPath = await uploadRequestPDF({
-            requestId: requestData.id,
-            pdfBuffer: finalPdfBuffer,
-          });
+            if (stampRequest && stampRequest.stamp) {
+              // GM'in (onaylayan) imza bilgilerini al
+              const { data: gmEmployee } = await supabase
+                .from("employees")
+                .select("first_name, last_name, signature_text, signature_font")
+                .eq("id", appUser.employee_id)
+                .single();
 
-          console.log('PDF uploaded successfully:', pdfPath);
+              const gmSignatureText = gmEmployee?.signature_text
+                || (gmEmployee ? `${gmEmployee.first_name} ${gmEmployee.last_name}` : undefined);
 
-          // PDF path'i database'e kaydet
-          await supabase
-            .from("requests")
-            .update({ pdf_path: pdfPath })
-            .eq("id", requestData.id);
+              // Kaşelenmiş PDF oluştur
+              const stampedPdfBuffer = await stampPDF({
+                originalPdfPath: stampRequest.original_pdf_path,
+                stampImagePath: stampRequest.stamp.image_path,
+                stampWidth: stampRequest.stamp.width,
+                stampHeight: stampRequest.stamp.height,
+                stampPosition: stampRequest.stamp_position as StampPosition,
+                selectedPages: stampRequest.selected_pages,
+                signatureText: gmSignatureText,
+                signatureFont: gmEmployee?.signature_font || undefined,
+                signatureImageDataUrl: signature_data_url,
+              });
 
-          console.log('PDF path saved to database');
+              // Kaşelenmiş PDF'i Storage'a yükle
+              const supabaseAdmin = createServiceRoleClient();
+              const now = new Date();
+              const year = now.getFullYear();
+              const month = String(now.getMonth() + 1).padStart(2, '0');
+              const stampedFileName = `stamp_${Date.now()}_stamped.pdf`;
+              const stampedPdfPath = `${year}/${month}/${stampedFileName}`;
+
+              const { error: uploadError } = await supabaseAdmin.storage
+                .from('request-documents')
+                .upload(stampedPdfPath, stampedPdfBuffer, {
+                  contentType: 'application/pdf',
+                  upsert: false,
+                });
+
+              if (uploadError) {
+                console.error('Error uploading stamped PDF:', uploadError);
+              } else {
+                // stamp_requests tablosunda stamped_pdf_path güncelle
+                await supabase
+                  .from("stamp_requests")
+                  .update({ stamped_pdf_path: stampedPdfPath })
+                  .eq("id", stampRequest.id);
+
+                // requests tablosunda pdf_path güncelle
+                await supabase
+                  .from("requests")
+                  .update({ pdf_path: stampedPdfPath })
+                  .eq("id", requestData.id);
+
+                console.log('Stamped PDF uploaded and saved:', stampedPdfPath);
+              }
+            } else {
+              console.error('Stamp request or stamp not found for request:', requestData.id);
+            }
+          } else {
+            // ===== DİĞER WORKFLOW'LAR: Normal PDF oluştur =====
+            console.log('Generating PDF for request:', requestData.id);
+            const pdfBuffer = await generateRequestPDF({
+              requestId: requestData.id,
+              supabase,
+            });
+
+            // Ek dosyaları (attachment) ana PDF'e birleştir
+            console.log('Merging attachments...');
+            const finalPdfBuffer = await mergeAttachments(pdfBuffer, requestData.id, supabase);
+
+            console.log('Uploading PDF to storage...');
+            const pdfPath = await uploadRequestPDF({
+              requestId: requestData.id,
+              pdfBuffer: finalPdfBuffer,
+            });
+
+            console.log('PDF uploaded successfully:', pdfPath);
+
+            // PDF path'i database'e kaydet
+            await supabase
+              .from("requests")
+              .update({ pdf_path: pdfPath })
+              .eq("id", requestData.id);
+
+            console.log('PDF path saved to database');
+          }
         } catch (pdfError) {
           // PDF oluşturma hatası - loglayalım ama işlemi durdurmayalım
           console.error('Error generating/uploading PDF:', pdfError);
@@ -417,7 +507,8 @@ export async function PATCH(
           supabase,
           requestData.requester_employee_id,
           requestData.id,
-          workflowName
+          workflowName,
+          stampSubject
         );
       } else {
         // Sonraki PENDING adıma geç
@@ -455,7 +546,8 @@ export async function PATCH(
             nextApproval.approver_employee_id,
             requesterName,
             requestData.id,
-            workflowName
+            workflowName,
+            stampSubject
           );
         }
       }

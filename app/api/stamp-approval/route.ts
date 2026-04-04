@@ -1,14 +1,13 @@
 import { createClient } from "@/lib/supabase/server";
+import { createServiceRoleClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { createApprovalChain, getWorkflowDefinitionByCode, notifyApprover, canStartWorkflow } from "@/lib/workflow";
-import type { CreateSalaryAdvanceInput } from "@/lib/workflow";
 
-// GET /api/salary-advance - Kullanıcının maaş avans taleplerini listele
+// GET /api/stamp-approval - Kullanıcının kaşeli belge taleplerini listele
 export async function GET() {
   try {
     const supabase = await createClient();
 
-    // 1. Mevcut kullanıcının employee_id'sini al
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -24,16 +23,15 @@ export async function GET() {
       return NextResponse.json({ error: "User not linked to employee" }, { status: 400 });
     }
 
-    // 2. Kullanıcının taleplerini getir
     const { data: requests, error } = await supabase
       .from("requests")
       .select(`
         *,
         workflow_definition:workflow_definitions(id, code, name),
-        salary_advance_request:salary_advance_requests(*)
+        stamp_request:stamp_requests(*, stamp:stamps(*))
       `)
       .eq("requester_employee_id", appUser.employee_id)
-      .eq("workflow_definition.code", "SALARY_ADVANCE")
+      .eq("workflow_definition.code", "STAMP_APPROVAL")
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -41,7 +39,6 @@ export async function GET() {
       return NextResponse.json({ error: "Failed to fetch requests" }, { status: 500 });
     }
 
-    // workflow_definition null olanları filtrele (code eşleşmeyenler)
     const filteredRequests = requests?.filter(r => r.workflow_definition !== null) || [];
 
     return NextResponse.json(filteredRequests);
@@ -51,13 +48,21 @@ export async function GET() {
   }
 }
 
-// POST /api/salary-advance - Yeni maaş avans talebi oluştur
+// POST /api/stamp-approval - Yeni kaşeli belge talebi oluştur
 export async function POST(request: Request) {
   try {
     const supabase = await createClient();
-    const body: CreateSalaryAdvanceInput = await request.json();
+    const formData = await request.formData();
 
-    // 1. Mevcut kullanıcının employee_id'sini al
+    // FormData'dan alanları al
+    const pdfFile = formData.get("pdf_file") as File | null;
+    const stampId = formData.get("stamp_id") as string;
+    const selectedPages = (formData.get("selected_pages") as string) || "all";
+    const stampPosition = (formData.get("stamp_position") as string) || "bottom-right";
+    const subject = formData.get("subject") as string;
+    const description = formData.get("description") as string | null;
+
+    // 1. Kullanıcı doğrulama
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -73,27 +78,51 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "User not linked to employee" }, { status: 400 });
     }
 
-    // 2. Workflow definition'ı al
-    const workflowDef = await getWorkflowDefinitionByCode(supabase, "SALARY_ADVANCE");
+    // 2. Workflow definition al
+    const workflowDef = await getWorkflowDefinitionByCode(supabase, "STAMP_APPROVAL");
     if (!workflowDef) {
       return NextResponse.json({ error: "Workflow not found" }, { status: 400 });
     }
 
-    // 3. Workflow başlatma yetkisi kontrolü (ORG_ADMIN tümüne erişebilir)
+    // 3. Yetki kontrolü (ORG_ADMIN tümüne erişebilir)
     const hasPermission = await canStartWorkflow(supabase, appUser.employee_id, workflowDef.id, appUser.role);
     if (!hasPermission) {
       return NextResponse.json({ error: "Bu formu başlatma yetkiniz yok" }, { status: 403 });
     }
 
     // 4. Validasyon
-    if (!body.amount || body.amount <= 0) {
-      return NextResponse.json({ error: "Geçerli bir avans miktarı girin" }, { status: 400 });
+    if (!pdfFile) {
+      return NextResponse.json({ error: "PDF dosyası gerekli" }, { status: 400 });
     }
-    if (!body.payment_method || !["CASH", "BANK_TRANSFER"].includes(body.payment_method)) {
-      return NextResponse.json({ error: "Geçerli bir ödeme şekli seçin" }, { status: 400 });
+    if (!stampId) {
+      return NextResponse.json({ error: "Kaşe seçimi gerekli" }, { status: 400 });
+    }
+    if (pdfFile.type !== "application/pdf") {
+      return NextResponse.json({ error: "Sadece PDF dosyası yüklenebilir" }, { status: 400 });
     }
 
-    // 5. Ana request kaydını oluştur
+    // 5. PDF'i Storage'a yükle
+    const supabaseAdmin = createServiceRoleClient();
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, "0");
+    const pdfBuffer = Buffer.from(await pdfFile.arrayBuffer());
+    const originalFileName = `stamp_${Date.now()}_original.pdf`;
+    const originalPdfPath = `${year}/${month}/${originalFileName}`;
+
+    const { error: uploadError } = await supabaseAdmin.storage
+      .from("request-documents")
+      .upload(originalPdfPath, pdfBuffer, {
+        contentType: "application/pdf",
+        upsert: false,
+      });
+
+    if (uploadError) {
+      console.error("Error uploading PDF:", uploadError);
+      return NextResponse.json({ error: "PDF yükleme başarısız" }, { status: 500 });
+    }
+
+    // 6. Ana request kaydı oluştur
     const { data: newRequest, error: requestError } = await supabase
       .from("requests")
       .insert({
@@ -108,28 +137,32 @@ export async function POST(request: Request) {
 
     if (requestError || !newRequest) {
       console.error("Error creating request:", requestError);
+      // Rollback: yüklenen PDF'i sil
+      await supabaseAdmin.storage.from("request-documents").remove([originalPdfPath]);
       return NextResponse.json({ error: "Failed to create request" }, { status: 500 });
     }
 
-    // 6. Salary advance request detaylarını oluştur
-    // salary_deduction_consent artık Personel Müdürlüğü adımında (step 2) doldurulacak
-    const { error: advanceError } = await supabase
-      .from("salary_advance_requests")
+    // 7. Stamp request detaylarını oluştur
+    const { error: stampError } = await supabase
+      .from("stamp_requests")
       .insert({
         request_id: newRequest.id,
-        amount: body.amount,
-        payment_method: body.payment_method,
-        salary_deduction_consent: false,
+        stamp_id: stampId,
+        original_pdf_path: originalPdfPath,
+        selected_pages: selectedPages,
+        stamp_position: stampPosition,
+        subject: subject || null,
+        description: description || null,
       });
 
-    if (advanceError) {
-      // Rollback: request'i sil
+    if (stampError) {
       await supabase.from("requests").delete().eq("id", newRequest.id);
-      console.error("Error creating salary advance request:", advanceError);
-      return NextResponse.json({ error: "Failed to create salary advance details" }, { status: 500 });
+      await supabaseAdmin.storage.from("request-documents").remove([originalPdfPath]);
+      console.error("Error creating stamp request:", stampError);
+      return NextResponse.json({ error: "Failed to create stamp request details" }, { status: 500 });
     }
 
-    // 7. Approval chain oluştur
+    // 8. Approval chain oluştur
     try {
       await createApprovalChain(
         supabase,
@@ -138,22 +171,22 @@ export async function POST(request: Request) {
         appUser.employee_id
       );
     } catch (approvalError) {
-      // Rollback: tüm kayıtları sil
-      await supabase.from("salary_advance_requests").delete().eq("request_id", newRequest.id);
+      await supabase.from("stamp_requests").delete().eq("request_id", newRequest.id);
       await supabase.from("requests").delete().eq("id", newRequest.id);
+      await supabaseAdmin.storage.from("request-documents").remove([originalPdfPath]);
       console.error("Error creating approval chain:", approvalError);
-      return NextResponse.json({ 
-        error: approvalError instanceof Error ? approvalError.message : "Failed to create approval chain" 
+      return NextResponse.json({
+        error: approvalError instanceof Error ? approvalError.message : "Failed to create approval chain"
       }, { status: 500 });
     }
 
-    // 8. Oluşturulan talebi detaylı getir
+    // 9. Oluşturulan talebi detaylı getir
     const { data: createdRequest } = await supabase
       .from("requests")
       .select(`
         *,
         workflow_definition:workflow_definitions(id, code, name),
-        salary_advance_request:salary_advance_requests(*),
+        stamp_request:stamp_requests(*, stamp:stamps(*)),
         approvals:request_approvals(
           *,
           workflow_step:workflow_steps(*)
@@ -162,7 +195,7 @@ export async function POST(request: Request) {
       .eq("id", newRequest.id)
       .single();
 
-    // 9. Onaycıya bildirim gönder
+    // 10. Onaycıya bildirim gönder
     if (createdRequest?.approvals) {
       const { data: requester } = await supabase
         .from("employees")
@@ -191,7 +224,8 @@ export async function POST(request: Request) {
           pendingApproval.approver_employee_id,
           requesterName,
           newRequest.id,
-          workflowDef.name
+          workflowDef.name,
+          subject || undefined
         );
       }
     }
