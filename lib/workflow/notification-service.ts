@@ -98,7 +98,7 @@ export async function notifyApprover(
 
   const title = 'Onay Bekleyen Talep';
   const subjectLine = subject ? `\nKonu: ${subject}` : '';
-  const message = `${requesterName} tarafından oluşturulan ${workflowName} talebi onayınızı bekliyor.${subjectLine}`;
+  const message = `${requesterName} tarafından oluşturulan ${workflowName} süreci onayınızı bekliyor.${subjectLine}`;
   const type = 'APPROVAL_REQUIRED';
 
   // In-app bildirim oluştur
