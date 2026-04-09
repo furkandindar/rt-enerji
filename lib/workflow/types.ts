@@ -5,7 +5,7 @@
 // ============================================================================
 
 export type ApproverType = 'REQUESTER' | 'UNIT_HEAD' | 'STATIC_POSITION';
-export type RequestStatus = 'DRAFT' | 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED';
+export type RequestStatus = 'DRAFT' | 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED' | 'AWAITING_COMPLETION' | 'COMPLETED';
 export type ApprovalStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
 export type LeaveType = 'ANNUAL_LEAVE' | 'SHORT_LEAVE';
 export type NotificationType = 'APPROVAL_REQUIRED' | 'REQUEST_APPROVED' | 'REQUEST_REJECTED' | 'REQUEST_CANCELLED';
@@ -28,6 +28,14 @@ export interface WorkflowDefinition {
   updated_at: string;
 }
 
+// Koşullu adım tanımı - condition JSON yapısı
+export interface StepCondition {
+  field: string;   // Süreç-spesifik tablodaki kolon adı (ör: "advance_requested")
+  value: unknown;  // Beklenen değer (ör: true)
+}
+
+export type WorkflowStepPhase = 'APPROVAL' | 'COMPLETION';
+
 export interface WorkflowStep {
   id: string;
   workflow_definition_id: string;
@@ -38,6 +46,8 @@ export interface WorkflowStep {
   is_required: boolean;
   action_type: ActionType; // V3: FILL_AND_SIGN veya SIGN_ONLY
   form_section_key: string | null; // V3: Hangi form bölümü doldurulacak
+  condition: StepCondition | null; // V4: Koşullu adım - null ise her zaman çalışır
+  phase: WorkflowStepPhase; // V4: APPROVAL veya COMPLETION
   created_at: string;
 }
 
@@ -499,6 +509,48 @@ export interface CreateRequestFormInput {
   amount?: number;
   reason?: string;
   request_type: RequestFormType;
+}
+
+// ============================================================================
+// Travel Assignment (Şehir İçi/Dışı Görev Formu) Types
+// ============================================================================
+
+export type TransportationType = 'COMPANY_VEHICLE' | 'RENTAL_VEHICLE' | 'AIRPLANE' | 'OTHER';
+
+export interface TravelAssignmentRequest {
+  id: string;
+  request_id: string;
+  company_id: string;
+  assignment_subject: string;
+  destination_city: string;
+  destination_institution: string;
+  estimated_departure_at: string;
+  estimated_return_at: string;
+  transportation_type: TransportationType;
+  transportation_cost: number;
+  accommodation_needed: boolean;
+  accommodation_cost: number;
+  advance_requested: boolean;
+  actual_departure_at: string | null;  // Asistan doldurur (COMPLETION fazı)
+  actual_return_at: string | null;     // Asistan doldurur (COMPLETION fazı)
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateTravelAssignmentInput {
+  company_id: string;
+  assignment_subject: string;
+  destination_city: string;
+  destination_institution: string;
+  estimated_departure_at: string;
+  estimated_return_at: string;
+  transportation_type: TransportationType;
+  transportation_cost?: number;
+  accommodation_needed: boolean;
+  accommodation_cost?: number;
+  advance_requested: boolean;
+  advance_amount?: number;           // Avans talebi varsa miktar
+  advance_payment_method?: string;   // Avans talebi varsa ödeme şekli
 }
 
 // ============================================================================

@@ -341,7 +341,9 @@ Mevcut yıllık izin sistemi yeni modele uyarlanacak:
 
 - [ ] Config-driven form builder (admin panelden form tasarlama)
 - [ ] Paralel onay adımları
-- [ ] Koşullu adımlar (if-else mantığı)
+- [x] Koşullu adımlar (if-else mantığı) → **V4'te implement edildi** → [v4-workflow-engine-conditional.md](./v4-workflow-engine-conditional.md)
+- [x] Çok fazlı süreçler (APPROVAL + COMPLETION) → **V4'te implement edildi**
+- [x] İlişkili talepler (parent-child) → **V4'te implement edildi**
 - [ ] Timeout/Deadline mekanizması
 - [ ] Email bildirimleri (Microsoft Graph API)
 

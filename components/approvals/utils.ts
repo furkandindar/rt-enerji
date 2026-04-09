@@ -37,6 +37,9 @@ export const getRequestSummary = (approval: PendingApproval): string => {
   if (approval.request.stamp_request) {
     return approval.request.stamp_request.subject || approval.request.stamp_request.stamp?.name || "Kaşeli Belge";
   }
+  if (approval.request.travel_assignment_request) {
+    return `${approval.request.travel_assignment_request.destination_city} - ${approval.request.travel_assignment_request.assignment_subject}`;
+  }
   return "-";
 };
 

@@ -44,12 +44,16 @@ const statusColors: Record<string, string> = {
   PENDING: "bg-yellow-500",
   APPROVED: "bg-green-500",
   REJECTED: "bg-red-500",
+  AWAITING_COMPLETION: "bg-blue-500",
+  COMPLETED: "bg-green-700",
 };
 
 const statusLabels: Record<string, string> = {
   PENDING: "Beklemede",
   APPROVED: "Onaylandı",
   REJECTED: "Reddedildi",
+  AWAITING_COMPLETION: "Tamamlanma Bekleniyor",
+  COMPLETED: "Tamamlandı",
 };
 
 export default function DashboardPage() {

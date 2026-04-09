@@ -162,6 +162,22 @@ export interface PendingApproval {
         height: number;
       };
     };
+    travel_assignment_request?: {
+      id: string;
+      company: { id: string; name: string } | null;
+      assignment_subject: string;
+      destination_city: string;
+      destination_institution: string;
+      estimated_departure_at: string;
+      estimated_return_at: string;
+      transportation_type: string;
+      transportation_cost: number;
+      accommodation_needed: boolean;
+      accommodation_cost: number;
+      advance_requested: boolean;
+      actual_departure_at: string | null;
+      actual_return_at: string | null;
+    };
     approvals?: Approval[];
   };
 }

@@ -10,7 +10,7 @@ Bu doküman, RT Enerji Workflow Engine V3'e yeni bir süreç eklemek isteyen gel
 4. [Faz 1: Veritabanı](#faz-1-veritabanı)
 5. [Faz 2: Backend](#faz-2-backend)
 6. [Faz 3: Frontend](#faz-3-frontend)
-7. [Faz 4: PDF (Opsiyonel)](#faz-4-pdf-opsiyonel)
+7. [Faz 4: PDF](#faz-4-pdf)
 8. [Checklist](#checklist)
 9. [Örnek Süreçler](#örnek-süreçler)
 
@@ -90,7 +90,7 @@ Her yeni süreç 4 fazda implement edilir:
 | **Faz 1** | Veritabanı (workflow + tablo + RLS) | ✅ Evet |
 | **Faz 2** | Backend (types + API endpoint) | ✅ Evet |
 | **Faz 3** | Frontend (form + menü + detay gösterimi) | ✅ Evet |
-| **Faz 4** | PDF template | ⚪ Opsiyonel |
+| **Faz 4** | PDF template | ✅ Evet |
 
 ---
 
@@ -204,6 +204,37 @@ CREATE POLICY "[process]_requests_insert" ON public.[process]_requests
     )
   );
 ```
+
+### Adım 1.5: Ek Dosya Konfigürasyonu
+
+Her süreçte kullanıcıların ek dosya yükleyebilmesi için `workflow_step_attachments` tablosuna konfigürasyon eklenir. Genellikle ilk adım (Talep Eden) için tanımlanır, ancak herhangi bir adımda ek dosya istenebilir.
+
+```sql
+-- Talep Eden adımına ek dosya alanı ekle
+INSERT INTO public.workflow_step_attachments
+  (workflow_step_id, label, is_required, allowed_mime_types, max_file_size_bytes, max_files)
+SELECT
+  ws.id,
+  'Ek Dosya',                                        -- Görünen etiket
+  false,                                              -- Zorunlu mu?
+  '{application/pdf,image/jpeg,image/png}',           -- İzin verilen dosya tipleri
+  10485760,                                           -- Maks dosya boyutu (10MB)
+  3                                                   -- Maks dosya sayısı
+FROM public.workflow_steps ws
+JOIN public.workflow_definitions wd ON wd.id = ws.workflow_definition_id
+WHERE wd.code = 'PROCESS_CODE' AND ws.step_order = 1;
+```
+
+**Konfigürasyon Alanları:**
+| Alan | Açıklama | Varsayılan |
+|------|----------|------------|
+| `label` | UI'da gösterilecek etiket | - |
+| `is_required` | Dosya yüklemek zorunlu mu? | `false` |
+| `allowed_mime_types` | İzin verilen dosya formatları | `{application/pdf}` |
+| `max_file_size_bytes` | Maksimum dosya boyutu (bytes) | `10485760` (10MB) |
+| `max_files` | Yüklenebilecek maksimum dosya sayısı | `1` |
+
+> **💡 Not:** Yüklenen ek dosyalar süreç tamamlandığında otomatik olarak ana PDF'in sonuna birleştirilir (`mergeAttachments`). Ayrıca bir işlem yapmanıza gerek yoktur.
 
 ---
 
@@ -343,7 +374,23 @@ export default function NewProcessPage() {
 }
 ```
 
-### Adım 3.2: Menüye Ekle
+### Adım 3.2: Ek Dosya Yükleme Alanı Ekle
+
+Talep formuna `<AttachmentUploader>` component'ini ekleyerek kullanıcıların ek dosya yüklemesini sağla. Component, Faz 1'de tanımlanan `workflow_step_attachments` konfigürasyonuna göre otomatik çalışır.
+
+```typescript
+import { AttachmentUploader } from "@/components/attachment-uploader";
+
+// Form içinde, talep oluşturulduktan sonra göster
+<AttachmentUploader
+  requestId={createdRequestId}
+  stepId={currentStepId}
+/>
+```
+
+> **💡 Not:** `AttachmentUploader` component'i dosya tipi, boyut ve sayı kontrollerini `workflow_step_attachments` konfigürasyonuna göre otomatik yapar. Detaylı bilgi için [workflow-attachments.md](../workflow-attachments.md) dokümanına bakın.
+
+### Adım 3.3: Menüye Ekle
 
 **Dosya:** `components/nav-workflow.tsx`
 
@@ -360,7 +407,7 @@ const items = [
 ];
 ```
 
-### Adım 3.3: Detay Gösterimini Güncelle
+### Adım 3.4: Detay Gösterimini Güncelle
 
 **`app/approvals/page.tsx`** ve **`app/my-requests/page.tsx`**:
 
@@ -398,7 +445,7 @@ const getRequestSummary = (request: Request): string => {
 
 ---
 
-## Faz 4: PDF (Opsiyonel)
+## Faz 4: PDF
 
 ### Adım 4.1: PDF Template Oluştur
 
@@ -440,6 +487,7 @@ if (request.[process]_request) {
   □ [process]_requests tablosu oluşturuldu
   □ RLS politikaları eklendi
   □ Pozisyon atamaları yapıldı (static_position_id)
+  □ workflow_step_attachments konfigürasyonu eklendi
 
 □ Faz 2: Backend
   □ lib/workflow/types.ts güncellendi
@@ -449,18 +497,20 @@ if (request.[process]_request) {
 
 □ Faz 3: Frontend
   □ app/[process]/new/page.tsx oluşturuldu
+  □ AttachmentUploader component'i forma eklendi
   □ components/nav-workflow.tsx güncellendi
   □ app/approvals/page.tsx güncellendi
   □ app/my-requests/page.tsx güncellendi
 
-□ Faz 4: PDF (Opsiyonel)
+□ Faz 4: PDF
   □ lib/pdf/[process]-pdf-template.tsx oluşturuldu
   □ lib/pdf/generate-request-pdf.ts güncellendi
 
 □ Test
   □ Talep oluşturma test edildi
+  □ Ek dosya yükleme test edildi
   □ Onay süreci test edildi
-  □ PDF indirme test edildi
+  □ PDF indirme test edildi (ek dosyaların birleştirildiği doğrulandı)
 ```
 
 ---

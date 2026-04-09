@@ -2,7 +2,7 @@
 // Onaycı belirleme, approval chain oluşturma ve workflow yetkilendirme
 
 import { SupabaseClient } from '@supabase/supabase-js';
-import { WorkflowStep, WorkflowDefinition } from './types';
+import { WorkflowStep, WorkflowDefinition, StepCondition } from './types';
 
 // ============================================================================
 // Types
@@ -239,6 +239,30 @@ async function determineUnitHeadApprover(
 }
 
 /**
+ * Koşullu adım kontrolü yapar.
+ * Adımın condition'ı varsa formData ile karşılaştırır.
+ * Koşul sağlanmıyorsa adım atlanmalıdır (true döner).
+ *
+ * @param condition - Adımın koşul tanımı (null ise her zaman çalışır)
+ * @param formData - Süreç-spesifik form verisi (undefined ise koşul kontrolü yapılmaz)
+ * @returns true ise adım atlanmalı (skip), false ise normal çalışmalı
+ */
+function shouldSkipStep(
+  condition: StepCondition | null,
+  formData?: Record<string, unknown>
+): boolean {
+  // Koşul yoksa adım her zaman çalışır
+  if (!condition) return false;
+
+  // formData yoksa koşul kontrolü yapılamaz, adım normal çalışır
+  if (!formData) return false;
+
+  // Koşul kontrolü: formData'daki değer, beklenen değerle eşleşiyor mu?
+  const actualValue = formData[condition.field];
+  return actualValue !== condition.value;
+}
+
+/**
  * Bir talep için tüm approval kayıtlarını oluşturur.
  *
  * Otomatik onaylama koşulları:
@@ -247,12 +271,17 @@ async function determineUnitHeadApprover(
  * 3. Talep eden = onaycı ve adım REQUESTER tipinde ise (self-approval)
  * 4. Mükerrer onaycı: Aynı kişi daha önceki bir adımda zaten onaycıysa VE bu adım SIGN_ONLY ise
  *    (FILL_AND_SIGN adımları her zaman manuel müdahale gerektirir)
+ * 5. Koşullu adım: step.condition varsa ve formData ile eşleşmiyorsa (V4)
+ *
+ * @param formData - Opsiyonel. Koşullu adımlar için süreç-spesifik form verisi.
+ *                   Mevcut süreçlerde geçilmez → koşul kontrolü atlanır → mevcut davranış korunur.
  */
 export async function createApprovalChain(
   supabase: SupabaseClient,
   requestId: string,
   workflowDefinitionId: string,
-  requesterEmployeeId: string
+  requesterEmployeeId: string,
+  formData?: Record<string, unknown>
 ): Promise<void> {
 
   // 1. Workflow adımlarını al
@@ -298,10 +327,17 @@ export async function createApprovalChain(
     const isDuplicateSignOnly = previousApprovers.has(approverEmployeeId) &&
                                  step.action_type === 'SIGN_ONLY';
 
+    // 5. Koşullu adım: condition sağlanmıyorsa atla (V4)
+    const isConditionNotMet = shouldSkipStep(
+      (step as WorkflowStep).condition,
+      formData
+    );
+
     const autoApproveThisStep = isFirstRequesterStep ||
                                  isFirstFillAndSignByRequester ||
                                  isSelfRequester ||
-                                 isDuplicateSignOnly;
+                                 isDuplicateSignOnly ||
+                                 isConditionNotMet;
 
     approvals.push({
       request_id: requestId,

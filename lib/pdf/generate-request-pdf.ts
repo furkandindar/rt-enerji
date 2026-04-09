@@ -6,6 +6,7 @@ import { OvertimePDFTemplate } from './overtime-pdf-template';
 import { OnboardingPDFTemplate } from './onboarding-pdf-template';
 import { SeparationPDFTemplate } from './separation-pdf-template';
 import { RequestFormPDFTemplate } from './request-form-pdf-template';
+import { TravelAssignmentPDFTemplate } from './travel-assignment-pdf-template';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { SignatureFont, DEFAULT_SIGNATURE_FONT } from '@/lib/signature/types';
 
@@ -61,6 +62,7 @@ export async function generateRequestPDF(
       onboarding_request:onboarding_requests(*),
       separation_request:separation_requests(*),
       request_form_request:request_form_requests(*),
+      travel_assignment_request:travel_assignment_requests(*, company:companies(*)),
       approvals:request_approvals(
         id,
         status,
@@ -163,6 +165,15 @@ export async function generateRequestPDF(
       request,
       requester: request.requester,
       requestFormRequest: request.request_form_request,
+      approvals: request.approvals || [],
+      signatures,
+    }) as React.ReactElement<DocumentProps>;
+  } else if (request.travel_assignment_request) {
+    // Şehir İçi/Dışı Görev Formu PDF'i
+    pdfDocument = React.createElement(TravelAssignmentPDFTemplate, {
+      request,
+      requester: request.requester,
+      travelAssignmentRequest: request.travel_assignment_request,
       approvals: request.approvals || [],
       signatures,
     }) as React.ReactElement<DocumentProps>;

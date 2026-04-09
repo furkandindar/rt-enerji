@@ -43,6 +43,7 @@ export async function GET(request: NextRequest) {
         separation_request:separation_requests(*),
         request_form_request:request_form_requests(*),
         stamp_request:stamp_requests(*, stamp:stamps(*)),
+        travel_assignment_request:travel_assignment_requests(*, company:companies(*)),
         requester:employees!requester_employee_id(
           id,
           first_name,

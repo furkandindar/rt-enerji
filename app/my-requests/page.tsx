@@ -205,6 +205,22 @@ interface Request {
   onboarding_request?: OnboardingRequestData;
   separation_request?: SeparationRequestData;
   request_form_request?: RequestFormRequestData;
+  travel_assignment_request?: {
+    id: string;
+    company: { id: string; name: string } | null;
+    assignment_subject: string;
+    destination_city: string;
+    destination_institution: string;
+    estimated_departure_at: string;
+    estimated_return_at: string;
+    transportation_type: string;
+    transportation_cost: number;
+    accommodation_needed: boolean;
+    accommodation_cost: number;
+    advance_requested: boolean;
+    actual_departure_at: string | null;
+    actual_return_at: string | null;
+  };
   stamp_request?: {
     id: string;
     original_pdf_path: string;
@@ -236,6 +252,8 @@ const statusColors: Record<string, string> = {
   APPROVED: "bg-green-500",
   REJECTED: "bg-red-500",
   CANCELLED: "bg-gray-400",
+  AWAITING_COMPLETION: "bg-blue-500",
+  COMPLETED: "bg-green-700",
 };
 
 const statusLabels: Record<string, string> = {
@@ -244,6 +262,8 @@ const statusLabels: Record<string, string> = {
   APPROVED: "Onaylandı",
   REJECTED: "Reddedildi",
   CANCELLED: "İptal Edildi",
+  AWAITING_COMPLETION: "Tamamlanma Bekleniyor",
+  COMPLETED: "Tamamlandı",
 };
 
 const approvalStatusLabels: Record<string, string> = {
@@ -357,6 +377,9 @@ export default function MyRequestsPage() {
     if (request.stamp_request) {
       return request.stamp_request.subject || request.stamp_request.stamp?.name || "Kaşeli Belge";
     }
+    if (request.travel_assignment_request) {
+      return `${request.travel_assignment_request.destination_city} - ${request.travel_assignment_request.assignment_subject}`;
+    }
     return "-";
   };
 
@@ -468,6 +491,8 @@ export default function MyRequestsPage() {
             <SelectItem value="all">Tüm Durumlar</SelectItem>
             <SelectItem value="PENDING">Beklemede</SelectItem>
             <SelectItem value="APPROVED">Onaylandı</SelectItem>
+            <SelectItem value="AWAITING_COMPLETION">Tamamlanma Bekleniyor</SelectItem>
+            <SelectItem value="COMPLETED">Tamamlandı</SelectItem>
             <SelectItem value="REJECTED">Reddedildi</SelectItem>
             <SelectItem value="CANCELLED">İptal Edildi</SelectItem>
           </SelectContent>
@@ -1022,6 +1047,99 @@ export default function MyRequestsPage() {
                 </>
               )}
 
+              {/* Travel Assignment Request specific fields */}
+              {selectedRequest.travel_assignment_request && (
+                <>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">Şirket</p>
+                      <p className="text-sm font-semibold">
+                        {selectedRequest.travel_assignment_request.company?.name || "-"}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">Ulaşım Aracı</p>
+                      <p className="text-sm font-semibold">
+                        {({
+                          COMPANY_VEHICLE: "Şirket Aracı",
+                          RENTAL_VEHICLE: "Kiralık Araç",
+                          AIRPLANE: "Uçak",
+                          OTHER: "Diğer",
+                        } as Record<string, string>)[selectedRequest.travel_assignment_request.transportation_type] || "-"}
+                      </p>
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground">Görev Konusu</p>
+                    <p className="text-sm font-semibold">{selectedRequest.travel_assignment_request.assignment_subject}</p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">Görev Şehri</p>
+                      <p className="text-sm font-semibold">{selectedRequest.travel_assignment_request.destination_city}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">Görev Kurumu</p>
+                      <p className="text-sm font-semibold">{selectedRequest.travel_assignment_request.destination_institution}</p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">Tahmini Çıkış</p>
+                      <p className="text-sm font-semibold">
+                        {format(new Date(selectedRequest.travel_assignment_request.estimated_departure_at), "d MMM yyyy HH:mm", { locale: tr })}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">Tahmini Dönüş</p>
+                      <p className="text-sm font-semibold">
+                        {format(new Date(selectedRequest.travel_assignment_request.estimated_return_at), "d MMM yyyy HH:mm", { locale: tr })}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">Ulaşım Bedeli</p>
+                      <p className="text-sm font-semibold">
+                        {selectedRequest.travel_assignment_request.transportation_cost.toLocaleString('tr-TR')} TL
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">Konaklama</p>
+                      <p className="text-sm font-semibold">
+                        {selectedRequest.travel_assignment_request.accommodation_needed
+                          ? `Var - ${selectedRequest.travel_assignment_request.accommodation_cost.toLocaleString('tr-TR')} TL`
+                          : "Yok"}
+                      </p>
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground">Avans Talebi</p>
+                    <p className="text-sm font-semibold">
+                      {selectedRequest.travel_assignment_request.advance_requested ? "Var" : "Yok"}
+                    </p>
+                  </div>
+                  {selectedRequest.travel_assignment_request.actual_departure_at && (
+                    <div className="grid grid-cols-2 gap-4 border-t pt-4">
+                      <div>
+                        <p className="text-sm font-medium text-muted-foreground">Gerçekleşen Gidiş</p>
+                        <p className="text-sm font-semibold">
+                          {format(new Date(selectedRequest.travel_assignment_request.actual_departure_at), "d MMM yyyy HH:mm", { locale: tr })}
+                        </p>
+                      </div>
+                      {selectedRequest.travel_assignment_request.actual_return_at && (
+                        <div>
+                          <p className="text-sm font-medium text-muted-foreground">Gerçekleşen Dönüş</p>
+                          <p className="text-sm font-semibold">
+                            {format(new Date(selectedRequest.travel_assignment_request.actual_return_at), "d MMM yyyy HH:mm", { locale: tr })}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
+
               {/* Ek Dosyalar - tüm talep tipleri için */}
               {attachments.length > 0 && (
                 <div className="space-y-2">
@@ -1132,7 +1250,7 @@ export default function MyRequestsPage() {
               )}
 
               {/* PDF Butonları - Sadece onaylanmış talepler için */}
-              {selectedRequest.status === "APPROVED" && (
+              {(selectedRequest.status === "APPROVED" || selectedRequest.status === "AWAITING_COMPLETION" || selectedRequest.status === "COMPLETED") && (
                 <div className="border-t pt-4 mt-6 flex gap-2">
                   <Button
                     variant="outline"

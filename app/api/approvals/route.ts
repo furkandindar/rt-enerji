@@ -55,6 +55,7 @@ export async function GET() {
           separation_request:separation_requests(*),
           request_form_request:request_form_requests(*),
           stamp_request:stamp_requests(*, stamp:stamps(*)),
+          travel_assignment_request:travel_assignment_requests(*, company:companies(*)),
           approvals:request_approvals(
             id,
             status,

@@ -24,6 +24,7 @@ import { OnboardingRequestDetails } from "./onboarding-request-details";
 import { SeparationRequestDetails } from "./separation-request-details";
 import { RequestFormDetails } from "./request-form-details";
 import { StampRequestDetails } from "./stamp-request-details";
+import { TravelAssignmentDetails } from "./travel-assignment-details";
 import { ApprovalHistoryAccordion } from "./approval-history-accordion";
 import { ApprovalActions } from "./approval-actions";
 import { PdfViewerDialog } from "@/components/pdf-viewer-dialog";
@@ -63,6 +64,11 @@ interface ApprovalDetailSheetProps {
   isStampApproval: boolean;
   signatureDataUrl: string | null;
   setSignatureDataUrl: (dataUrl: string | null) => void;
+  isTravelCompletionForm: boolean;
+  actualDeparture: string;
+  setActualDeparture: (value: string) => void;
+  actualReturn: string;
+  setActualReturn: (value: string) => void;
   canApprove: boolean;
   isSubmitting: boolean;
   handleDecision: (decision: "APPROVED" | "REJECTED") => void;
@@ -102,6 +108,11 @@ export function ApprovalDetailSheet({
   isStampApproval,
   signatureDataUrl,
   setSignatureDataUrl,
+  isTravelCompletionForm,
+  actualDeparture,
+  setActualDeparture,
+  actualReturn,
+  setActualReturn,
   canApprove,
   isSubmitting,
   handleDecision,
@@ -183,6 +194,9 @@ export function ApprovalDetailSheet({
             {selectedApproval.request.stamp_request && (
               <StampRequestDetails approval={selectedApproval} />
             )}
+            {selectedApproval.request.travel_assignment_request && (
+              <TravelAssignmentDetails approval={selectedApproval} />
+            )}
 
             {/* Onay Adımı ve Oluşturulma */}
             <div className="grid grid-cols-2 gap-4">
@@ -236,6 +250,11 @@ export function ApprovalDetailSheet({
                 isStampApproval={isStampApproval}
                 signatureDataUrl={signatureDataUrl}
                 setSignatureDataUrl={setSignatureDataUrl}
+                isTravelCompletionForm={isTravelCompletionForm}
+                actualDeparture={actualDeparture}
+                setActualDeparture={setActualDeparture}
+                actualReturn={actualReturn}
+                setActualReturn={setActualReturn}
                 canApprove={canApprove}
                 isSubmitting={isSubmitting}
                 handleDecision={handleDecision}

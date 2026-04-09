@@ -64,6 +64,13 @@ interface ApprovalActionsProps {
   signatureDataUrl: string | null;
   setSignatureDataUrl: (dataUrl: string | null) => void;
 
+  // Travel completion (V4: asistan gerçekleşen tarihleri girer)
+  isTravelCompletionForm: boolean;
+  actualDeparture: string;
+  setActualDeparture: (value: string) => void;
+  actualReturn: string;
+  setActualReturn: (value: string) => void;
+
   // Actions
   canApprove: boolean;
   isSubmitting: boolean;
@@ -99,12 +106,50 @@ export function ApprovalActions({
   isStampApproval,
   signatureDataUrl,
   setSignatureDataUrl,
+  isTravelCompletionForm,
+  actualDeparture,
+  setActualDeparture,
+  actualReturn,
+  setActualReturn,
   canApprove,
   isSubmitting,
   handleDecision,
 }: ApprovalActionsProps) {
   return (
     <div className="border-t pt-4 mt-6 space-y-4">
+      {/* V4: Travel Completion Form — Asistan gerçekleşen tarihleri girer */}
+      {isTravelCompletionForm && (
+        <div className="space-y-4 border-t pt-4">
+          <div className="text-sm font-medium text-muted-foreground">
+            Gerçekleşen Görev Tarihleri
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="actual_departure" className="text-sm font-medium">
+                Gerçekleşen Gidiş Tarihi/Saati <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                id="actual_departure"
+                type="datetime-local"
+                value={actualDeparture}
+                onChange={(e) => setActualDeparture(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="actual_return" className="text-sm font-medium">
+                Gerçekleşen Dönüş Tarihi/Saati <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                id="actual_return"
+                type="datetime-local"
+                value={actualReturn}
+                onChange={(e) => setActualReturn(e.target.value)}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* HR Form Alanları */}
       {isHrForm && (
         <div className="space-y-4 border-t pt-4">

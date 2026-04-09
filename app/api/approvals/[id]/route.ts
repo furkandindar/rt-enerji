@@ -22,7 +22,7 @@ export async function PATCH(
     const { id } = await params;
     const body = await request.json();
 
-    const { decision, comment, hr_fields, salary_consent_fields, onboarding_fields, separation_fields, signature_data_url } = body as {
+    const { decision, comment, hr_fields, salary_consent_fields, onboarding_fields, separation_fields, travel_completion_fields, signature_data_url } = body as {
       decision: 'APPROVED' | 'REJECTED';
       comment?: string;
       hr_fields?: {
@@ -39,6 +39,10 @@ export async function PATCH(
       separation_fields?: {
         section_key: string;
         items: Record<string, { status: string; notes: string }>;
+      };
+      travel_completion_fields?: {
+        actual_departure_at: string;
+        actual_return_at: string;
       };
       signature_data_url?: string;
     };
@@ -275,6 +279,37 @@ export async function PATCH(
       }
     }
 
+    // 3e. FILL_AND_SIGN adımları için travel completion alanlarını güncelle (V4: asistan gerçekleşen tarihleri girer)
+    if (decision === 'APPROVED' && stepData.action_type === 'FILL_AND_SIGN' && stepData.form_section_key === 'actual_dates') {
+      if (!travel_completion_fields?.actual_departure_at || !travel_completion_fields?.actual_return_at) {
+        return NextResponse.json({ error: "Gerçekleşen gidiş ve dönüş tarihleri zorunludur" }, { status: 400 });
+      }
+
+      const { data: travelRequest } = await supabase
+        .from("travel_assignment_requests")
+        .select("id")
+        .eq("request_id", requestData.id)
+        .single();
+
+      if (travelRequest) {
+        const { error: travelUpdateError } = await supabase
+          .from("travel_assignment_requests")
+          .update({
+            actual_departure_at: travel_completion_fields.actual_departure_at,
+            actual_return_at: travel_completion_fields.actual_return_at,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", travelRequest.id);
+
+        if (travelUpdateError) {
+          console.error("Error updating travel completion fields:", travelUpdateError);
+          return NextResponse.json({ error: "Failed to update travel completion fields" }, { status: 500 });
+        }
+
+        console.log("Travel completion fields updated successfully");
+      }
+    }
+
     // 4. Approval'ı güncelle
     const { error: updateError } = await supabase
       .from("request_approvals")
@@ -344,12 +379,18 @@ export async function PATCH(
       );
     } else {
       // Onaylandı - sonraki adıma geç veya tamamla
-      const { data: totalSteps } = await supabase
+      const { data: allSteps } = await supabase
         .from("workflow_steps")
-        .select("id")
-        .eq("workflow_definition_id", requestData.workflow_definition_id);
+        .select("id, step_order, phase")
+        .eq("workflow_definition_id", requestData.workflow_definition_id)
+        .order("step_order", { ascending: true });
 
-      const totalStepCount = totalSteps?.length || 0;
+      const totalStepCount = allSteps?.length || 0;
+
+      // COMPLETION fazında adım var mı? (V4)
+      const hasCompletionPhase = allSteps?.some(
+        (s: { phase: string }) => s.phase === 'COMPLETION'
+      ) || false;
 
       // Sonraki adıma ilerle — zaten APPROVED olan adımları atla
       let nextStep = requestData.current_step + 1;
@@ -361,7 +402,7 @@ export async function PATCH(
           id,
           status,
           approver_employee_id,
-          workflow_step:workflow_steps(step_order)
+          workflow_step:workflow_steps(step_order, phase)
         `)
         .eq("request_id", requestData.id);
 
@@ -387,8 +428,26 @@ export async function PATCH(
 
       const isCompleted = nextStep > totalStepCount;
 
-      if (isCompleted) {
-        // Tüm adımlar tamamlandı - talep onaylandı
+      // ----------------------------------------------------------------
+      // V4: APPROVAL fazı tamamlandı mı kontrol et
+      // Eğer COMPLETION fazı varsa ve sonraki adım COMPLETION fazında ise,
+      // tüm APPROVAL adımları bitmiş demektir → AWAITING_COMPLETION
+      // ----------------------------------------------------------------
+      const isEnteringCompletionPhase = !isCompleted && hasCompletionPhase && (() => {
+        const nextStepData = allSteps?.find(
+          (s: { step_order: number }) => s.step_order === nextStep
+        );
+        return nextStepData?.phase === 'COMPLETION';
+      })();
+
+      // Mevcut request durumu AWAITING_COMPLETION ise ve isCompleted ise → COMPLETED
+      const isCompletionFinished = isCompleted && hasCompletionPhase;
+
+      if (isCompleted && !hasCompletionPhase) {
+        // ================================================================
+        // MEVCUT DAVRANIŞ: Tüm adımlar tamamlandı, COMPLETION fazı yok
+        // İzin, avans, işe giriş, ayrılış vb. süreçler buraya düşer
+        // ================================================================
         await supabase
           .from("requests")
           .update({
@@ -510,8 +569,138 @@ export async function PATCH(
           workflowName,
           stampSubject
         );
+
+      } else if (isEnteringCompletionPhase) {
+        // ================================================================
+        // V4: Tüm APPROVAL adımları bitti, COMPLETION fazına geçiliyor
+        // Görev formu gibi çok fazlı süreçler buraya düşer
+        // ================================================================
+        console.log('All APPROVAL steps completed. Entering COMPLETION phase for request:', requestData.id);
+
+        await supabase
+          .from("requests")
+          .update({
+            status: 'AWAITING_COMPLETION',
+            current_step: nextStep,
+          })
+          .eq("id", requestData.id);
+
+        // Onay PDF'i oluştur (gerçekleşen tarihler henüz boş)
+        try {
+          console.log('Generating approval PDF for request:', requestData.id);
+          const pdfBuffer = await generateRequestPDF({
+            requestId: requestData.id,
+            supabase,
+          });
+
+          const finalPdfBuffer = await mergeAttachments(pdfBuffer, requestData.id, supabase);
+
+          const pdfPath = await uploadRequestPDF({
+            requestId: requestData.id,
+            pdfBuffer: finalPdfBuffer,
+          });
+
+          await supabase
+            .from("requests")
+            .update({ pdf_path: pdfPath })
+            .eq("id", requestData.id);
+
+          console.log('Approval phase PDF uploaded:', pdfPath);
+        } catch (pdfError) {
+          console.error('Error generating approval phase PDF:', pdfError);
+        }
+
+        // Talep edene "onaylandı" bildirimi gönder
+        await notifyRequestApproved(
+          supabase,
+          requestData.requester_employee_id,
+          requestData.id,
+          workflowName,
+          stampSubject
+        );
+
+        // COMPLETION fazındaki ilk onaycıya bildirim gönder
+        const nextApproval = allApprovals?.find((a: { status: string; workflow_step: { step_order: number } | { step_order: number }[] | null }) => {
+          const stepOrder = Array.isArray(a.workflow_step)
+            ? a.workflow_step[0]?.step_order
+            : a.workflow_step?.step_order;
+          return stepOrder === nextStep && a.status === 'PENDING';
+        });
+
+        if (nextApproval) {
+          const { data: requester } = await supabase
+            .from("employees")
+            .select("first_name, last_name")
+            .eq("id", requestData.requester_employee_id)
+            .single();
+
+          const requesterName = requester
+            ? `${requester.first_name} ${requester.last_name}`
+            : "Bir çalışan";
+
+          await notifyApprover(
+            supabase,
+            nextApproval.approver_employee_id,
+            requesterName,
+            requestData.id,
+            workflowName,
+            stampSubject
+          );
+        }
+
+      } else if (isCompletionFinished) {
+        // ================================================================
+        // V4: COMPLETION fazı da tamamlandı — süreç tamamen bitti
+        // ================================================================
+        console.log('COMPLETION phase finished. Request fully completed:', requestData.id);
+
+        await supabase
+          .from("requests")
+          .update({
+            status: 'COMPLETED',
+            completed_at: new Date().toISOString(),
+          })
+          .eq("id", requestData.id);
+
+        // Final PDF oluştur (gerçekleşen tarihler dolu, üzerine yazar)
+        try {
+          console.log('Generating final PDF for completed request:', requestData.id);
+          const pdfBuffer = await generateRequestPDF({
+            requestId: requestData.id,
+            supabase,
+          });
+
+          const finalPdfBuffer = await mergeAttachments(pdfBuffer, requestData.id, supabase);
+
+          const pdfPath = await uploadRequestPDF({
+            requestId: requestData.id,
+            pdfBuffer: finalPdfBuffer,
+          });
+
+          await supabase
+            .from("requests")
+            .update({ pdf_path: pdfPath })
+            .eq("id", requestData.id);
+
+          console.log('Final PDF uploaded:', pdfPath);
+        } catch (pdfError) {
+          console.error('Error generating final PDF:', pdfError);
+        }
+
+        // Talep edene "tamamlandı" bildirimi gönder
+        await notifyRequestApproved(
+          supabase,
+          requestData.requester_employee_id,
+          requestData.id,
+          workflowName,
+          stampSubject
+        );
+
       } else {
-        // Sonraki PENDING adıma geç
+        // ================================================================
+        // Henüz bitmedi — sonraki PENDING adıma geç
+        // Hem mevcut süreçler hem yeni süreçler bu bloğu kullanır
+        // ================================================================
         await supabase
           .from("requests")
           .update({

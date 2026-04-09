@@ -47,6 +47,10 @@ export function useApprovals() {
   // Canvas signature state (stamp approval için)
   const [signatureDataUrl, setSignatureDataUrl] = useState<string | null>(null);
 
+  // Travel assignment completion state (asistan gerçekleşen tarihleri girer)
+  const [actualDeparture, setActualDeparture] = useState("");
+  const [actualReturn, setActualReturn] = useState("");
+
   // Pagination states
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
@@ -85,6 +89,11 @@ export function useApprovals() {
     ? separationSectionConfig[formSectionKey]
     : null;
 
+  // V4: COMPLETION fazı — asistanın gerçekleşen tarihleri girme formu
+  const isTravelCompletionForm = selectedApproval?.workflow_step?.action_type === 'FILL_AND_SIGN' &&
+    selectedApproval?.workflow_step?.form_section_key === 'actual_dates' &&
+    selectedApproval?.request?.travel_assignment_request != null;
+
   const hrFormValid = !isHrForm || (remainingDays.trim() !== "" && !isNaN(Number(remainingDays)));
   const salaryConsentFormValid = !isSalaryConsentForm || salaryDeductionConsent;
   const onboardingFormValid = !isOnboardingSectionForm || (
@@ -99,7 +108,9 @@ export function useApprovals() {
     .filter((c) => c.is_required)
     .every((c) => uploadedAttachments.some((f) => f.step_attachment_config_id === c.id));
 
-  const canApprove = hasValidSignature && signatureAccepted && hrFormValid && salaryConsentFormValid && onboardingFormValid && separationFormValid && attachmentsValid;
+  const travelCompletionFormValid = !isTravelCompletionForm || (actualDeparture.trim() !== "" && actualReturn.trim() !== "");
+
+  const canApprove = hasValidSignature && signatureAccepted && hrFormValid && salaryConsentFormValid && onboardingFormValid && separationFormValid && attachmentsValid && travelCompletionFormValid;
 
   // Pagination
   const totalPages = Math.ceil(approvalHistory.length / pageSize);
@@ -257,6 +268,7 @@ export function useApprovals() {
         salary_consent_fields?: { consent: boolean };
         onboarding_fields?: { section_key: string; items: Record<string, { status: string; notes: string }> };
         separation_fields?: { section_key: string; items: Record<string, { status: string; notes: string }> };
+        travel_completion_fields?: { actual_departure_at: string; actual_return_at: string };
         signature_data_url?: string;
       } = { decision, comment };
 
@@ -286,6 +298,12 @@ export function useApprovals() {
           items: separationChecklist,
         };
       }
+      if (decision === "APPROVED" && isTravelCompletionForm) {
+        requestBody.travel_completion_fields = {
+          actual_departure_at: new Date(actualDeparture).toISOString(),
+          actual_return_at: new Date(actualReturn).toISOString(),
+        };
+      }
 
       const response = await fetch(`/api/approvals/${selectedApproval.id}`, {
         method: "PATCH",
@@ -306,6 +324,8 @@ export function useApprovals() {
       setSalaryDeductionConsent(false);
       setOnboardingChecklist({});
       setSeparationChecklist({});
+      setActualDeparture("");
+      setActualReturn("");
       setAttachmentConfigs([]);
       setUploadedAttachments([]);
       fetchApprovals();
@@ -429,6 +449,8 @@ export function useApprovals() {
     salaryDeductionConsent,
     onboardingChecklist,
     separationChecklist,
+    actualDeparture,
+    actualReturn,
     attachmentConfigs,
     uploadedAttachments,
     previousStepAttachments,
@@ -443,6 +465,7 @@ export function useApprovals() {
     currentSeparationSectionConfig,
     separationSectionKey,
     isStampApproval,
+    isTravelCompletionForm,
     canApprove,
     hasValidSignature,
     hrFormValid,
@@ -462,6 +485,8 @@ export function useApprovals() {
     setSalaryDeductionConsent,
     setOnboardingChecklist,
     setSeparationChecklist,
+    setActualDeparture,
+    setActualReturn,
     setUploadedAttachments,
 
     // Handlers

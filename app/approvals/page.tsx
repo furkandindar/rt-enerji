@@ -35,6 +35,7 @@ export default function ApprovalsPage() {
     currentSeparationSectionConfig,
     separationSectionKey,
     isStampApproval,
+    isTravelCompletionForm,
     canApprove,
     currentPage,
     pageSize,
@@ -48,6 +49,10 @@ export default function ApprovalsPage() {
     setSalaryDeductionConsent,
     setOnboardingChecklist,
     setSeparationChecklist,
+    actualDeparture,
+    setActualDeparture,
+    actualReturn,
+    setActualReturn,
     setUploadedAttachments,
     handleDecision,
     handleDownloadPDF,
@@ -140,6 +145,11 @@ export default function ApprovalsPage() {
         isStampApproval={isStampApproval}
         signatureDataUrl={signatureDataUrl}
         setSignatureDataUrl={setSignatureDataUrl}
+        isTravelCompletionForm={isTravelCompletionForm}
+        actualDeparture={actualDeparture}
+        setActualDeparture={setActualDeparture}
+        actualReturn={actualReturn}
+        setActualReturn={setActualReturn}
         canApprove={canApprove}
         isSubmitting={isSubmitting}
         handleDecision={handleDecision}
