@@ -265,16 +265,18 @@ function shouldSkipStep(
 /**
  * Bir talep için tüm approval kayıtlarını oluşturur.
  *
- * Otomatik onaylama koşulları:
- * 1. İlk adım REQUESTER tipinde ise (talep eden kendi formunu imzalıyor)
- * 2. İlk adım FILL_AND_SIGN action'ı ile talep eden = onaycı ise
- * 3. Talep eden = onaycı ve adım REQUESTER tipinde ise (self-approval)
- * 4. Mükerrer onaycı: Aynı kişi daha önceki bir adımda zaten onaycıysa VE bu adım SIGN_ONLY ise
- *    (FILL_AND_SIGN adımları her zaman manuel müdahale gerektirir)
- * 5. Koşullu adım: step.condition varsa ve formData ile eşleşmiyorsa (V4)
+ * Oluşturma anında otomatik onaylama koşulları (yalnızca):
+ * 1. İlk adım REQUESTER tipinde ise (talep eden kendi formunu imzalıyor/gönderiyor)
+ * 2. Koşullu adım: step.condition varsa ve formData ile eşleşmiyorsa (V4)
+ *
+ * İlk adım auto-approve edildikten sonra, talep edenin ilerideki SIGN_ONLY adımları da
+ * otomatik onaylanır (form doldurmaya gerek olmayan mükerrer imzalar).
+ *
+ * Mükerrer onaycı (aynı kişi birden fazla adımda) durumu oluşturma anında DEĞİL,
+ * onay verilme anında (PATCH /api/approvals/[id]) handle edilir. Böylece onaycı
+ * gerçekten onay verdikten sonra ilerideki SIGN_ONLY adımları otomatik onaylanır.
  *
  * @param formData - Opsiyonel. Koşullu adımlar için süreç-spesifik form verisi.
- *                   Mevcut süreçlerde geçilmez → koşul kontrolü atlanır → mevcut davranış korunur.
  */
 export async function createApprovalChain(
   supabase: SupabaseClient,
@@ -297,7 +299,6 @@ export async function createApprovalChain(
 
   // 2. Her adım için onaycıyı belirle ve approval kaydı oluştur
   const approvals = [];
-  const previousApprovers = new Set<string>(); // Daha önce atanan onaycıları takip et
 
   for (const step of steps) {
     const approverEmployeeId = await determineApprover(
@@ -310,34 +311,17 @@ export async function createApprovalChain(
       throw new Error(`Could not determine approver for step: ${step.name}`);
     }
 
-    // Otomatik onaylama koşulları:
-    // 1. İlk adım REQUESTER tipinde ise
+    // Otomatik onaylama koşulları (oluşturma anında):
+    // 1. İlk adım REQUESTER tipinde ise (talep gönderimi = ilk onay)
     const isFirstRequesterStep = step.step_order === 1 && step.approver_type === 'REQUESTER';
 
-    // 2. İlk adım FILL_AND_SIGN ve talep eden = onaycı ise
-    const isFirstFillAndSignByRequester = step.step_order === 1 &&
-                                           step.action_type === 'FILL_AND_SIGN' &&
-                                           approverEmployeeId === requesterEmployeeId;
-
-    // 3. Talep eden = onaycı ve adım REQUESTER tipinde ise (herhangi bir adımda)
-    const isSelfRequester = step.approver_type === 'REQUESTER' && approverEmployeeId === requesterEmployeeId;
-
-    // 4. Mükerrer onaycı: Bu kişi daha önceki bir adımda zaten onaycıydı VE bu adım SIGN_ONLY
-    //    FILL_AND_SIGN adımları her zaman manuel müdahale gerektirir (veri girişi var)
-    const isDuplicateSignOnly = previousApprovers.has(approverEmployeeId) &&
-                                 step.action_type === 'SIGN_ONLY';
-
-    // 5. Koşullu adım: condition sağlanmıyorsa atla (V4)
+    // 2. Koşullu adım: condition sağlanmıyorsa atla (V4)
     const isConditionNotMet = shouldSkipStep(
       (step as WorkflowStep).condition,
       formData
     );
 
-    const autoApproveThisStep = isFirstRequesterStep ||
-                                 isFirstFillAndSignByRequester ||
-                                 isSelfRequester ||
-                                 isDuplicateSignOnly ||
-                                 isConditionNotMet;
+    const autoApproveThisStep = isFirstRequesterStep || isConditionNotMet;
 
     approvals.push({
       request_id: requestId,
@@ -345,22 +329,39 @@ export async function createApprovalChain(
       approver_employee_id: approverEmployeeId,
       status: autoApproveThisStep ? 'APPROVED' : 'PENDING',
       decided_at: autoApproveThisStep ? new Date().toISOString() : null,
+      action_type: step.action_type, // Forward-approve kontrolü için
     });
-
-    // Bu onaycıyı takip listesine ekle
-    previousApprovers.add(approverEmployeeId);
   }
 
-  // 3. Tüm approval kayıtlarını ekle
+  // 3. İlk adım auto-approve edildiyse, talep edenin ilerideki SIGN_ONLY adımlarını da onayla
+  const firstApproval = approvals[0];
+  if (firstApproval && firstApproval.status === 'APPROVED' && firstApproval.approver_employee_id === requesterEmployeeId) {
+    const now = new Date().toISOString();
+    for (let i = 1; i < approvals.length; i++) {
+      const futureApproval = approvals[i];
+      if (
+        futureApproval.status === 'PENDING' &&
+        futureApproval.approver_employee_id === requesterEmployeeId &&
+        futureApproval.action_type === 'SIGN_ONLY'
+      ) {
+        futureApproval.status = 'APPROVED';
+        futureApproval.decided_at = now;
+      }
+    }
+  }
+
+  // 4. action_type alanını çıkar (DB'de yok), sonra tüm approval kayıtlarını ekle
+  const approvalsForInsert = approvals.map(({ action_type: _, ...rest }) => rest);
+
   const { error: insertError } = await supabase
     .from('request_approvals')
-    .insert(approvals);
+    .insert(approvalsForInsert);
 
   if (insertError) {
     throw new Error(`Failed to create approval chain: ${insertError.message}`);
   }
 
-  // 4. Baştan itibaren ardışık APPROVED adımları atla ve current_step'i ayarla
+  // 5. Baştan itibaren ardışık APPROVED adımları atla ve current_step'i ayarla
   let currentStep = 1;
   for (const approval of approvals) {
     if (approval.status === 'APPROVED') {
@@ -370,8 +371,61 @@ export async function createApprovalChain(
     }
   }
 
-  // current_step 1'den farklıysa güncelle
-  if (currentStep > 1) {
+  // Tüm adımlar auto-approve olduysa request'i tamamla + PDF üret + bildirim gönder
+  const allApproved = currentStep > approvals.length;
+  if (allApproved) {
+    const { error: updateError } = await supabase
+      .from('requests')
+      .update({
+        status: 'APPROVED',
+        current_step: approvals.length,
+        completed_at: new Date().toISOString(),
+      })
+      .eq('id', requestId);
+
+    if (updateError) {
+      console.error('Failed to complete request after all auto-approvals:', updateError);
+    }
+
+    // PDF üret (stamp approval hariç — canvas imzası gerektirir)
+    const { data: workflowDef } = await supabase
+      .from('workflow_definitions')
+      .select('code, name')
+      .eq('id', workflowDefinitionId)
+      .single();
+
+    if (workflowDef?.code !== 'STAMP_APPROVAL') {
+      try {
+        const { generateRequestPDF } = await import('../pdf/generate-request-pdf');
+        const { mergeAttachments } = await import('../pdf/merge-attachments');
+        const { uploadRequestPDF } = await import('../storage/upload-request-pdf');
+
+        console.log('Generating PDF after all auto-approvals for request:', requestId);
+        const pdfBuffer = await generateRequestPDF({ requestId, supabase });
+        const finalPdfBuffer = await mergeAttachments(pdfBuffer, requestId, supabase);
+        const pdfPath = await uploadRequestPDF({ requestId, pdfBuffer: finalPdfBuffer });
+
+        await supabase.from('requests').update({ pdf_path: pdfPath }).eq('id', requestId);
+        console.log('PDF generated after all auto-approvals:', pdfPath);
+      } catch (pdfError) {
+        console.error('Error generating PDF after all auto-approvals:', pdfError);
+      }
+    }
+
+    // Talep edene "onaylandı" bildirimi gönder
+    try {
+      const { notifyRequestApproved } = await import('./notification-service');
+      await notifyRequestApproved(
+        supabase,
+        requesterEmployeeId,
+        requestId,
+        workflowDef?.name || 'Talep',
+      );
+    } catch (notifError) {
+      console.error('Error sending notification after all auto-approvals:', notifError);
+    }
+  } else if (currentStep > 1) {
+    // current_step'i ilk PENDING adıma ayarla
     const { error: updateError } = await supabase
       .from('requests')
       .update({ current_step: currentStep })

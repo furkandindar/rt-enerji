@@ -1,6 +1,6 @@
 import { PDFDocument } from 'pdf-lib';
 import { SupabaseClient } from '@supabase/supabase-js';
-import { createServiceRoleClient } from '@/lib/supabase/server';
+import { createServiceRoleClient } from '@/lib/supabase/service-role';
 
 /**
  * Workflow PDF'ine ek dosyaları (attachment) birleştirir.

@@ -381,7 +381,7 @@ export async function PATCH(
       // Onaylandı - sonraki adıma geç veya tamamla
       const { data: allSteps } = await supabase
         .from("workflow_steps")
-        .select("id, step_order, phase")
+        .select("id, step_order, phase, action_type")
         .eq("workflow_definition_id", requestData.workflow_definition_id)
         .order("step_order", { ascending: true });
 
@@ -392,19 +392,68 @@ export async function PATCH(
         (s: { phase: string }) => s.phase === 'COMPLETION'
       ) || false;
 
-      // Sonraki adıma ilerle — zaten APPROVED olan adımları atla
-      let nextStep = requestData.current_step + 1;
-
-      // Tüm approval kayıtlarını al (otomatik onaylanmış adımları kontrol etmek için)
+      // Tüm approval kayıtlarını al
       const { data: allApprovals } = await supabase
         .from("request_approvals")
         .select(`
           id,
           status,
           approver_employee_id,
-          workflow_step:workflow_steps(step_order, phase)
+          workflow_step:workflow_steps(step_order, phase, action_type)
         `)
         .eq("request_id", requestData.id);
+
+      // ================================================================
+      // Mükerrer onaycı: Bu kişinin ilerideki SIGN_ONLY adımlarını otomatik onayla
+      // Onaycı gerçekten onay verdikten sonra, ilerideki sadece-imza adımları da onaylanır
+      // ================================================================
+      const forwardAutoApproveIds: string[] = [];
+      if (allApprovals) {
+        const now = new Date().toISOString();
+        for (const futureApproval of allApprovals) {
+          const futureStepOrder = Array.isArray(futureApproval.workflow_step)
+            ? futureApproval.workflow_step[0]?.step_order
+            : (futureApproval.workflow_step as { step_order: number; phase: string; action_type: string } | null)?.step_order;
+          const futureActionType = Array.isArray(futureApproval.workflow_step)
+            ? futureApproval.workflow_step[0]?.action_type
+            : (futureApproval.workflow_step as { step_order: number; phase: string; action_type: string } | null)?.action_type;
+
+          if (
+            futureApproval.status === 'PENDING' &&
+            futureApproval.approver_employee_id === appUser.employee_id &&
+            futureActionType === 'SIGN_ONLY' &&
+            futureStepOrder !== undefined &&
+            futureStepOrder > stepData.step_order
+          ) {
+            forwardAutoApproveIds.push(futureApproval.id);
+          }
+        }
+
+        if (forwardAutoApproveIds.length > 0) {
+          const { error: forwardError } = await supabase
+            .from("request_approvals")
+            .update({
+              status: 'APPROVED',
+              decided_at: now,
+            })
+            .in("id", forwardAutoApproveIds);
+
+          if (forwardError) {
+            console.error("Error auto-approving forward steps:", forwardError);
+          } else {
+            console.log(`Auto-approved ${forwardAutoApproveIds.length} forward SIGN_ONLY steps for approver:`, appUser.employee_id);
+            // allApprovals içindeki durumları güncelle (nextStep hesabı için)
+            for (const a of allApprovals) {
+              if (forwardAutoApproveIds.includes(a.id)) {
+                a.status = 'APPROVED';
+              }
+            }
+          }
+        }
+      }
+
+      // Sonraki adıma ilerle — zaten APPROVED olan adımları atla
+      let nextStep = requestData.current_step + 1;
 
       // Zaten APPROVED olan adımları atla (while döngüsü)
       while (nextStep <= totalStepCount) {
@@ -452,6 +501,7 @@ export async function PATCH(
           .from("requests")
           .update({
             status: 'APPROVED',
+            current_step: totalStepCount,
             completed_at: new Date().toISOString(),
           })
           .eq("id", requestData.id);
@@ -658,6 +708,7 @@ export async function PATCH(
           .from("requests")
           .update({
             status: 'COMPLETED',
+            current_step: totalStepCount,
             completed_at: new Date().toISOString(),
           })
           .eq("id", requestData.id);
