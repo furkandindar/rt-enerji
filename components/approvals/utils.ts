@@ -40,6 +40,9 @@ export const getRequestSummary = (approval: PendingApproval): string => {
   if (approval.request.travel_assignment_request) {
     return `${approval.request.travel_assignment_request.destination_city} - ${approval.request.travel_assignment_request.assignment_subject}`;
   }
+  if (approval.request.approval_letter_request) {
+    return approval.request.approval_letter_request.subject || "-";
+  }
   return "-";
 };
 

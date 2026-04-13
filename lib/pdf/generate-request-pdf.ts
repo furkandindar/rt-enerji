@@ -7,6 +7,7 @@ import { OnboardingPDFTemplate } from './onboarding-pdf-template';
 import { SeparationPDFTemplate } from './separation-pdf-template';
 import { RequestFormPDFTemplate } from './request-form-pdf-template';
 import { TravelAssignmentPDFTemplate } from './travel-assignment-pdf-template';
+import { ApprovalLetterPDFTemplate } from './approval-letter-pdf-template';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { SignatureFont, DEFAULT_SIGNATURE_FONT } from '@/lib/signature/types';
 
@@ -63,6 +64,7 @@ export async function generateRequestPDF(
       separation_request:separation_requests(*),
       request_form_request:request_form_requests(*),
       travel_assignment_request:travel_assignment_requests(*, company:companies(*)),
+      approval_letter_request:approval_letter_requests(*),
       approvals:request_approvals(
         id,
         status,
@@ -174,6 +176,15 @@ export async function generateRequestPDF(
       request,
       requester: request.requester,
       travelAssignmentRequest: request.travel_assignment_request,
+      approvals: request.approvals || [],
+      signatures,
+    }) as React.ReactElement<DocumentProps>;
+  } else if (request.approval_letter_request) {
+    // Olur Yazısı PDF'i
+    pdfDocument = React.createElement(ApprovalLetterPDFTemplate, {
+      request,
+      requester: request.requester,
+      approvalLetterRequest: request.approval_letter_request,
       approvals: request.approvals || [],
       signatures,
     }) as React.ReactElement<DocumentProps>;

@@ -554,6 +554,46 @@ export interface CreateTravelAssignmentInput {
 }
 
 // ============================================================================
+// Approval Letter (Olur Yazısı) Types
+// ============================================================================
+
+export interface ApprovalLetterRequest {
+  id: string;
+  request_id: string;
+  letter_date: string;
+  company: string;
+  project: string;
+  subject: string;
+  content: string;
+  has_payment_table: boolean;
+  comparison_approval_date: string | null;
+  agreement_amount: string | null;
+  has_contract: boolean | null;
+  paid_amounts: string[];  // ["100.000 TL", "50.000 EUR", "-"]
+  remaining_payment: string | null;
+  requested_payment_amount: string | null;
+  remaining_after_payment: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateApprovalLetterInput {
+  letter_date: string;
+  company: string;
+  project: string;
+  subject: string;
+  content: string;
+  has_payment_table: boolean;
+  comparison_approval_date?: string;
+  agreement_amount?: string;
+  has_contract?: boolean;
+  paid_amounts?: string[];
+  remaining_payment?: string;
+  requested_payment_amount?: string;
+  remaining_after_payment?: string;
+}
+
+// ============================================================================
 // Workflow Attachment Types
 // ============================================================================
 

@@ -178,6 +178,22 @@ export interface PendingApproval {
       actual_departure_at: string | null;
       actual_return_at: string | null;
     };
+    approval_letter_request?: {
+      id: string;
+      letter_date: string;
+      company: string;
+      project: string;
+      subject: string;
+      content: string;
+      has_payment_table: boolean;
+      comparison_approval_date: string | null;
+      agreement_amount: string | null;
+      has_contract: boolean | null;
+      paid_amounts: string[];
+      remaining_payment: string | null;
+      requested_payment_amount: string | null;
+      remaining_after_payment: string | null;
+    };
     approvals?: Approval[];
   };
 }

@@ -25,6 +25,7 @@ import { SeparationRequestDetails } from "./separation-request-details";
 import { RequestFormDetails } from "./request-form-details";
 import { StampRequestDetails } from "./stamp-request-details";
 import { TravelAssignmentDetails } from "./travel-assignment-details";
+import { ApprovalLetterDetails } from "./approval-letter-details";
 import { ApprovalHistoryAccordion } from "./approval-history-accordion";
 import { ApprovalActions } from "./approval-actions";
 import { PdfViewerDialog } from "@/components/pdf-viewer-dialog";
@@ -196,6 +197,9 @@ export function ApprovalDetailSheet({
             )}
             {selectedApproval.request.travel_assignment_request && (
               <TravelAssignmentDetails approval={selectedApproval} />
+            )}
+            {selectedApproval.request.approval_letter_request && (
+              <ApprovalLetterDetails approval={selectedApproval} previousStepAttachments={previousStepAttachments} />
             )}
 
             {/* Onay Adımı ve Oluşturulma */}

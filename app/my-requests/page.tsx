@@ -234,6 +234,22 @@ interface Request {
       name: string;
     };
   };
+  approval_letter_request?: {
+    id: string;
+    letter_date: string;
+    company: string;
+    project: string;
+    subject: string;
+    content: string;
+    has_payment_table: boolean;
+    comparison_approval_date: string | null;
+    agreement_amount: string | null;
+    has_contract: boolean | null;
+    paid_amounts: string[];
+    remaining_payment: string | null;
+    requested_payment_amount: string | null;
+    remaining_after_payment: string | null;
+  };
   requester?: Requester;
   approvals?: Approval[];
 }
@@ -302,6 +318,7 @@ export default function MyRequestsPage() {
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [showPdfPreview, setShowPdfPreview] = useState(false);
+  const [previewAttachment, setPreviewAttachment] = useState<{ id: string; name: string } | null>(null);
 
   // Filters
   const [workflowFilter, setWorkflowFilter] = useState<string>("all");
@@ -379,6 +396,9 @@ export default function MyRequestsPage() {
     }
     if (request.travel_assignment_request) {
       return `${request.travel_assignment_request.destination_city} - ${request.travel_assignment_request.assignment_subject}`;
+    }
+    if (request.approval_letter_request) {
+      return request.approval_letter_request.subject || "-";
     }
     return "-";
   };
@@ -1140,6 +1160,65 @@ export default function MyRequestsPage() {
                 </>
               )}
 
+              {/* Approval Letter Request specific fields */}
+              {selectedRequest.approval_letter_request && (
+                <>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">Tarih</p>
+                      <p className="text-sm font-semibold">
+                        {format(new Date(selectedRequest.approval_letter_request.letter_date), "d MMM yyyy", { locale: tr })}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">Firma</p>
+                      <p className="text-sm font-semibold">{selectedRequest.approval_letter_request.company}</p>
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground">Proje</p>
+                    <p className="text-sm font-semibold">{selectedRequest.approval_letter_request.project}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground">Konu</p>
+                    <p className="text-sm font-semibold">{selectedRequest.approval_letter_request.subject}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground">Yazı</p>
+                    <p className="text-sm font-semibold whitespace-pre-wrap">{selectedRequest.approval_letter_request.content}</p>
+                  </div>
+                  {selectedRequest.approval_letter_request.has_payment_table && (
+                    <div className="border rounded-lg p-3 space-y-2">
+                      <p className="text-sm font-semibold">Ödeme Tablosu</p>
+                      <div className="grid grid-cols-2 gap-2 text-sm">
+                        <span className="text-muted-foreground">Karşılaştırma Onay Tarihi:</span>
+                        <span className="font-medium">
+                          {selectedRequest.approval_letter_request.comparison_approval_date
+                            ? format(new Date(selectedRequest.approval_letter_request.comparison_approval_date), "d MMM yyyy", { locale: tr })
+                            : "-"}
+                        </span>
+                        <span className="text-muted-foreground">Anlaşma Tutarı:</span>
+                        <span className="font-medium">{selectedRequest.approval_letter_request.agreement_amount || "-"}</span>
+                        <span className="text-muted-foreground">Sözleşme:</span>
+                        <span className="font-medium">{selectedRequest.approval_letter_request.has_contract ? "VAR" : "YOK"}</span>
+                        {(selectedRequest.approval_letter_request.paid_amounts || []).map((amount: string, idx: number) => (
+                          <div key={idx} className="contents">
+                            <span className="text-muted-foreground">Ödenen ({idx + 1}):</span>
+                            <span className="font-medium">{amount || "-"}</span>
+                          </div>
+                        ))}
+                        <span className="text-muted-foreground">Kalan Ödeme:</span>
+                        <span className="font-medium">{selectedRequest.approval_letter_request.remaining_payment || "-"}</span>
+                        <span className="text-muted-foreground">Ödenmesi Talep Edilen:</span>
+                        <span className="font-medium">{selectedRequest.approval_letter_request.requested_payment_amount || "-"}</span>
+                        <span className="text-muted-foreground">Bu Ödeme Sonrası Kalan:</span>
+                        <span className="font-medium">{selectedRequest.approval_letter_request.remaining_after_payment || "-"}</span>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+
               {/* Ek Dosyalar - tüm talep tipleri için */}
               {attachments.length > 0 && (
                 <div className="space-y-2">
@@ -1154,12 +1233,24 @@ export default function MyRequestsPage() {
                           <FileIcon className="h-4 w-4 text-muted-foreground shrink-0" />
                           <span className="text-sm truncate">{attachment.config_label}</span>
                         </div>
-                        <button
-                          onClick={() => handleDownloadAttachment(attachment.id, attachment.file_name || attachment.config_label)}
-                          className="ml-2 shrink-0 text-muted-foreground hover:text-foreground"
-                        >
-                          <Download className="h-4 w-4" />
-                        </button>
+                        <div className="flex items-center gap-1 shrink-0 ml-2">
+                          {attachment.mime_type === "application/pdf" && (
+                            <button
+                              onClick={() => setPreviewAttachment({ id: attachment.id, name: attachment.file_name || attachment.config_label })}
+                              className="text-muted-foreground hover:text-foreground"
+                              title="Görüntüle"
+                            >
+                              <Eye className="h-4 w-4" />
+                            </button>
+                          )}
+                          <button
+                            onClick={() => handleDownloadAttachment(attachment.id, attachment.file_name || attachment.config_label)}
+                            className="text-muted-foreground hover:text-foreground"
+                            title="İndir"
+                          >
+                            <Download className="h-4 w-4" />
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -1282,6 +1373,15 @@ export default function MyRequestsPage() {
           previewUrl={`/api/requests/${selectedRequest.id}/pdf/preview`}
           downloadUrl={`/api/requests/${selectedRequest.id}/pdf`}
           fileName={`talep_${selectedRequest.id}.pdf`}
+        />
+      )}
+
+      {previewAttachment && (
+        <PdfViewerDialog
+          open={!!previewAttachment}
+          onOpenChange={(open) => { if (!open) setPreviewAttachment(null); }}
+          attachmentId={previewAttachment.id}
+          fileName={previewAttachment.name}
         />
       )}
     </div>

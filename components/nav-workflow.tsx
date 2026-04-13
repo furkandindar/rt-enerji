@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarPlus, FileCheck, ClipboardList, Banknote, Clock, UserPlus, UserMinus, FileText, Stamp, MapPin, type LucideIcon } from "lucide-react";
+import { CalendarPlus, FileCheck, ClipboardList, Banknote, Clock, UserPlus, UserMinus, FileText, Stamp, MapPin, FilePenLine, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -31,6 +31,7 @@ const personalItems: NavItem[] = [
   { title: "Görev Formu",         url: "/travel-assignment/new", icon: MapPin },
   { title: "Talep Formu",         url: "/request-form/new",   icon: FileText },
   { title: "Kaşeli Belge Onayı",  url: "/stamp-approval/new", icon: Stamp },
+  { title: "Olur Yazısı",        url: "/approval-letter/new", icon: FilePenLine },
 ];
 
 // Departmana özel kısıtlı süreçler
