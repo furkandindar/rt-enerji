@@ -22,6 +22,7 @@ export interface AppUser {
   role: UserRole;
   employeeId: string | null;
   availableWorkflowCodes: string[];
+  privacyAccepted: boolean;
 }
 
 // Context tipi
@@ -70,7 +71,7 @@ export function UserProvider({ children }: UserProviderProps) {
       // app_users -> employees ilişkisinden bilgileri çek (role dahil)
       const { data: appUserData } = await supabase
         .from("app_users")
-        .select("employee_id, role, employees(first_name, last_name)")
+        .select("employee_id, role, privacy_accepted_at, employees(first_name, last_name)")
         .eq("id", authUser.id)
         .single();
 
@@ -102,6 +103,7 @@ export function UserProvider({ children }: UserProviderProps) {
         role: (appUserData?.role as UserRole) || "ORG_VIEWER",
         employeeId,
         availableWorkflowCodes,
+        privacyAccepted: !!appUserData?.privacy_accepted_at,
       });
     } else {
       setUser(null);

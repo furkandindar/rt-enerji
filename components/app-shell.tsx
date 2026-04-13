@@ -24,6 +24,7 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar";
 import { Loading } from "./ui/loading";
+import { PrivacyConsentGuard } from "./privacy-consent-guard";
 
 interface AppShellProps {
   children: ReactNode;
@@ -62,6 +63,7 @@ function AppShellContent({ children }: { children: ReactNode }) {
   }
 
   return (
+    <PrivacyConsentGuard>
     <SidebarProvider>
       <AppSidebar user={user} />
       <SidebarInset>
@@ -121,6 +123,7 @@ function AppShellContent({ children }: { children: ReactNode }) {
         <div className="flex flex-1 flex-col gap-4 p-4 pt-0">{children}</div>
       </SidebarInset>
     </SidebarProvider>
+    </PrivacyConsentGuard>
   );
 }
 

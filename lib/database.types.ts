@@ -20,6 +20,7 @@ export type Database = {
           email: string
           employee_id: string | null
           id: string
+          privacy_accepted_at: string | null
           role: string
         }
         Insert: {
@@ -27,6 +28,7 @@ export type Database = {
           email: string
           employee_id?: string | null
           id: string
+          privacy_accepted_at?: string | null
           role?: string
         }
         Update: {
@@ -34,6 +36,7 @@ export type Database = {
           email?: string
           employee_id?: string | null
           id?: string
+          privacy_accepted_at?: string | null
           role?: string
         }
         Relationships: [
