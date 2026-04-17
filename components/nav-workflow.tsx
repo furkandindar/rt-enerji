@@ -28,7 +28,7 @@ interface NavItem {
 const personalItems: NavItem[] = [
   { title: "İzin Talebi", url: "/leave-requests/new", icon: CalendarPlus },
   { title: "Maaş Avans Talebi",   url: "/salary-advance/new", icon: Banknote },
-  { title: "Görev Formu",         url: "/travel-assignment/new", icon: MapPin },
+  { title: "Şehir İçi/Dışı Görev Formu",         url: "/travel-assignment/new", icon: MapPin },
   { title: "Talep Formu",         url: "/request-form/new",   icon: FileText },
   { title: "Kaşeli Belge Onayı",  url: "/stamp-approval/new", icon: Stamp },
   { title: "Olur Yazısı",        url: "/approval-letter/new", icon: FilePenLine },
