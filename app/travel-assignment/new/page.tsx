@@ -47,13 +47,17 @@ const travelAssignmentSchema = z.object({
   accommodation_cost: z.number().min(0),
   advance_requested: z.boolean(),
   advance_amount: z.number().min(0).optional(),
-  advance_payment_method: z.enum(["CASH", "BANK_TRANSFER"]).optional(),
+  advance_subject: z.string().optional(),
+  advance_content: z.string().optional(),
 }).refine(
   (data) => !data.advance_requested || (data.advance_amount !== undefined && data.advance_amount > 0),
   { message: "Avans miktarı girilmelidir", path: ["advance_amount"] }
 ).refine(
-  (data) => !data.advance_requested || data.advance_payment_method !== undefined,
-  { message: "Ödeme şekli seçilmelidir", path: ["advance_payment_method"] }
+  (data) => !data.advance_requested || (data.advance_subject !== undefined && data.advance_subject.trim().length > 0),
+  { message: "Avans konusu girilmelidir", path: ["advance_subject"] }
+).refine(
+  (data) => !data.advance_requested || (data.advance_content !== undefined && data.advance_content.trim().length > 0),
+  { message: "Avans açıklaması girilmelidir", path: ["advance_content"] }
 );
 
 type TravelAssignmentFormValues = z.infer<typeof travelAssignmentSchema>;
@@ -144,7 +148,8 @@ export default function NewTravelAssignmentPage() {
       accommodation_cost: 0,
       advance_requested: false,
       advance_amount: undefined,
-      advance_payment_method: undefined,
+      advance_subject: undefined,
+      advance_content: undefined,
     },
   });
 
@@ -419,49 +424,62 @@ export default function NewTravelAssignmentPage() {
               {advanceRequested && (
                 <div className="space-y-4 rounded-lg border p-4">
                   <p className="text-sm font-medium text-muted-foreground">Avans Detayları</p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <FormField
-                      control={form.control}
-                      name="advance_amount"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Avans Miktarı (TL)</FormLabel>
-                          <FormControl>
-                            <Input
-                              type="number"
-                              placeholder="0.00"
-                              {...field}
-                              value={field.value ?? ""}
-                              onChange={(e) => field.onChange(e.target.value === "" ? undefined : parseFloat(e.target.value))}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                  <FormField
+                    control={form.control}
+                    name="advance_subject"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Avans Konusu</FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder="Örn: Görev avansı"
+                            {...field}
+                            value={field.value ?? ""}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
 
-                    <FormField
-                      control={form.control}
-                      name="advance_payment_method"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Ödeme Şekli</FormLabel>
-                          <Select onValueChange={field.onChange} defaultValue={field.value}>
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Ödeme şekli seçin" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              <SelectItem value="BANK_TRANSFER">Banka Transferi</SelectItem>
-                              <SelectItem value="CASH">Nakit</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
+                  <FormField
+                    control={form.control}
+                    name="advance_content"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Avans Açıklaması</FormLabel>
+                        <FormControl>
+                          <Textarea
+                            placeholder="Avans talebinin detaylarını yazın..."
+                            className="min-h-[100px]"
+                            {...field}
+                            value={field.value ?? ""}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="advance_amount"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Avans Miktarı (TL)</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            placeholder="0.00"
+                            {...field}
+                            value={field.value ?? ""}
+                            onChange={(e) => field.onChange(e.target.value === "" ? undefined : parseFloat(e.target.value))}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
                 </div>
               )}
 

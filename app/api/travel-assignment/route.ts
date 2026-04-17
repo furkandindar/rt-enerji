@@ -209,16 +209,34 @@ export async function POST(request: Request) {
       // Bildirim hatası süreci durdurmamalı
     }
 
-    // 9. Avans talebi varsa SALARY_ADVANCE workflow'u tetikle
+    // 9. Avans talebi varsa REQUEST_FORM workflow'u tetikle
     if (body.advance_requested) {
       try {
-        const advanceDef = await getWorkflowDefinitionByCode(supabase, "SALARY_ADVANCE");
-        if (advanceDef) {
+        const requestFormDef = await getWorkflowDefinitionByCode(supabase, "REQUEST_FORM");
+        if (requestFormDef) {
+          // Çalışan adı ve şirket adını al
+          const [{ data: employee }, { data: company }] = await Promise.all([
+            supabase
+              .from("employees")
+              .select("first_name, last_name")
+              .eq("id", appUser.employee_id)
+              .single(),
+            supabase
+              .from("companies")
+              .select("name")
+              .eq("id", body.company_id)
+              .single(),
+          ]);
+
+          const requesterName = employee
+            ? `${employee.first_name} ${employee.last_name}`
+            : "";
+
           // Alt talep oluştur
           const { data: advanceRequest, error: advanceError } = await supabase
             .from("requests")
             .insert({
-              workflow_definition_id: advanceDef.id,
+              workflow_definition_id: requestFormDef.id,
               requester_employee_id: appUser.employee_id,
               parent_request_id: newRequest.id,  // V4: görev formuna bağla
               status: "PENDING",
@@ -232,13 +250,18 @@ export async function POST(request: Request) {
             console.error("Error creating linked advance request:", advanceError);
             // Ana süreç devam eder, avans oluşturulamazsa logluyoruz
           } else {
-            // Avans detaylarını oluştur (görev formundan gelen değerlerle)
+            // Talep formu detaylarını oluştur (görev formundan gelen değerlerle)
             const { error: advanceDetailError } = await supabase
-              .from("salary_advance_requests")
+              .from("request_form_requests")
               .insert({
                 request_id: advanceRequest.id,
-                amount: body.advance_amount || 0,
-                payment_method: body.advance_payment_method || "BANK_TRANSFER",
+                requester_name: requesterName,
+                company: company?.name || "",
+                request_date: new Date().toISOString().split("T")[0],
+                subject: body.advance_subject || "",
+                content: body.advance_content || "",
+                amount: body.advance_amount || null,
+                request_type: "DIGER",
               });
 
             if (advanceDetailError) {
@@ -249,7 +272,7 @@ export async function POST(request: Request) {
               await createApprovalChain(
                 supabase,
                 advanceRequest.id,
-                advanceDef.id,
+                requestFormDef.id,
                 appUser.employee_id
               );
             }

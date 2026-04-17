@@ -550,7 +550,8 @@ export interface CreateTravelAssignmentInput {
   accommodation_cost?: number;
   advance_requested: boolean;
   advance_amount?: number;           // Avans talebi varsa miktar
-  advance_payment_method?: string;   // Avans talebi varsa ödeme şekli
+  advance_subject?: string;          // Avans talebi varsa konu
+  advance_content?: string;          // Avans talebi varsa açıklama
 }
 
 // ============================================================================
