@@ -1,6 +1,6 @@
 "use client";
 
-import { Building2, Briefcase, Layers, type LucideIcon } from "lucide-react";
+import { Building, Building2, Briefcase, Layers, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -41,6 +41,11 @@ export function NavDictionaries() {
         title: "Seviye Tipleri",
         url: "/grade-levels",
         icon: Layers,
+      },
+      {
+        title: "Şirketler",
+        url: "/companies",
+        icon: Building,
       },
     ];
 
