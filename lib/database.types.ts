@@ -1572,6 +1572,9 @@ export type Database = {
           selected_pages: string
           stamp_id: string
           stamp_position: string
+          stamp_position_overrides: Json | null
+          stamp_x_ratio: number | null
+          stamp_y_ratio: number | null
           stamped_pdf_path: string | null
           subject: string
           updated_at: string | null
@@ -1585,6 +1588,9 @@ export type Database = {
           selected_pages?: string
           stamp_id: string
           stamp_position?: string
+          stamp_position_overrides?: Json | null
+          stamp_x_ratio?: number | null
+          stamp_y_ratio?: number | null
           stamped_pdf_path?: string | null
           subject?: string
           updated_at?: string | null
@@ -1598,6 +1604,9 @@ export type Database = {
           selected_pages?: string
           stamp_id?: string
           stamp_position?: string
+          stamp_position_overrides?: Json | null
+          stamp_x_ratio?: number | null
+          stamp_y_ratio?: number | null
           stamped_pdf_path?: string | null
           subject?: string
           updated_at?: string | null

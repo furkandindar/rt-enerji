@@ -154,6 +154,9 @@ export interface PendingApproval {
       stamped_pdf_path: string | null;
       selected_pages: string;
       stamp_position: string;
+      stamp_x_ratio: number | null;
+      stamp_y_ratio: number | null;
+      stamp_position_overrides: Record<string, { x: number; y: number }> | null;
       subject: string | null;
       description: string | null;
       stamp: {

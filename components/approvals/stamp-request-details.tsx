@@ -39,7 +39,11 @@ export function StampRequestDetails({ approval }: StampRequestDetailsProps) {
         <div>
           <p className="text-sm font-medium text-muted-foreground">Kaşe Konumu</p>
           <p className="text-sm font-semibold">
-            {positionLabels[stamp.stamp_position] || stamp.stamp_position}
+            {stamp.stamp_x_ratio != null && stamp.stamp_y_ratio != null
+              ? stamp.stamp_position_overrides && Object.keys(stamp.stamp_position_overrides).length > 0
+                ? `Özel (sayfa bazlı, ${Object.keys(stamp.stamp_position_overrides).length} özel sayfa)`
+                : "Özel (tüm sayfalar)"
+              : positionLabels[stamp.stamp_position] || stamp.stamp_position}
           </p>
         </div>
       </div>

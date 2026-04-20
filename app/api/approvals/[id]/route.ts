@@ -8,7 +8,7 @@ import {
 import { generateRequestPDF } from "@/lib/pdf/generate-request-pdf";
 import { mergeAttachments } from "@/lib/pdf/merge-attachments";
 import { uploadRequestPDF } from "@/lib/storage/upload-request-pdf";
-import { stampPDF } from "@/lib/pdf/stamp-pdf";
+import { stampPDF, type StampPositionOverrides } from "@/lib/pdf/stamp-pdf";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { StampPosition } from "@/lib/workflow/types";
 
@@ -534,6 +534,9 @@ export async function PATCH(
                 stampHeight: stampRequest.stamp.height,
                 stampPosition: stampRequest.stamp_position as StampPosition,
                 selectedPages: stampRequest.selected_pages,
+                stampXRatio: stampRequest.stamp_x_ratio,
+                stampYRatio: stampRequest.stamp_y_ratio,
+                stampPositionOverrides: stampRequest.stamp_position_overrides as StampPositionOverrides | null,
                 signatureText: gmSignatureText,
                 signatureFont: gmEmployee?.signature_font || undefined,
                 signatureImageDataUrl: signature_data_url,

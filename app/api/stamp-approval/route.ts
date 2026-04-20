@@ -62,6 +62,55 @@ export async function POST(request: Request) {
     const subject = formData.get("subject") as string;
     const description = formData.get("description") as string | null;
 
+    // Serbest konum alanları (opsiyonel)
+    const xRatioRaw = formData.get("stamp_x_ratio") as string | null;
+    const yRatioRaw = formData.get("stamp_y_ratio") as string | null;
+    const overridesRaw = formData.get("stamp_position_overrides") as string | null;
+
+    let stampXRatio: number | null = null;
+    let stampYRatio: number | null = null;
+
+    if (xRatioRaw && yRatioRaw) {
+      const xNum = parseFloat(xRatioRaw);
+      const yNum = parseFloat(yRatioRaw);
+      if (!Number.isFinite(xNum) || xNum < 0 || xNum > 1) {
+        return NextResponse.json({ error: "stamp_x_ratio 0-1 arasında bir sayı olmalı" }, { status: 400 });
+      }
+      if (!Number.isFinite(yNum) || yNum < 0 || yNum > 1) {
+        return NextResponse.json({ error: "stamp_y_ratio 0-1 arasında bir sayı olmalı" }, { status: 400 });
+      }
+      stampXRatio = xNum;
+      stampYRatio = yNum;
+    } else if (xRatioRaw || yRatioRaw) {
+      return NextResponse.json({ error: "stamp_x_ratio ve stamp_y_ratio birlikte gönderilmeli" }, { status: 400 });
+    }
+
+    // Override map'i tolerantla parse et: geçersiz girişler sessizce atılır
+    let stampPositionOverrides: Record<string, { x: number; y: number }> | null = null;
+    if (overridesRaw) {
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(overridesRaw);
+      } catch {
+        return NextResponse.json({ error: "stamp_position_overrides geçerli JSON olmalı" }, { status: 400 });
+      }
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        const cleaned: Record<string, { x: number; y: number }> = {};
+        for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
+          const pageNum = Number(key);
+          if (!Number.isInteger(pageNum) || pageNum < 1) continue;
+          if (!value || typeof value !== "object") continue;
+          const v = value as { x?: unknown; y?: unknown };
+          const xn = typeof v.x === "number" ? v.x : NaN;
+          const yn = typeof v.y === "number" ? v.y : NaN;
+          if (!Number.isFinite(xn) || xn < 0 || xn > 1) continue;
+          if (!Number.isFinite(yn) || yn < 0 || yn > 1) continue;
+          cleaned[String(pageNum)] = { x: xn, y: yn };
+        }
+        stampPositionOverrides = Object.keys(cleaned).length > 0 ? cleaned : null;
+      }
+    }
+
     // 1. Kullanıcı doğrulama
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
@@ -151,6 +200,9 @@ export async function POST(request: Request) {
         original_pdf_path: originalPdfPath,
         selected_pages: selectedPages,
         stamp_position: stampPosition,
+        stamp_x_ratio: stampXRatio,
+        stamp_y_ratio: stampYRatio,
+        stamp_position_overrides: stampPositionOverrides,
         subject: subject || null,
         description: description || null,
       });

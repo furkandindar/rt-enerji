@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Loader2, Stamp, Upload, X, FileText } from "lucide-react";
@@ -18,6 +19,21 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import type { StampPositionValue } from "@/components/stamp-position-picker";
+import { DEFAULT_PRESET } from "@/lib/stamp-position/presets";
+
+// pdfjs SSR ile uyumsuz; picker sadece client'ta yüklenmeli.
+const StampPositionPicker = dynamic(
+  () => import("@/components/stamp-position-picker"),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex items-center justify-center h-40 rounded-md border bg-muted/20">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    ),
+  }
+);
 
 interface StampOption {
   id: string;
@@ -27,13 +43,12 @@ interface StampOption {
   height: number;
 }
 
-const POSITION_OPTIONS = [
-  { value: "bottom-right", label: "Sağ Alt" },
-  { value: "bottom-left", label: "Sol Alt" },
-  { value: "top-right", label: "Sağ Üst" },
-  { value: "top-left", label: "Sol Üst" },
-  { value: "center", label: "Orta" },
-] as const;
+function parseSpecificPages(input: string): number[] {
+  return input
+    .split(",")
+    .map((v) => parseInt(v.trim(), 10))
+    .filter((n) => Number.isInteger(n) && n >= 1);
+}
 
 export default function NewStampApprovalPage() {
   const router = useRouter();
@@ -44,12 +59,30 @@ export default function NewStampApprovalPage() {
   const [stamps, setStamps] = useState<StampOption[]>([]);
   const [selectedStampId, setSelectedStampId] = useState<string>("");
   const [pdfFile, setPdfFile] = useState<File | null>(null);
-  const [selectedPages, setSelectedPages] = useState<string>("all");
   const [pageMode, setPageMode] = useState<"all" | "specific">("all");
   const [specificPages, setSpecificPages] = useState<string>("");
-  const [stampPosition, setStampPosition] = useState<string>("bottom-right");
   const [subject, setSubject] = useState<string>("");
   const [description, setDescription] = useState<string>("");
+  const [stampPositionValue, setStampPositionValue] = useState<StampPositionValue>({
+    defaultRatio: null,
+    overrides: {},
+  });
+
+  const selectedStamp = useMemo(
+    () => stamps.find((s) => s.id === selectedStampId) || null,
+    [stamps, selectedStampId]
+  );
+
+  // PDF veya kaşe değişince seçilmiş konumu sıfırla — picker preset ile yeniden başlasın
+  useEffect(() => {
+    setStampPositionValue({ defaultRatio: null, overrides: {} });
+  }, [pdfFile, selectedStampId]);
+
+  const pickerSelectedPages = useMemo<number[] | undefined>(() => {
+    if (pageMode !== "specific") return undefined;
+    const parsed = parseSpecificPages(specificPages);
+    return parsed.length > 0 ? parsed : undefined;
+  }, [pageMode, specificPages]);
 
   // Kaşeleri yükle
   useEffect(() => {
@@ -88,18 +121,33 @@ export default function NewStampApprovalPage() {
     e.target.value = "";
   };
 
-  const canSubmit = pdfFile && selectedStampId && subject.trim() && !isSubmitting;
+  const canSubmit =
+    pdfFile &&
+    selectedStampId &&
+    subject.trim() &&
+    stampPositionValue.defaultRatio !== null &&
+    !isSubmitting;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!canSubmit) return;
+    if (!stampPositionValue.defaultRatio) return;
 
     setIsSubmitting(true);
     try {
       const formData = new FormData();
       formData.append("pdf_file", pdfFile);
       formData.append("stamp_id", selectedStampId);
-      formData.append("stamp_position", stampPosition);
+      // Legacy (NOT NULL) kolon — yeni ratio alanları dolu olduğunda backend bunu yok sayar
+      formData.append("stamp_position", DEFAULT_PRESET);
+      formData.append("stamp_x_ratio", String(stampPositionValue.defaultRatio.x));
+      formData.append("stamp_y_ratio", String(stampPositionValue.defaultRatio.y));
+      if (Object.keys(stampPositionValue.overrides).length > 0) {
+        formData.append(
+          "stamp_position_overrides",
+          JSON.stringify(stampPositionValue.overrides)
+        );
+      }
       formData.append("subject", subject.trim());
       formData.append(
         "selected_pages",
@@ -214,23 +262,6 @@ export default function NewStampApprovalPage() {
               )}
             </div>
 
-            {/* Kaşe Konumu */}
-            <div className="space-y-2">
-              <Label>Kaşe Konumu</Label>
-              <Select value={stampPosition} onValueChange={setStampPosition}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {POSITION_OPTIONS.map((pos) => (
-                    <SelectItem key={pos.value} value={pos.value}>
-                      {pos.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
             {/* Sayfa Seçimi */}
             <div className="space-y-3">
               <Label>Kaşelenecek Sayfalar</Label>
@@ -259,6 +290,32 @@ export default function NewStampApprovalPage() {
                   onChange={(e) => setSpecificPages(e.target.value)}
                 />
               )}
+            </div>
+
+            {/* Kaşe Konumu — sürüklenebilir picker */}
+            <div className="space-y-2">
+              <Label>Kaşe Konumu *</Label>
+              {pdfFile && selectedStamp ? (
+                <StampPositionPicker
+                  pdfFile={pdfFile}
+                  stamp={{
+                    imageUrl: `/api/stamps/${selectedStamp.id}/image`,
+                    widthPt: selectedStamp.width,
+                    heightPt: selectedStamp.height,
+                  }}
+                  selectedPages={pickerSelectedPages}
+                  value={stampPositionValue}
+                  onChange={setStampPositionValue}
+                  initialPreset={DEFAULT_PRESET}
+                />
+              ) : (
+                <div className="flex items-center justify-center h-32 rounded-md border border-dashed bg-muted/20 text-sm text-muted-foreground">
+                  Kaşe konumunu belirlemek için önce PDF ve kaşe seçin
+                </div>
+              )}
+              <p className="text-xs text-muted-foreground">
+                Varsayılan olarak tüm sayfalara aynı konum uygulanır. İstersen belirli bir sayfa için farklı konum tanımlayabilirsin.
+              </p>
             </div>
 
             {/* Konu */}

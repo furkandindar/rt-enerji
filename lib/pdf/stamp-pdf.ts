@@ -11,6 +11,9 @@ const SIGNATURE_FONT_URLS: Record<SignatureFont, string> = {
   'Sacramento': 'https://fonts.gstatic.com/s/sacramento/v15/buEzpo6gcdjy0EiZMBUG0CoV_NxLeiw.ttf',
 };
 
+/** Sayfa başına serbest konum override. Anahtar 1-tabanlı sayfa numarası (string). */
+export type StampPositionOverrides = Record<string, { x: number; y: number }>;
+
 interface StampPDFOptions {
   /** Orijinal PDF'in Storage path'i (request-documents bucket'ında) */
   originalPdfPath: string;
@@ -19,10 +22,15 @@ interface StampPDFOptions {
   /** Kaşe boyutları (px) */
   stampWidth: number;
   stampHeight: number;
-  /** Kaşenin konumu */
+  /** Kaşenin konumu (preset — yeni ratio alanları boş ise fallback) */
   stampPosition: StampPosition;
   /** Hangi sayfalara kaşe basılacak: "all" veya "1,3,5" */
   selectedPages: string;
+  /** Serbest konum default: UI top-left origin, 0-1 normalized (sayfa genişliğine/yüksekliğine oran) */
+  stampXRatio?: number | null;
+  stampYRatio?: number | null;
+  /** Sayfa bazlı override map: { "2": { x, y }, "5": { x, y } } — override olmayan sayfalar default ratio kullanır */
+  stampPositionOverrides?: StampPositionOverrides | null;
   /** GM'in imza metni (kaşenin üstüne yazılır, canvas imzası yoksa kullanılır) */
   signatureText?: string;
   /** GM'in imza font'u */
@@ -47,10 +55,19 @@ export async function stampPDF(options: StampPDFOptions): Promise<Buffer> {
     stampHeight,
     stampPosition,
     selectedPages,
+    stampXRatio,
+    stampYRatio,
+    stampPositionOverrides,
     signatureText,
     signatureFont,
     signatureImageDataUrl,
   } = options;
+
+  // Default ratio yalnızca x ve y birlikte sağlandığında geçerli
+  const defaultRatio =
+    typeof stampXRatio === 'number' && typeof stampYRatio === 'number'
+      ? { x: stampXRatio, y: stampYRatio }
+      : null;
 
   const supabaseAdmin = createServiceRoleClient();
 
@@ -133,15 +150,18 @@ export async function stampPDF(options: StampPDFOptions): Promise<Buffer> {
     const page = pdfDoc.getPage(pageIndex);
     const { width: pageWidth, height: pageHeight } = page.getSize();
 
-    // Kaşe konumunu hesapla
-    const { x, y } = calculateStampPosition(
-      stampPosition,
+    // Kaşe konumunu hesapla (override → default ratio → preset fallback)
+    const { x, y } = resolveStampPosition({
+      pageNumber: pageIndex + 1,
       pageWidth,
       pageHeight,
       stampWidth,
       stampHeight,
-      MARGIN
-    );
+      preset: stampPosition,
+      defaultRatio,
+      overrides: stampPositionOverrides ?? null,
+      margin: MARGIN,
+    });
 
     // Kaşeyi çiz
     page.drawImage(stampImage, {
@@ -233,3 +253,55 @@ function calculateStampPosition(
   }
 }
 
+/**
+ * Bir sayfa için kaşe konumunu belirler. Öncelik sırası:
+ *   1) Sayfa için override varsa onun ratio'su
+ *   2) Yoksa default ratio (tüm sayfalar için)
+ *   3) Hiçbiri yoksa eski preset (calculateStampPosition)
+ *
+ * Ratio değerleri UI top-left origin (0-1). Fonksiyon, pdf-lib'in bottom-left
+ * origin koordinat sistemine çevirir ve sonucu sayfa sınırlarına clamp'ler.
+ */
+function resolveStampPosition(params: {
+  pageNumber: number; // 1-based
+  pageWidth: number;
+  pageHeight: number;
+  stampWidth: number;
+  stampHeight: number;
+  preset: StampPosition;
+  defaultRatio: { x: number; y: number } | null;
+  overrides: StampPositionOverrides | null;
+  margin: number;
+}): { x: number; y: number } {
+  const override = params.overrides?.[String(params.pageNumber)];
+  const ratio =
+    override && typeof override.x === 'number' && typeof override.y === 'number'
+      ? override
+      : params.defaultRatio;
+
+  let x: number;
+  let y: number;
+
+  if (ratio) {
+    // UI top-left (kaşenin sol-üst köşesi) → PDF bottom-left (kaşenin sol-alt köşesi)
+    x = ratio.x * params.pageWidth;
+    y = params.pageHeight - ratio.y * params.pageHeight - params.stampHeight;
+  } else {
+    const preset = calculateStampPosition(
+      params.preset,
+      params.pageWidth,
+      params.pageHeight,
+      params.stampWidth,
+      params.stampHeight,
+      params.margin
+    );
+    x = preset.x;
+    y = preset.y;
+  }
+
+  // Sayfa sınırına clamp — kaşe taşarsa kenara yapıştırılır
+  x = Math.max(0, Math.min(x, params.pageWidth - params.stampWidth));
+  y = Math.max(0, Math.min(y, params.pageHeight - params.stampHeight));
+
+  return { x, y };
+}
