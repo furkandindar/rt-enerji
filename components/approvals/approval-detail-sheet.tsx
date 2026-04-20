@@ -26,6 +26,8 @@ import { RequestFormDetails } from "./request-form-details";
 import { StampRequestDetails } from "./stamp-request-details";
 import { TravelAssignmentDetails } from "./travel-assignment-details";
 import { ApprovalLetterDetails } from "./approval-letter-details";
+import { FinanceApprovalCoverDetails } from "./finance-approval-cover-details";
+import { AccountingApprovalCoverDetails } from "./accounting-approval-cover-details";
 import { ApprovalHistoryAccordion } from "./approval-history-accordion";
 import { ApprovalActions } from "./approval-actions";
 import { PdfViewerDialog } from "@/components/pdf-viewer-dialog";
@@ -200,6 +202,12 @@ export function ApprovalDetailSheet({
             )}
             {selectedApproval.request.approval_letter_request && (
               <ApprovalLetterDetails approval={selectedApproval} previousStepAttachments={previousStepAttachments} />
+            )}
+            {selectedApproval.request.finance_approval_cover_request && (
+              <FinanceApprovalCoverDetails approval={selectedApproval} previousStepAttachments={previousStepAttachments} />
+            )}
+            {selectedApproval.request.accounting_approval_cover_request && (
+              <AccountingApprovalCoverDetails approval={selectedApproval} previousStepAttachments={previousStepAttachments} />
             )}
 
             {/* Onay Adımı ve Oluşturulma */}

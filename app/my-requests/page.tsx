@@ -43,7 +43,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { overtimeTypeLabels } from "@/lib/approvals/constants";
+import {
+  overtimeTypeLabels,
+  financeExpenseAreaLabels,
+  financeFundingSourceLabels,
+  accountingCapacityTypeLabels,
+} from "@/lib/approvals/constants";
 import { PdfViewerDialog } from "@/components/pdf-viewer-dialog";
 
 interface WorkflowDefinition {
@@ -87,6 +92,7 @@ interface Approver {
 interface WorkflowStep {
   step_order: number;
   name: string;
+  approver_type?: 'REQUESTER' | 'UNIT_HEAD' | 'STATIC_POSITION' | 'DYNAMIC_USER_LIST';
 }
 
 interface Approval {
@@ -95,6 +101,7 @@ interface Approval {
   comment: string | null;
   decided_at: string | null;
   created_at: string;
+  sequence_order: number;
   workflow_step: WorkflowStep;
   approver: Approver;
 }
@@ -233,6 +240,51 @@ interface Request {
       id: string;
       name: string;
     };
+  };
+  finance_approval_cover_request?: {
+    id: string;
+    subject: string;
+    request_date: string;
+    document_no: string;
+    account_available: boolean;
+    cash_flow_recorded: boolean;
+    expense_area: string;
+    funding_source: string;
+    has_rt_enerji_proforma: boolean;
+    items?: Array<{
+      id: string;
+      row_order: number;
+      item_date: string;
+      company_name: string;
+      payee_name: string;
+      item_subject: string;
+      invoice_amount: number;
+      payable_amount: number;
+    }>;
+  };
+  accounting_approval_cover_request?: {
+    id: string;
+    subject: string;
+    request_date: string;
+    document_no: string;
+    demirbas_registered: boolean;
+    has_dispatch_note: boolean;
+    has_delivery_info: boolean;
+    has_invoice_record: boolean;
+    has_accounting_prog_entry: boolean;
+    has_arvento_record: boolean;
+    paid_from_credit: boolean;
+    items?: Array<{
+      id: string;
+      row_order: number;
+      item_date: string;
+      company_name: string;
+      payee_name: string;
+      item_subject: string;
+      capacity_type: string;
+      invoice_amount: number;
+      payable_amount: number;
+    }>;
   };
   approval_letter_request?: {
     id: string;
@@ -399,6 +451,12 @@ export default function MyRequestsPage() {
     }
     if (request.approval_letter_request) {
       return request.approval_letter_request.subject || "-";
+    }
+    if (request.finance_approval_cover_request) {
+      return request.finance_approval_cover_request.subject || "-";
+    }
+    if (request.accounting_approval_cover_request) {
+      return request.accounting_approval_cover_request.subject || "-";
     }
     return "-";
   };
@@ -1219,6 +1277,197 @@ export default function MyRequestsPage() {
                 </>
               )}
 
+              {/* Finance Approval Cover specific fields */}
+              {selectedRequest.finance_approval_cover_request && (() => {
+                const fin = selectedRequest.finance_approval_cover_request;
+                const items = [...(fin.items || [])].sort((a, b) => a.row_order - b.row_order);
+                const totalInvoice = items.reduce((sum, it) => sum + Number(it.invoice_amount || 0), 0);
+                const totalPayable = items.reduce((sum, it) => sum + Number(it.payable_amount || 0), 0);
+                const fmt = (v: number) => new Intl.NumberFormat("tr-TR", {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                }).format(v);
+                return (
+                  <>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <p className="text-sm font-medium text-muted-foreground">Tarih</p>
+                        <p className="text-sm font-semibold">
+                          {format(new Date(fin.request_date), "d MMMM yyyy", { locale: tr })}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-muted-foreground">Sayı</p>
+                        <p className="text-sm font-semibold">{fin.document_no}</p>
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">Konu</p>
+                      <p className="text-sm font-semibold">{fin.subject}</p>
+                    </div>
+                    {items.length > 0 && (
+                      <div className="border rounded-lg p-3 space-y-2">
+                        <p className="text-sm font-semibold">Ödeme Kalemleri</p>
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-xs">
+                            <thead>
+                              <tr className="border-b text-left text-muted-foreground">
+                                <th className="py-1.5 pr-2 font-medium">Tarih</th>
+                                <th className="py-1.5 pr-2 font-medium">Firma</th>
+                                <th className="py-1.5 pr-2 font-medium">Ödenecek</th>
+                                <th className="py-1.5 pr-2 font-medium">Konu</th>
+                                <th className="py-1.5 pr-2 font-medium text-right">Fatura (TL)</th>
+                                <th className="py-1.5 font-medium text-right">Ödenecek (TL)</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {items.map((it) => (
+                                <tr key={it.id} className="border-b last:border-0 align-top">
+                                  <td className="py-1.5 pr-2 whitespace-nowrap">
+                                    {format(new Date(it.item_date), "d MMM yyyy", { locale: tr })}
+                                  </td>
+                                  <td className="py-1.5 pr-2">{it.company_name}</td>
+                                  <td className="py-1.5 pr-2">{it.payee_name}</td>
+                                  <td className="py-1.5 pr-2">{it.item_subject}</td>
+                                  <td className="py-1.5 pr-2 text-right whitespace-nowrap">
+                                    {fmt(Number(it.invoice_amount))}
+                                  </td>
+                                  <td className="py-1.5 text-right whitespace-nowrap">
+                                    {fmt(Number(it.payable_amount))}
+                                  </td>
+                                </tr>
+                              ))}
+                              <tr className="font-semibold">
+                                <td colSpan={4} className="py-1.5 pr-2 text-right">Toplam</td>
+                                <td className="py-1.5 pr-2 text-right whitespace-nowrap">{fmt(totalInvoice)}</td>
+                                <td className="py-1.5 text-right whitespace-nowrap">{fmt(totalPayable)}</td>
+                              </tr>
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+                    <div className="border rounded-lg p-3 space-y-2">
+                      <p className="text-sm font-semibold">Değerlendirme</p>
+                      <div className="grid grid-cols-2 gap-2 text-sm">
+                        <span className="text-muted-foreground">Hesapta Para:</span>
+                        <span className="font-medium">{fin.account_available ? "Evet" : "Hayır"}</span>
+                        <span className="text-muted-foreground">Nakit Akış Kaydı:</span>
+                        <span className="font-medium">{fin.cash_flow_recorded ? "Yapıldı" : "Yapılmadı"}</span>
+                        <span className="text-muted-foreground">Harcama Alanı:</span>
+                        <span className="font-medium">
+                          {financeExpenseAreaLabels[fin.expense_area] || fin.expense_area}
+                        </span>
+                        <span className="text-muted-foreground">Niteliği:</span>
+                        <span className="font-medium">
+                          {financeFundingSourceLabels[fin.funding_source] || fin.funding_source}
+                        </span>
+                        <span className="text-muted-foreground">RT Enerji Proforması:</span>
+                        <span className="font-medium">{fin.has_rt_enerji_proforma ? "Var" : "Yok"}</span>
+                      </div>
+                    </div>
+                  </>
+                );
+              })()}
+
+              {/* Accounting Approval Cover specific fields */}
+              {selectedRequest.accounting_approval_cover_request && (() => {
+                const acc = selectedRequest.accounting_approval_cover_request;
+                const items = [...(acc.items || [])].sort((a, b) => a.row_order - b.row_order);
+                const totalInvoice = items.reduce((sum, it) => sum + Number(it.invoice_amount || 0), 0);
+                const totalPayable = items.reduce((sum, it) => sum + Number(it.payable_amount || 0), 0);
+                const fmt = (v: number) => new Intl.NumberFormat("tr-TR", {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                }).format(v);
+                return (
+                  <>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <p className="text-sm font-medium text-muted-foreground">Tarih</p>
+                        <p className="text-sm font-semibold">
+                          {format(new Date(acc.request_date), "d MMMM yyyy", { locale: tr })}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-muted-foreground">Sayı</p>
+                        <p className="text-sm font-semibold">{acc.document_no}</p>
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">Konu</p>
+                      <p className="text-sm font-semibold">{acc.subject}</p>
+                    </div>
+                    {items.length > 0 && (
+                      <div className="border rounded-lg p-3 space-y-2">
+                        <p className="text-sm font-semibold">Ödeme Kalemleri</p>
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-xs">
+                            <thead>
+                              <tr className="border-b text-left text-muted-foreground">
+                                <th className="py-1.5 pr-2 font-medium">Tarih</th>
+                                <th className="py-1.5 pr-2 font-medium">Firma</th>
+                                <th className="py-1.5 pr-2 font-medium">Ödenecek</th>
+                                <th className="py-1.5 pr-2 font-medium">Konu</th>
+                                <th className="py-1.5 pr-2 font-medium">Kapasite</th>
+                                <th className="py-1.5 pr-2 font-medium text-right">Fatura (TL)</th>
+                                <th className="py-1.5 font-medium text-right">Ödenecek (TL)</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {items.map((it) => (
+                                <tr key={it.id} className="border-b last:border-0 align-top">
+                                  <td className="py-1.5 pr-2 whitespace-nowrap">
+                                    {format(new Date(it.item_date), "d MMM yyyy", { locale: tr })}
+                                  </td>
+                                  <td className="py-1.5 pr-2">{it.company_name}</td>
+                                  <td className="py-1.5 pr-2">{it.payee_name}</td>
+                                  <td className="py-1.5 pr-2">{it.item_subject}</td>
+                                  <td className="py-1.5 pr-2 whitespace-nowrap">
+                                    {accountingCapacityTypeLabels[it.capacity_type] || it.capacity_type}
+                                  </td>
+                                  <td className="py-1.5 pr-2 text-right whitespace-nowrap">
+                                    {fmt(Number(it.invoice_amount))}
+                                  </td>
+                                  <td className="py-1.5 text-right whitespace-nowrap">
+                                    {fmt(Number(it.payable_amount))}
+                                  </td>
+                                </tr>
+                              ))}
+                              <tr className="font-semibold">
+                                <td colSpan={5} className="py-1.5 pr-2 text-right">Toplam</td>
+                                <td className="py-1.5 pr-2 text-right whitespace-nowrap">{fmt(totalInvoice)}</td>
+                                <td className="py-1.5 text-right whitespace-nowrap">{fmt(totalPayable)}</td>
+                              </tr>
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+                    <div className="border rounded-lg p-3 space-y-2">
+                      <p className="text-sm font-semibold">Değerlendirme</p>
+                      <div className="grid grid-cols-2 gap-2 text-sm">
+                        <span className="text-muted-foreground">Demirbaş kaydı:</span>
+                        <span className="font-medium">{acc.demirbas_registered ? "Var" : "Yok"}</span>
+                        <span className="text-muted-foreground">İrsaliye:</span>
+                        <span className="font-medium">{acc.has_dispatch_note ? "Var" : "Yok"}</span>
+                        <span className="text-muted-foreground">Teslim alan/eden bilgisi:</span>
+                        <span className="font-medium">{acc.has_delivery_info ? "Var" : "Yok"}</span>
+                        <span className="text-muted-foreground">Fatura kaydı – İcmal:</span>
+                        <span className="font-medium">{acc.has_invoice_record ? "Var" : "Yok"}</span>
+                        <span className="text-muted-foreground">Muhasebe programına giriş:</span>
+                        <span className="font-medium">{acc.has_accounting_prog_entry ? "Yapıldı" : "Yapılmadı"}</span>
+                        <span className="text-muted-foreground">Arvento kaydı:</span>
+                        <span className="font-medium">{acc.has_arvento_record ? "Var" : "Yok"}</span>
+                        <span className="text-muted-foreground">Krediden mi ödeniyor?:</span>
+                        <span className="font-medium">{acc.paid_from_credit ? "Evet" : "Hayır"}</span>
+                      </div>
+                    </div>
+                  </>
+                );
+              })()}
+
+
               {/* Ek Dosyalar - tüm talep tipleri için */}
               {attachments.length > 0 && (
                 <div className="space-y-2">
@@ -1294,7 +1543,7 @@ export default function MyRequestsPage() {
                             </TableHeader>
                             <TableBody>
                               {selectedRequest.approvals
-                                .sort((a, b) => a.workflow_step.step_order - b.workflow_step.step_order)
+                                .sort((a, b) => a.sequence_order - b.sequence_order)
                                 .map((approval) => (
                                   <TableRow key={approval.id}>
                                     <TableCell className="font-medium">

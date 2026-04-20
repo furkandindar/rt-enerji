@@ -57,15 +57,25 @@ export async function GET() {
           stamp_request:stamp_requests(*, stamp:stamps(*)),
           travel_assignment_request:travel_assignment_requests(*, company:companies(*)),
           approval_letter_request:approval_letter_requests(*),
+          finance_approval_cover_request:finance_approval_cover_requests(
+            *,
+            items:finance_approval_cover_items(*)
+          ),
+          accounting_approval_cover_request:accounting_approval_cover_requests(
+            *,
+            items:accounting_approval_cover_items(*)
+          ),
           approvals:request_approvals(
             id,
             status,
             comment,
             decided_at,
             created_at,
+            sequence_order,
             workflow_step:workflow_steps(
               step_order,
-              name
+              name,
+              approver_type
             ),
             approver:employees!request_approvals_approver_employee_id_fkey(
               id,
@@ -86,11 +96,9 @@ export async function GET() {
     // Bekleyen onayları filtrele (PENDING ve sırası gelen)
     const pendingApprovals = allApprovals?.filter(approval => {
       const request = approval.request;
-      const step = approval.workflow_step;
       return approval.status === "PENDING" &&
              request &&
-             step &&
-             request.current_step === step.step_order;
+             request.current_step === approval.sequence_order;
     }) || [];
 
     // Onay geçmişini filtrele (APPROVED veya REJECTED)

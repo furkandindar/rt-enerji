@@ -4,7 +4,7 @@
 // ENUM Types (Database ile uyumlu)
 // ============================================================================
 
-export type ApproverType = 'REQUESTER' | 'UNIT_HEAD' | 'STATIC_POSITION';
+export type ApproverType = 'REQUESTER' | 'UNIT_HEAD' | 'STATIC_POSITION' | 'DYNAMIC_USER_LIST';
 export type RequestStatus = 'DRAFT' | 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED' | 'AWAITING_COMPLETION' | 'COMPLETED';
 export type ApprovalStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
 export type LeaveType = 'ANNUAL_LEAVE' | 'SHORT_LEAVE';
@@ -79,6 +79,7 @@ export interface RequestApproval {
   status: ApprovalStatus;
   comment: string | null;
   decided_at: string | null;
+  sequence_order: number; // Onay zincirindeki mutlak sıra (DYNAMIC_USER_LIST'te aynı step'e birden fazla satır olabilir)
   created_at: string;
 }
 
@@ -155,6 +156,10 @@ export interface ApprovalDecisionInput {
   decision: 'APPROVED' | 'REJECTED';
   comment?: string;
 }
+
+// Dinamik onaycı listesi input'u (DYNAMIC_USER_LIST approver type için)
+// workflow_step_id → seçilen employee_id'lerin sıralı listesi
+export type CreateRequestDynamicApprovers = Record<string, string[]>;
 
 // ============================================================================
 // Salary Advance Types
@@ -666,3 +671,135 @@ export interface CreateStampApprovalInput {
   stamp_position: StampPosition;
   description?: string;
 }
+
+
+// ============================================================================
+// Finance Approval Cover (Onay Kapağı Finans) Types
+// ============================================================================
+
+export type FinanceExpenseArea =
+  | 'ANA_SAHA'
+  | 'ELEKTRIKSEL_KAPASITE_ARTISI'
+  | 'YEKA';
+
+export type FinanceFundingSource =
+  | 'KREDI'
+  | 'OZ_KAYNAK'
+  | 'NAKIT_FAZLASI'
+  | 'DIGER';
+
+export interface FinanceApprovalCoverItem {
+  id: string;
+  finance_request_id: string;
+  row_order: number;
+  item_date: string;
+  company_name: string;
+  payee_name: string;
+  item_subject: string;
+  invoice_amount: number;
+  payable_amount: number;
+  created_at: string;
+}
+
+export interface FinanceApprovalCoverRequest {
+  id: string;
+  request_id: string;
+  subject: string;
+  request_date: string;
+  document_no: string;
+  account_available: boolean;
+  cash_flow_recorded: boolean;
+  expense_area: FinanceExpenseArea;
+  funding_source: FinanceFundingSource;
+  has_rt_enerji_proforma: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateFinanceApprovalCoverItemInput {
+  item_date: string;
+  company_name: string;
+  payee_name: string;
+  item_subject: string;
+  invoice_amount: number;
+  payable_amount: number;
+}
+
+export interface CreateFinanceApprovalCoverInput {
+  subject: string;
+  request_date: string;
+  document_no: string;
+  account_available: boolean;
+  cash_flow_recorded: boolean;
+  expense_area: FinanceExpenseArea;
+  funding_source: FinanceFundingSource;
+  has_rt_enerji_proforma: boolean;
+  items: CreateFinanceApprovalCoverItemInput[];
+  dynamic_approvers?: CreateRequestDynamicApprovers;
+}
+
+// ============================================================================
+// ONAY KAPAĞI MUHASEBE (Accounting Approval Cover) - Tipler
+// ============================================================================
+
+export type AccountingCapacityType =
+  | 'KAPASITE'
+  | 'ANASAHA'
+  | 'YEKA';
+
+export interface AccountingApprovalCoverItem {
+  id: string;
+  accounting_request_id: string;
+  row_order: number;
+  item_date: string;
+  company_name: string;
+  payee_name: string;
+  item_subject: string;
+  capacity_type: AccountingCapacityType;
+  invoice_amount: number;
+  payable_amount: number;
+  created_at: string;
+}
+
+export interface AccountingApprovalCoverRequest {
+  id: string;
+  request_id: string;
+  subject: string;
+  request_date: string;
+  document_no: string;
+  demirbas_registered: boolean;
+  has_dispatch_note: boolean;
+  has_delivery_info: boolean;
+  has_invoice_record: boolean;
+  has_accounting_prog_entry: boolean;
+  has_arvento_record: boolean;
+  paid_from_credit: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateAccountingApprovalCoverItemInput {
+  item_date: string;
+  company_name: string;
+  payee_name: string;
+  item_subject: string;
+  capacity_type: AccountingCapacityType;
+  invoice_amount: number;
+  payable_amount: number;
+}
+
+export interface CreateAccountingApprovalCoverInput {
+  subject: string;
+  request_date: string;
+  document_no: string;
+  demirbas_registered: boolean;
+  has_dispatch_note: boolean;
+  has_delivery_info: boolean;
+  has_invoice_record: boolean;
+  has_accounting_prog_entry: boolean;
+  has_arvento_record: boolean;
+  paid_from_credit: boolean;
+  items: CreateAccountingApprovalCoverItemInput[];
+  dynamic_approvers?: CreateRequestDynamicApprovers;
+}
+

@@ -2,7 +2,7 @@
 // Onaycı belirleme, approval chain oluşturma ve workflow yetkilendirme
 
 import { SupabaseClient } from '@supabase/supabase-js';
-import { WorkflowStep, WorkflowDefinition, StepCondition } from './types';
+import { WorkflowStep, WorkflowDefinition, StepCondition, CreateRequestDynamicApprovers } from './types';
 
 // ============================================================================
 // Types
@@ -277,13 +277,16 @@ function shouldSkipStep(
  * gerçekten onay verdikten sonra ilerideki SIGN_ONLY adımları otomatik onaylanır.
  *
  * @param formData - Opsiyonel. Koşullu adımlar için süreç-spesifik form verisi.
+ * @param dynamicApprovers - Opsiyonel. DYNAMIC_USER_LIST adımları için workflow_step_id → sıralı employee_id listesi eşlemesi.
+ *                           Liste boş/tanımsız olan DYNAMIC_USER_LIST adımları atlanır.
  */
 export async function createApprovalChain(
   supabase: SupabaseClient,
   requestId: string,
   workflowDefinitionId: string,
   requesterEmployeeId: string,
-  formData?: Record<string, unknown>
+  formData?: Record<string, unknown>,
+  dynamicApprovers?: CreateRequestDynamicApprovers
 ): Promise<void> {
 
   // 1. Workflow adımlarını al
@@ -297,10 +300,41 @@ export async function createApprovalChain(
     throw new Error('Failed to fetch workflow steps');
   }
 
-  // 2. Her adım için onaycıyı belirle ve approval kaydı oluştur
+  // 2. Her adım için onaycı(lar)ı belirle ve approval kayıtları oluştur
   const approvals = [];
+  let sequenceCounter = 0; // DYNAMIC_USER_LIST adımları dahil mutlak sıra
 
   for (const step of steps) {
+    // Koşullu adım kontrolü (tüm tipler için geçerli)
+    const isConditionNotMet = shouldSkipStep(
+      (step as WorkflowStep).condition,
+      formData
+    );
+
+    // DYNAMIC_USER_LIST: tek step, N sıralı approval satırı
+    if (step.approver_type === 'DYNAMIC_USER_LIST') {
+      // Koşul sağlanmıyorsa VEYA liste boş/tanımsız ise adım tamamen atlanır
+      if (isConditionNotMet) continue;
+
+      const selectedIds = dynamicApprovers?.[step.id] ?? [];
+      if (selectedIds.length === 0) continue;
+
+      for (const employeeId of selectedIds) {
+        sequenceCounter++;
+        approvals.push({
+          request_id: requestId,
+          workflow_step_id: step.id,
+          approver_employee_id: employeeId,
+          status: 'PENDING',
+          decided_at: null,
+          sequence_order: sequenceCounter,
+          action_type: step.action_type,
+        });
+      }
+      continue;
+    }
+
+    // Standart tipler (REQUESTER, UNIT_HEAD, STATIC_POSITION): tek approval satırı
     const approverEmployeeId = await determineApprover(
       supabase,
       step as WorkflowStep,
@@ -316,19 +350,16 @@ export async function createApprovalChain(
     const isFirstRequesterStep = step.step_order === 1 && step.approver_type === 'REQUESTER';
 
     // 2. Koşullu adım: condition sağlanmıyorsa atla (V4)
-    const isConditionNotMet = shouldSkipStep(
-      (step as WorkflowStep).condition,
-      formData
-    );
-
     const autoApproveThisStep = isFirstRequesterStep || isConditionNotMet;
 
+    sequenceCounter++;
     approvals.push({
       request_id: requestId,
       workflow_step_id: step.id,
       approver_employee_id: approverEmployeeId,
       status: autoApproveThisStep ? 'APPROVED' : 'PENDING',
       decided_at: autoApproveThisStep ? new Date().toISOString() : null,
+      sequence_order: sequenceCounter,
       action_type: step.action_type, // Forward-approve kontrolü için
     });
   }

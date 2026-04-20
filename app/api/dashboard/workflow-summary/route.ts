@@ -22,12 +22,12 @@ export async function GET() {
       return NextResponse.json({ error: "User not linked to employee" }, { status: 400 });
     }
 
-    // 1. Bekleyen onaylar sayısı (current_step'i kontrol et)
+    // 1. Bekleyen onaylar sayısı (current_step'i kontrol et — sequence_order ile)
     const { data: pendingApprovals } = await supabase
       .from("request_approvals")
       .select(`
         id,
-        workflow_step:workflow_steps(step_order),
+        sequence_order,
         request:requests(current_step, status)
       `)
       .eq("approver_employee_id", appUser.employee_id)
@@ -35,12 +35,10 @@ export async function GET() {
 
     // Sadece sırası gelenleri say
     const activePendingCount = pendingApprovals?.filter(a => {
-      // Supabase join sonuçları: tek relation tek obje, çoklu relation array döner
       const request = Array.isArray(a.request) ? a.request[0] : a.request;
-      const step = Array.isArray(a.workflow_step) ? a.workflow_step[0] : a.workflow_step;
-      return request && step &&
+      return request &&
              request.status === 'PENDING' &&
-             request.current_step === step.step_order;
+             request.current_step === a.sequence_order;
     }).length || 0;
 
     // 2. Kullanıcının talepleri (status'a göre grupla)

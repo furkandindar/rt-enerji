@@ -175,15 +175,11 @@ export async function POST(request: Request) {
 
       const { data: nextApproval } = await supabase
         .from("request_approvals")
-        .select(`
-          approver_employee_id,
-          workflow_step:workflow_steps(step_order)
-        `)
+        .select("approver_employee_id")
         .eq("request_id", newRequest.id)
         .eq("status", "PENDING")
-        .order("created_at", { ascending: true })
-        .limit(1)
-        .single();
+        .eq("sequence_order", currentStep)
+        .maybeSingle();
 
       if (nextApproval) {
         const { data: requester } = await supabase

@@ -109,8 +109,9 @@ create table if not exists public.request_approvals (
   decided_at          timestamptz,                      -- Karar zamanı
   created_at          timestamptz not null default now(),
 
-  -- Her talep için her adım bir kez olmalı
-  unique (request_id, workflow_step_id)
+  -- DYNAMIC_USER_LIST adımları için aynı step'e birden fazla onaycı eklenebilir;
+  -- sadece aynı onaycının aynı step'te iki kez olmaması gerekir.
+  unique (request_id, workflow_step_id, approver_employee_id)
 );
 
 create index if not exists idx_request_approvals_request

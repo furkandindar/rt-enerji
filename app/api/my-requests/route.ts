@@ -45,6 +45,14 @@ export async function GET(request: NextRequest) {
         stamp_request:stamp_requests(*, stamp:stamps(*)),
         travel_assignment_request:travel_assignment_requests(*, company:companies(*)),
         approval_letter_request:approval_letter_requests(*),
+        finance_approval_cover_request:finance_approval_cover_requests(
+          *,
+          items:finance_approval_cover_items(*)
+        ),
+        accounting_approval_cover_request:accounting_approval_cover_requests(
+          *,
+          items:accounting_approval_cover_items(*)
+        ),
         requester:employees!requester_employee_id(
           id,
           first_name,
@@ -65,9 +73,11 @@ export async function GET(request: NextRequest) {
           comment,
           decided_at,
           created_at,
+          sequence_order,
           workflow_step:workflow_steps(
             step_order,
-            name
+            name,
+            approver_type
           ),
           approver:employees!approver_employee_id(
             id,

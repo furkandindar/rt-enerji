@@ -240,6 +240,106 @@ export type Database = {
         }
         Relationships: []
       }
+      finance_approval_cover_items: {
+        Row: {
+          company_name: string
+          created_at: string
+          finance_request_id: string
+          id: string
+          invoice_amount: number
+          item_date: string
+          item_subject: string
+          payable_amount: number
+          payee_name: string
+          row_order: number
+        }
+        Insert: {
+          company_name: string
+          created_at?: string
+          finance_request_id: string
+          id?: string
+          invoice_amount: number
+          item_date: string
+          item_subject: string
+          payable_amount: number
+          payee_name: string
+          row_order: number
+        }
+        Update: {
+          company_name?: string
+          created_at?: string
+          finance_request_id?: string
+          id?: string
+          invoice_amount?: number
+          item_date?: string
+          item_subject?: string
+          payable_amount?: number
+          payee_name?: string
+          row_order?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "finance_approval_cover_items_finance_request_id_fkey"
+            columns: ["finance_request_id"]
+            isOneToOne: false
+            referencedRelation: "finance_approval_cover_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      finance_approval_cover_requests: {
+        Row: {
+          account_available: boolean
+          cash_flow_recorded: boolean
+          created_at: string
+          document_no: string
+          expense_area: Database["public"]["Enums"]["finance_expense_area"]
+          funding_source: Database["public"]["Enums"]["finance_funding_source"]
+          has_rt_enerji_proforma: boolean
+          id: string
+          request_date: string
+          request_id: string
+          subject: string
+          updated_at: string
+        }
+        Insert: {
+          account_available: boolean
+          cash_flow_recorded: boolean
+          created_at?: string
+          document_no: string
+          expense_area: Database["public"]["Enums"]["finance_expense_area"]
+          funding_source: Database["public"]["Enums"]["finance_funding_source"]
+          has_rt_enerji_proforma: boolean
+          id?: string
+          request_date?: string
+          request_id: string
+          subject: string
+          updated_at?: string
+        }
+        Update: {
+          account_available?: boolean
+          cash_flow_recorded?: boolean
+          created_at?: string
+          document_no?: string
+          expense_area?: Database["public"]["Enums"]["finance_expense_area"]
+          funding_source?: Database["public"]["Enums"]["finance_funding_source"]
+          has_rt_enerji_proforma?: boolean
+          id?: string
+          request_date?: string
+          request_id?: string
+          subject?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "finance_approval_cover_requests_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: true
+            referencedRelation: "requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       grade_levels: {
         Row: {
           band: number
@@ -978,6 +1078,7 @@ export type Database = {
           decided_at: string | null
           id: string
           request_id: string
+          sequence_order: number
           status: Database["public"]["Enums"]["approval_status"]
           workflow_step_id: string
         }
@@ -988,6 +1089,7 @@ export type Database = {
           decided_at?: string | null
           id?: string
           request_id: string
+          sequence_order: number
           status?: Database["public"]["Enums"]["approval_status"]
           workflow_step_id: string
         }
@@ -998,6 +1100,7 @@ export type Database = {
           decided_at?: string | null
           id?: string
           request_id?: string
+          sequence_order?: number
           status?: Database["public"]["Enums"]["approval_status"]
           workflow_step_id?: string
         }
@@ -1861,8 +1964,14 @@ export type Database = {
     }
     Enums: {
       approval_status: "PENDING" | "APPROVED" | "REJECTED"
-      approver_type: "REQUESTER" | "UNIT_HEAD" | "STATIC_POSITION"
+      approver_type:
+        | "REQUESTER"
+        | "UNIT_HEAD"
+        | "STATIC_POSITION"
+        | "DYNAMIC_USER_LIST"
       checklist_status: "DONE" | "NOT_DONE" | "NA"
+      finance_expense_area: "ANA_SAHA" | "ELEKTRIKSEL_KAPASITE_ARTISI" | "YEKA"
+      finance_funding_source: "KREDI" | "OZ_KAYNAK" | "NAKIT_FAZLASI" | "DIGER"
       leave_type: "ANNUAL_LEAVE" | "SHORT_LEAVE"
       notification_type:
         | "APPROVAL_REQUIRED"
@@ -2015,8 +2124,15 @@ export const Constants = {
   public: {
     Enums: {
       approval_status: ["PENDING", "APPROVED", "REJECTED"],
-      approver_type: ["REQUESTER", "UNIT_HEAD", "STATIC_POSITION"],
+      approver_type: [
+        "REQUESTER",
+        "UNIT_HEAD",
+        "STATIC_POSITION",
+        "DYNAMIC_USER_LIST",
+      ],
       checklist_status: ["DONE", "NOT_DONE", "NA"],
+      finance_expense_area: ["ANA_SAHA", "ELEKTRIKSEL_KAPASITE_ARTISI", "YEKA"],
+      finance_funding_source: ["KREDI", "OZ_KAYNAK", "NAKIT_FAZLASI", "DIGER"],
       leave_type: ["ANNUAL_LEAVE", "SHORT_LEAVE"],
       notification_type: [
         "APPROVAL_REQUIRED",

@@ -4,15 +4,37 @@ Bu doküman, RT Enerji Workflow Engine V3'e yeni bir süreç eklemek isteyen gel
 
 ## 📋 İçindekiler
 
-1. [Genel Bakış](#genel-bakış)
-2. [Mimari Yapı](#mimari-yapı)
-3. [Implementasyon Fazları](#implementasyon-fazları)
-4. [Faz 1: Veritabanı](#faz-1-veritabanı)
-5. [Faz 2: Backend](#faz-2-backend)
-6. [Faz 3: Frontend](#faz-3-frontend)
-7. [Faz 4: PDF](#faz-4-pdf)
-8. [Checklist](#checklist)
-9. [Örnek Süreçler](#örnek-süreçler)
+1. [Çalışma Prensibi](#çalışma-prensibi)
+2. [Genel Bakış](#genel-bakış)
+3. [Mimari Yapı](#mimari-yapı)
+4. [Implementasyon Fazları](#implementasyon-fazları)
+5. [Faz 1: Veritabanı](#faz-1-veritabanı)
+6. [Faz 2: Backend](#faz-2-backend)
+7. [Faz 3: Frontend](#faz-3-frontend)
+8. [Faz 4: PDF](#faz-4-pdf)
+9. [Checklist](#checklist)
+10. [Örnek Süreçler](#örnek-süreçler)
+11. [Dinamik Onaycılar (DYNAMIC_USER_LIST)](#dinamik-onaycılar-dynamic_user_list)
+
+---
+
+## Çalışma Prensibi
+
+> **⚠️ ÖNEMLİ — AI Asistanı İçin Kurallar**
+>
+> Bu projede süreç implementasyonu yapılırken **AI asistanı Supabase'e doğrudan yazma işlemi yapmaz.** Aşağıdaki kurallara uyulur:
+>
+> 1. **SQL'ler elle çalıştırılır.** Tüm `INSERT`, `CREATE TABLE`, `ALTER TABLE`, `CREATE POLICY` vb. komutlar kullanıcı tarafından **Supabase SQL Editor** üzerinden manuel olarak çalıştırılır. AI asistan Supabase MCP/API aracılığıyla yazma işlemi yapmaz.
+>
+> 2. **AI'ın görevi SQL üretmektir.** Her faz için çalıştırılmaya hazır, kopyala-yapıştır edilebilir SQL blokları verilir. Kullanıcı bu SQL'leri inceler ve kendisi uygular.
+>
+> 3. **İstisna — `workflow_steps` INSERT'leri AI tarafından yazılmaz.** Bu tablodaki kayıtlar `static_position_id` seçimi gerektirdiği için **tamamen kullanıcı tarafından elle yazılır**. AI asistan `workflow_steps` için SQL üretmez; sadece sürecin kaç adımdan oluşacağı ve her adımın hangi `approver_type` / `action_type` / `form_section_key` değerlerini alacağı konusunda **metinsel öneri** sunar. Kullanıcı bu öneriye göre INSERT'leri kendisi yazar. Diğer tüm SQL'ler (`workflow_definitions`, `[process]_requests` tablosu, RLS politikaları, `workflow_step_attachments` vb.) AI tarafından tam olarak üretilir.
+>
+> 4. **Okuma işlemleri serbesttir.** Mevcut şemayı, pozisyonları veya test verisini anlamak için `SELECT` sorguları AI tarafından çalıştırılabilir; ancak yazma (`INSERT`/`UPDATE`/`DELETE`/`CREATE`/`ALTER`) komutları her zaman kullanıcıya bırakılır.
+>
+> 5. **Kod tarafındaki değişiklikler (TypeScript, React, API route'ları vb.) AI tarafından yapılır.** Bu kısıtlama yalnızca veritabanı yazma işlemlerini kapsar.
+>
+> 6. **Her sürece ek dosya desteği zorunludur.** İstisnasız her yeni süreç, `workflow_step_attachments` konfigürasyonuyla birlikte gelir ve talep formunda `<AttachmentUploader>` component'i bulundurur. Ek dosya alanı genellikle ilk adıma (Talep Eden) tanımlanır; is_required varsayılan olarak `false` olsa da bazı süreçlerde zorunlu olabilir. Detaylar için bkz. [Adım 1.5](#adım-15-ek-dosya-konfigürasyonu-zorunlu) ve [Adım 3.2](#adım-32-ek-dosya-yükleme-alanı-ekle-zorunlu).
 
 ---
 
@@ -96,6 +118,8 @@ Her yeni süreç 4 fazda implement edilir:
 
 ## Faz 1: Veritabanı
 
+> **🔔 Hatırlatma:** Bu fazdaki tüm SQL'ler **kullanıcı tarafından Supabase SQL Editor üzerinden manuel** çalıştırılır. AI asistan sadece şablon/parametre tamamlanmış SQL üretir, Supabase'e yazma yapmaz. Ayrıntı için [Çalışma Prensibi](#çalışma-prensibi) bölümüne bakın.
+
 ### Adım 1.1: Workflow Definition Oluştur
 
 ```sql
@@ -111,7 +135,12 @@ VALUES (
 
 ### Adım 1.2: Workflow Steps Oluştur
 
+> **🛑 Bu INSERT'leri AI yazmaz — kullanıcı elle yazar.**
+>
+> `workflow_steps` tablosundaki kayıtlar `static_position_id` seçimi gerektirdiği için tamamen kullanıcı tarafından Supabase SQL Editor'de yazılır. AI asistan sadece adımların **yapısını** (kaç adım, her adımın `approver_type` / `action_type` / `form_section_key` değerleri) önerir; kullanıcı doğru pozisyonları seçerek INSERT'leri kendisi oluşturur. Aşağıdaki blok **yalnızca referans şablondur**.
+
 ```sql
+-- 📌 REFERANS ŞABLON (kullanıcı tarafından doldurulur)
 DO $$
 DECLARE
   v_workflow_id UUID;
@@ -119,17 +148,17 @@ BEGIN
   SELECT id INTO v_workflow_id FROM public.workflow_definitions WHERE code = 'PROCESS_CODE';
 
   -- Adım 1: Talep Eden (her zaman FILL_AND_SIGN)
-  INSERT INTO public.workflow_steps 
+  INSERT INTO public.workflow_steps
     (workflow_definition_id, step_order, name, approver_type, action_type, form_section_key, is_required)
-  VALUES 
+  VALUES
     (v_workflow_id, 1, 'Talep Eden', 'REQUESTER', 'FILL_AND_SIGN', 'request_info', true);
 
   -- Adım 2+: Onaycılar (genellikle SIGN_ONLY)
-  INSERT INTO public.workflow_steps 
+  INSERT INTO public.workflow_steps
     (workflow_definition_id, step_order, name, approver_type, static_position_id, action_type, is_required)
-  VALUES 
+  VALUES
     (v_workflow_id, 2, 'Personel', 'STATIC_POSITION', '<position_uuid>', 'SIGN_ONLY', true);
-  
+
   -- Diğer adımlar...
 END $$;
 ```
@@ -138,6 +167,7 @@ END $$;
 - `REQUESTER`: Talep eden kişi
 - `UNIT_HEAD`: Talep edenin birim amiri (escalation mantığı ile)
 - `STATIC_POSITION`: Sabit pozisyon (static_position_id gerekli)
+- `DYNAMIC_USER_LIST`: Talep oluştururken kullanıcı tarafından seçilen ilgili kişiler listesi. Tek bir `workflow_step` kaydı, `request_approvals` tablosunda N sıralı satıra açılır. Detaylar için bkz. [Dinamik Onaycılar](#dinamik-onaycılar-dynamic_user_list).
 
 > **⚠️ Önemli: Talep Eden = Onaycı Durumu**
 >
@@ -205,9 +235,11 @@ CREATE POLICY "[process]_requests_insert" ON public.[process]_requests
   );
 ```
 
-### Adım 1.5: Ek Dosya Konfigürasyonu
+### Adım 1.5: Ek Dosya Konfigürasyonu (ZORUNLU)
 
-Her süreçte kullanıcıların ek dosya yükleyebilmesi için `workflow_step_attachments` tablosuna konfigürasyon eklenir. Genellikle ilk adım (Talep Eden) için tanımlanır, ancak herhangi bir adımda ek dosya istenebilir.
+> **✅ Bu adım her süreç için zorunludur.** İstisnasız her yeni süreç `workflow_step_attachments` konfigürasyonuyla gelir. Bu adım atlandığında kullanıcı talep formunda ek dosya yükleme alanı göremez.
+
+`workflow_step_attachments` tablosuna konfigürasyon eklenir. Genellikle ilk adım (Talep Eden) için tanımlanır, ancak herhangi bir adımda ek dosya istenebilir. Dosya yükleme zorunluluğu (`is_required`) sürece göre `true` veya `false` olabilir.
 
 ```sql
 -- Talep Eden adımına ek dosya alanı ekle
@@ -374,9 +406,11 @@ export default function NewProcessPage() {
 }
 ```
 
-### Adım 3.2: Ek Dosya Yükleme Alanı Ekle
+### Adım 3.2: Ek Dosya Yükleme Alanı Ekle (ZORUNLU)
 
-Talep formuna `<AttachmentUploader>` component'ini ekleyerek kullanıcıların ek dosya yüklemesini sağla. Component, Faz 1'de tanımlanan `workflow_step_attachments` konfigürasyonuna göre otomatik çalışır.
+> **✅ Bu adım her süreç için zorunludur.** Faz 1'de eklenen `workflow_step_attachments` konfigürasyonunun kullanıcıya yansıması bu component ile sağlanır.
+
+Talep formuna `<AttachmentUploader>` component'ini ekleyerek kullanıcıların ek dosya yüklemesini sağla. Component, Faz 1'de tanımlanan `workflow_step_attachments` konfigürasyonuna göre otomatik çalışır (dosya tipi, boyut ve sayı kontrolleri).
 
 ```typescript
 import { AttachmentUploader } from "@/components/attachment-uploader";
@@ -521,6 +555,89 @@ if (request.[process]_request) {
 |-------|---------|-------------|
 | Maaş Avans Talebi | [salary-advance.md](./salary-advance.md) | Düşük |
 | Yıllık İzin Talebi | (mevcut sistem) | Düşük |
+
+---
+
+## Dinamik Onaycılar (DYNAMIC_USER_LIST)
+
+Bazı süreçlerde onay zincirinin bir kısmı **talep oluşturulurken** kullanıcı tarafından belirlenir (örn: "ilgili kişiler"). Bu tür adımlar için workflow engine `DYNAMIC_USER_LIST` approver type'ını destekler.
+
+### Ne Zaman Kullanılır?
+
+- Talep eden, onay akışına kendi seçeceği bir veya birden fazla kişi eklemek istediğinde
+- Bu kişiler normal onaycı gibi davranır (`FILL_AND_SIGN` veya `SIGN_ONLY`)
+- Seçim **opsiyonel** olabilir (hiç seçilmezse adım atlanır)
+
+### Çalışma Mantığı
+
+`workflow_steps` tablosunda **tek bir adım** olarak tanımlanır, ancak talep oluşturulduğunda `request_approvals` tablosunda **N ayrı satıra** genişler. Tüm satırlar aynı `workflow_step_id`'yi paylaşır, `sequence_order` kolonu ile sıralanır.
+
+**Örnek tanım:**
+```
+step_order=1  | Talep Eden      | REQUESTER          | FILL_AND_SIGN
+step_order=2  | İlgili Kişiler  | DYNAMIC_USER_LIST  | FILL_AND_SIGN   ← Dinamik
+step_order=3  | Finans Müdürü   | STATIC_POSITION    | SIGN_ONLY
+step_order=4  | Genel Müdür     | STATIC_POSITION    | SIGN_ONLY
+```
+
+**Talep oluşturulduğunda (3 ilgili kişi seçilmişse) `request_approvals`:**
+```
+sequence_order=1  | step_1 | requester       | APPROVED (auto)
+sequence_order=2  | step_2 | related_person_1| PENDING ← sıradaki
+sequence_order=3  | step_2 | related_person_2| PENDING
+sequence_order=4  | step_2 | related_person_3| PENDING
+sequence_order=5  | step_3 | finance_manager | PENDING
+sequence_order=6  | step_4 | general_manager | PENDING
+```
+
+### Temel Kurallar
+
+1. **Sıralama:** İlgili kişiler kullanıcının ekleme sırasına göre, tek tek sırayla onay verir.
+2. **Bildirim:** İlk ilgili kişi APPROVED olmadan ikinciye bildirim gitmez (mevcut ardışık akışla aynı).
+3. **Reddetme:** İlgili kişilerden biri reddederse **tüm süreç reddedilir** (normal davranış).
+4. **Opsiyonellik:** Seçilen kişi listesi boşsa bu adıma hiç satır eklenmez, sonraki adıma geçilir.
+5. **Duplikasyon:** Aynı kişi birden fazla kez seçilemez (UI tarafında engellenir).
+6. **Escalation:** Kullanıcı bilinçli seçim yaptığı için `STATIC_POSITION` / `UNIT_HEAD` için geçerli olan "talep eden = onaycı" alternatif arama mantığı çalıştırılmaz.
+
+### Süreç Eklerken Ek Adımlar
+
+`DYNAMIC_USER_LIST` kullanan bir sürecin standart 4 faz dışında şunları da yapması gerekir:
+
+- **Faz 1:** `workflow_steps` tanımına ilgili adım `DYNAMIC_USER_LIST` tipinde eklenir (kullanıcı tarafından elle).
+- **Faz 2:** API POST endpoint'i request body'de `dynamic_approvers` alanını bekler:
+  ```ts
+  {
+    // form alanları...
+    dynamic_approvers: {
+      [workflowStepId: string]: string[]  // sıralı employee_id listesi
+    }
+  }
+  ```
+  Bu değer `createApprovalChain`'e parametre olarak verilir.
+- **Faz 3:** Talep formunda `<UserMultiPicker>` component'i kullanılır.
+- **Faz 4:** PDF template ilgili adım için dinamik sayıda imza bloğu render etmelidir.
+
+### Frontend Component
+
+Kullanıcı seçimi için reusable `<UserMultiPicker>` component'i kullanılır. Çalışan arama + multi-select + sıra değiştirme özelliği sunar.
+
+```tsx
+import { UserMultiPicker } from "@/components/user-multi-picker";
+
+<UserMultiPicker
+  value={relatedPersonIds}        // string[] — employee_id listesi (sıralı)
+  onChange={setRelatedPersonIds}
+  excludeEmployeeIds={[currentUserEmployeeId]}  // kendini seçmeyi engelle
+  label="İlgili Kişiler"
+/>
+```
+
+### Reddetme Davranışı
+
+İlgili kişilerden biri `REJECTED` seçerse:
+- Tüm talebin `status = REJECTED` olur (normal akışla aynı)
+- Kalan ilgili kişilere ve sonraki adımlara bildirim gönderilmez
+- Onay zincirinin geri kalan satırları PENDING kalır (audit için silinmez)
 
 ---
 

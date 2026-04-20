@@ -26,6 +26,7 @@ export interface Approver {
 export interface WorkflowStep {
   step_order: number;
   name: string;
+  approver_type?: 'REQUESTER' | 'UNIT_HEAD' | 'STATIC_POSITION' | 'DYNAMIC_USER_LIST';
 }
 
 export interface Approval {
@@ -34,6 +35,7 @@ export interface Approval {
   comment: string | null;
   decided_at: string | null;
   created_at: string;
+  sequence_order: number;
   workflow_step: WorkflowStep;
   approver: Approver;
 }
@@ -193,6 +195,51 @@ export interface PendingApproval {
       remaining_payment: string | null;
       requested_payment_amount: string | null;
       remaining_after_payment: string | null;
+    };
+    finance_approval_cover_request?: {
+      id: string;
+      subject: string;
+      request_date: string;
+      document_no: string;
+      account_available: boolean;
+      cash_flow_recorded: boolean;
+      expense_area: string;
+      funding_source: string;
+      has_rt_enerji_proforma: boolean;
+      items?: Array<{
+        id: string;
+        row_order: number;
+        item_date: string;
+        company_name: string;
+        payee_name: string;
+        item_subject: string;
+        invoice_amount: number;
+        payable_amount: number;
+      }>;
+    };
+    accounting_approval_cover_request?: {
+      id: string;
+      subject: string;
+      request_date: string;
+      document_no: string;
+      demirbas_registered: boolean;
+      has_dispatch_note: boolean;
+      has_delivery_info: boolean;
+      has_invoice_record: boolean;
+      has_accounting_prog_entry: boolean;
+      has_arvento_record: boolean;
+      paid_from_credit: boolean;
+      items?: Array<{
+        id: string;
+        row_order: number;
+        item_date: string;
+        company_name: string;
+        payee_name: string;
+        item_subject: string;
+        capacity_type: string;
+        invoice_amount: number;
+        payable_amount: number;
+      }>;
     };
     approvals?: Approval[];
   };

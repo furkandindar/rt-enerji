@@ -54,7 +54,7 @@ export function ApprovalHistoryAccordion({ approvals }: ApprovalHistoryAccordion
                 </TableHeader>
                 <TableBody>
                   {approvals
-                    .sort((a, b) => a.workflow_step.step_order - b.workflow_step.step_order)
+                    .sort((a, b) => a.sequence_order - b.sequence_order)
                     .map((approval) => (
                       <TableRow key={approval.id}>
                         <TableCell className="font-medium">

@@ -69,6 +69,31 @@ export const overtimeTypeLabels: Record<string, string> = {
   STAFF_SHORTAGE: "Olağan Durumlar",
 };
 
+export const financeExpenseAreaLabels: Record<string, string> = {
+  ANA_SAHA: "Ana Saha",
+  ELEKTRIKSEL_KAPASITE_ARTISI: "Elektriksel Kapasite Artışı",
+  YEKA: "YEKA",
+};
+
+export const financeFundingSourceLabels: Record<string, string> = {
+  KREDI: "Kredi",
+  OZ_KAYNAK: "Öz Kaynak",
+  NAKIT_FAZLASI: "Nakit Fazlası",
+  DIGER: "Diğer",
+};
+
+export const accountingCapacityTypeLabels: Record<string, string> = {
+  KAPASITE: "Kapasite",
+  ANASAHA: "Ana Saha",
+  YEKA: "YEKA",
+};
+
+export const accountingCapacityTypeShortLabels: Record<string, string> = {
+  KAPASITE: "K",
+  ANASAHA: "A",
+  YEKA: "YEKA",
+};
+
 export const overtimeReasonLabels: Record<string, string> = {
   SHIFT_OUTSIDE: "Vardiya Dışı",
   NON_CONTINUOUS: "Sürekli Olmayan",

@@ -180,13 +180,8 @@ export async function POST(request: Request) {
       });
 
       const pendingApproval = createdRequest.approvals.find(
-        (a: { status: string; workflow_step: { step_order: number } | { step_order: number }[] }) => {
-          // workflow_step array veya obje olabilir
-          const stepOrder = Array.isArray(a.workflow_step)
-            ? a.workflow_step[0]?.step_order
-            : a.workflow_step?.step_order;
-          return a.status === 'PENDING' && stepOrder === currentStep;
-        }
+        (a: { status: string; sequence_order: number }) =>
+          a.status === 'PENDING' && a.sequence_order === currentStep
       );
 
       console.log("Found pending approval:", pendingApproval);

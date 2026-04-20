@@ -8,6 +8,8 @@ import { SeparationPDFTemplate } from './separation-pdf-template';
 import { RequestFormPDFTemplate } from './request-form-pdf-template';
 import { TravelAssignmentPDFTemplate } from './travel-assignment-pdf-template';
 import { ApprovalLetterPDFTemplate } from './approval-letter-pdf-template';
+import { FinanceApprovalCoverPDFTemplate } from './finance-approval-cover-pdf-template';
+import { AccountingApprovalCoverPDFTemplate } from './accounting-approval-cover-pdf-template';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { SignatureFont, DEFAULT_SIGNATURE_FONT } from '@/lib/signature/types';
 
@@ -65,15 +67,25 @@ export async function generateRequestPDF(
       request_form_request:request_form_requests(*),
       travel_assignment_request:travel_assignment_requests(*, company:companies(*)),
       approval_letter_request:approval_letter_requests(*),
+      finance_approval_cover_request:finance_approval_cover_requests(
+        *,
+        items:finance_approval_cover_items(*)
+      ),
+      accounting_approval_cover_request:accounting_approval_cover_requests(
+        *,
+        items:accounting_approval_cover_items(*)
+      ),
       approvals:request_approvals(
         id,
         status,
         comment,
         decided_at,
         created_at,
+        sequence_order,
         workflow_step:workflow_steps(
           step_order,
           name,
+          approver_type,
           form_section_key,
           static_position:positions(
             id,
@@ -185,6 +197,24 @@ export async function generateRequestPDF(
       request,
       requester: request.requester,
       approvalLetterRequest: request.approval_letter_request,
+      approvals: request.approvals || [],
+      signatures,
+    }) as React.ReactElement<DocumentProps>;
+  } else if (request.finance_approval_cover_request) {
+    // Onay Kapağı Finans PDF'i
+    pdfDocument = React.createElement(FinanceApprovalCoverPDFTemplate, {
+      request,
+      requester: request.requester,
+      financeRequest: request.finance_approval_cover_request,
+      approvals: request.approvals || [],
+      signatures,
+    }) as React.ReactElement<DocumentProps>;
+  } else if (request.accounting_approval_cover_request) {
+    // Onay Kapağı Muhasebe PDF'i
+    pdfDocument = React.createElement(AccountingApprovalCoverPDFTemplate, {
+      request,
+      requester: request.requester,
+      accountingRequest: request.accounting_approval_cover_request,
       approvals: request.approvals || [],
       signatures,
     }) as React.ReactElement<DocumentProps>;

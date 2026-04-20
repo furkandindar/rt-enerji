@@ -92,10 +92,10 @@ export async function PATCH(
       return NextResponse.json({ error: "Already processed" }, { status: 400 });
     }
 
-    // Sırası mı?
+    // Sırası mı? (sequence_order — DYNAMIC_USER_LIST ile uyumlu)
     const requestData = approval.request;
     const stepData = approval.workflow_step;
-    if (requestData.current_step !== stepData.step_order) {
+    if (requestData.current_step !== approval.sequence_order) {
       return NextResponse.json({ error: "Not your turn to approve" }, { status: 400 });
     }
 
@@ -381,27 +381,28 @@ export async function PATCH(
       // Onaylandı - sonraki adıma geç veya tamamla
       const { data: allSteps } = await supabase
         .from("workflow_steps")
-        .select("id, step_order, phase, action_type")
-        .eq("workflow_definition_id", requestData.workflow_definition_id)
-        .order("step_order", { ascending: true });
-
-      const totalStepCount = allSteps?.length || 0;
+        .select("phase")
+        .eq("workflow_definition_id", requestData.workflow_definition_id);
 
       // COMPLETION fazında adım var mı? (V4)
       const hasCompletionPhase = allSteps?.some(
         (s: { phase: string }) => s.phase === 'COMPLETION'
       ) || false;
 
-      // Tüm approval kayıtlarını al
+      // Tüm approval kayıtlarını al (sequence_order ile sıralı)
       const { data: allApprovals } = await supabase
         .from("request_approvals")
         .select(`
           id,
           status,
           approver_employee_id,
+          sequence_order,
           workflow_step:workflow_steps(step_order, phase, action_type)
         `)
-        .eq("request_id", requestData.id);
+        .eq("request_id", requestData.id)
+        .order("sequence_order", { ascending: true });
+
+      const totalApprovalCount = allApprovals?.length || 0;
 
       // ================================================================
       // Mükerrer onaycı: Bu kişinin ilerideki SIGN_ONLY adımlarını otomatik onayla
@@ -411,9 +412,6 @@ export async function PATCH(
       if (allApprovals) {
         const now = new Date().toISOString();
         for (const futureApproval of allApprovals) {
-          const futureStepOrder = Array.isArray(futureApproval.workflow_step)
-            ? futureApproval.workflow_step[0]?.step_order
-            : (futureApproval.workflow_step as { step_order: number; phase: string; action_type: string } | null)?.step_order;
           const futureActionType = Array.isArray(futureApproval.workflow_step)
             ? futureApproval.workflow_step[0]?.action_type
             : (futureApproval.workflow_step as { step_order: number; phase: string; action_type: string } | null)?.action_type;
@@ -422,8 +420,7 @@ export async function PATCH(
             futureApproval.status === 'PENDING' &&
             futureApproval.approver_employee_id === appUser.employee_id &&
             futureActionType === 'SIGN_ONLY' &&
-            futureStepOrder !== undefined &&
-            futureStepOrder > stepData.step_order
+            futureApproval.sequence_order > approval.sequence_order
           ) {
             forwardAutoApproveIds.push(futureApproval.id);
           }
@@ -452,41 +449,40 @@ export async function PATCH(
         }
       }
 
-      // Sonraki adıma ilerle — zaten APPROVED olan adımları atla
-      let nextStep = requestData.current_step + 1;
+      // Sonraki onaya ilerle — zaten APPROVED olan sequence'leri atla
+      let nextStep = approval.sequence_order + 1;
 
-      // Zaten APPROVED olan adımları atla (while döngüsü)
-      while (nextStep <= totalStepCount) {
-        const stepApproval = allApprovals?.find((a: { workflow_step: { step_order: number } | { step_order: number }[] | null }) => {
-          const stepOrder = Array.isArray(a.workflow_step)
-            ? a.workflow_step[0]?.step_order
-            : a.workflow_step?.step_order;
-          return stepOrder === nextStep;
-        });
+      // Zaten APPROVED olan onayları atla (forward-approve sonucu olabilir)
+      while (nextStep <= totalApprovalCount) {
+        const seqApproval = allApprovals?.find(
+          (a: { sequence_order: number }) => a.sequence_order === nextStep
+        );
 
-        // Bu adım zaten APPROVED ise atla
-        if (stepApproval && stepApproval.status === 'APPROVED') {
-          console.log(`Step ${nextStep} already APPROVED, skipping...`);
+        if (seqApproval && seqApproval.status === 'APPROVED') {
+          console.log(`Sequence ${nextStep} already APPROVED, skipping...`);
           nextStep++;
           continue;
         }
 
-        // PENDING adıma ulaştık, dur
+        // PENDING onaya ulaştık, dur
         break;
       }
 
-      const isCompleted = nextStep > totalStepCount;
+      const isCompleted = nextStep > totalApprovalCount;
 
       // ----------------------------------------------------------------
       // V4: APPROVAL fazı tamamlandı mı kontrol et
-      // Eğer COMPLETION fazı varsa ve sonraki adım COMPLETION fazında ise,
-      // tüm APPROVAL adımları bitmiş demektir → AWAITING_COMPLETION
+      // Eğer COMPLETION fazı varsa ve sonraki onayın ait olduğu step
+      // COMPLETION fazında ise, tüm APPROVAL adımları bitmiş demektir
       // ----------------------------------------------------------------
       const isEnteringCompletionPhase = !isCompleted && hasCompletionPhase && (() => {
-        const nextStepData = allSteps?.find(
-          (s: { step_order: number }) => s.step_order === nextStep
+        const nextApprovalData = allApprovals?.find(
+          (a: { sequence_order: number }) => a.sequence_order === nextStep
         );
-        return nextStepData?.phase === 'COMPLETION';
+        const nextPhase = Array.isArray(nextApprovalData?.workflow_step)
+          ? nextApprovalData?.workflow_step[0]?.phase
+          : (nextApprovalData?.workflow_step as { phase: string } | null | undefined)?.phase;
+        return nextPhase === 'COMPLETION';
       })();
 
       // Mevcut request durumu AWAITING_COMPLETION ise ve isCompleted ise → COMPLETED
@@ -501,7 +497,7 @@ export async function PATCH(
           .from("requests")
           .update({
             status: 'APPROVED',
-            current_step: totalStepCount,
+            current_step: totalApprovalCount,
             completed_at: new Date().toISOString(),
           })
           .eq("id", requestData.id);
@@ -670,12 +666,10 @@ export async function PATCH(
         );
 
         // COMPLETION fazındaki ilk onaycıya bildirim gönder
-        const nextApproval = allApprovals?.find((a: { status: string; workflow_step: { step_order: number } | { step_order: number }[] | null }) => {
-          const stepOrder = Array.isArray(a.workflow_step)
-            ? a.workflow_step[0]?.step_order
-            : a.workflow_step?.step_order;
-          return stepOrder === nextStep && a.status === 'PENDING';
-        });
+        const nextApproval = allApprovals?.find(
+          (a: { status: string; sequence_order: number }) =>
+            a.sequence_order === nextStep && a.status === 'PENDING'
+        );
 
         if (nextApproval) {
           const { data: requester } = await supabase
@@ -708,7 +702,7 @@ export async function PATCH(
           .from("requests")
           .update({
             status: 'COMPLETED',
-            current_step: totalStepCount,
+            current_step: totalApprovalCount,
             completed_at: new Date().toISOString(),
           })
           .eq("id", requestData.id);
@@ -760,14 +754,12 @@ export async function PATCH(
           .eq("id", requestData.id);
 
         // Sonraki onaycıya bildirim gönder
-        const nextApproval = allApprovals?.find((a: { status: string; workflow_step: { step_order: number } | { step_order: number }[] | null }) => {
-          const stepOrder = Array.isArray(a.workflow_step)
-            ? a.workflow_step[0]?.step_order
-            : a.workflow_step?.step_order;
-          return stepOrder === nextStep && a.status === 'PENDING';
-        });
+        const nextApproval = allApprovals?.find(
+          (a: { status: string; sequence_order: number }) =>
+            a.sequence_order === nextStep && a.status === 'PENDING'
+        );
 
-        console.log("Found next approval for step", nextStep, ":", nextApproval);
+        console.log("Found next approval for sequence", nextStep, ":", nextApproval);
 
         if (nextApproval) {
           // Talep edenin adını al

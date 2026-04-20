@@ -187,17 +187,15 @@ export async function POST(request: Request) {
         ? `${requesterEmployee.first_name} ${requesterEmployee.last_name}`
         : "Bir çalışan";
 
+      const currentStep = createdRequest?.current_step || 1;
+
       const { data: pendingApproval } = await supabase
         .from("request_approvals")
-        .select(`
-          *,
-          workflow_step:workflow_steps(step_order, name)
-        `)
+        .select("approver_employee_id")
         .eq("request_id", newRequest.id)
         .eq("status", "PENDING")
-        .order("created_at", { ascending: true })
-        .limit(1)
-        .single();
+        .eq("sequence_order", currentStep)
+        .maybeSingle();
 
       if (pendingApproval) {
         await notifyApprover(
