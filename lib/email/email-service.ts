@@ -1,13 +1,12 @@
 // Email Service - Microsoft Graph API ile email gönderimi
 // https://learn.microsoft.com/en-us/graph/api/user-sendmail
 
+import { graphAppFetch } from '@/lib/msgraph/app-client';
+
 // ============================================================================
 // Config
 // ============================================================================
 
-const TENANT_ID = process.env.AZURE_TENANT_ID;
-const CLIENT_ID = process.env.AZURE_CLIENT_ID;
-const CLIENT_SECRET = process.env.AZURE_CLIENT_SECRET;
 const MAIL_FROM = process.env.AZURE_MAIL_FROM; // ör: deneme.admin@rtenerji.com
 
 // ============================================================================
@@ -20,52 +19,6 @@ export interface SendNotificationEmailParams {
   message: string;      // Bildirim mesajı
   type: string;         // Bildirim tipi (APPROVAL_REQUIRED, REQUEST_APPROVED, etc.)
   appUrl?: string;      // Uygulama URL'i (opsiyonel)
-}
-
-// ============================================================================
-// Microsoft Graph Auth - Client Credentials Flow
-// ============================================================================
-
-let cachedToken: { token: string; expiresAt: number } | null = null;
-
-/**
- * Client Credentials flow ile access token alır.
- * Token'ı cache'ler, süresi dolmadan yeniden kullanır.
- */
-async function getAccessToken(): Promise<string> {
-  // Cache'de geçerli token varsa kullan
-  if (cachedToken && Date.now() < cachedToken.expiresAt - 60_000) {
-    return cachedToken.token;
-  }
-
-  const tokenUrl = `https://login.microsoftonline.com/${TENANT_ID}/oauth2/v2.0/token`;
-
-  const body = new URLSearchParams({
-    client_id: CLIENT_ID!,
-    client_secret: CLIENT_SECRET!,
-    scope: 'https://graph.microsoft.com/.default',
-    grant_type: 'client_credentials',
-  });
-
-  const response = await fetch(tokenUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: body.toString(),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Token alınamadı: ${response.status} ${errorText}`);
-  }
-
-  const data = await response.json();
-
-  cachedToken = {
-    token: data.access_token,
-    expiresAt: Date.now() + data.expires_in * 1000,
-  };
-
-  return cachedToken.token;
 }
 
 // ============================================================================
@@ -150,17 +103,12 @@ function getEmailHtml(params: SendNotificationEmailParams): string {
 export async function sendNotificationEmail(
   params: SendNotificationEmailParams
 ): Promise<{ success: boolean; error?: string }> {
-  // Gerekli env variables kontrolü
-  if (!TENANT_ID || !CLIENT_ID || !CLIENT_SECRET || !MAIL_FROM) {
-    console.warn('[Email] Microsoft Graph config eksik, email gönderilmiyor');
-    return { success: false, error: 'Microsoft Graph config eksik (AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, AZURE_MAIL_FROM)' };
+  if (!MAIL_FROM) {
+    console.warn('[Email] AZURE_MAIL_FROM eksik, email gönderilmiyor');
+    return { success: false, error: 'AZURE_MAIL_FROM environment variable is not set' };
   }
 
   try {
-    const accessToken = await getAccessToken();
-
-    const graphUrl = `https://graph.microsoft.com/v1.0/users/${MAIL_FROM}/sendMail`;
-
     const emailPayload = {
       message: {
         subject: getEmailSubject(params.type, params.title),
@@ -179,13 +127,9 @@ export async function sendNotificationEmail(
       saveToSentItems: false,
     };
 
-    const response = await fetch(graphUrl, {
+    const response = await graphAppFetch(`/users/${MAIL_FROM}/sendMail`, {
       method: 'POST',
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(emailPayload),
+      body: emailPayload,
     });
 
     if (!response.ok) {

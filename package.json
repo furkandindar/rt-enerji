@@ -33,6 +33,7 @@
     "dagre": "^0.8.5",
     "date-fns": "^4.1.0",
     "exceljs": "^4.4.0",
+    "fast-xml-parser": "^5.7.1",
     "html-to-image": "^1.11.13",
     "lucide-react": "^0.511.0",
     "next": "16.0.7",

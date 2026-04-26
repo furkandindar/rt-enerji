@@ -29,6 +29,10 @@ export function LoginForm({
         provider: "azure",
         options: {
           redirectTo: `${window.location.origin}/auth/callback`,
+          // NOT: Microsoft Graph delegated scope'ları (Calendars.ReadWrite,
+          // Tasks.ReadWrite, offline_access) admin consent beklediği için geçici
+          // olarak devre dışı. Admin consent verildiğinde aşağıdaki satırı kullan:
+          //   scopes: "email offline_access Calendars.ReadWrite Tasks.ReadWrite",
           scopes: "email",
         },
       });
