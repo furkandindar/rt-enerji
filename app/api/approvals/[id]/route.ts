@@ -22,7 +22,7 @@ export async function PATCH(
     const { id } = await params;
     const body = await request.json();
 
-    const { decision, comment, hr_fields, salary_consent_fields, onboarding_fields, separation_fields, travel_completion_fields, signature_data_url } = body as {
+    const { decision, comment, hr_fields, salary_consent_fields, onboarding_fields, separation_fields, travel_completion_fields, signature_data_url, ykb_signed_pdf_path } = body as {
       decision: 'APPROVED' | 'REJECTED';
       comment?: string;
       hr_fields?: {
@@ -45,6 +45,7 @@ export async function PATCH(
         actual_return_at: string;
       };
       signature_data_url?: string;
+      ykb_signed_pdf_path?: string;
     };
 
     if (!decision || !['APPROVED', 'REJECTED'].includes(decision)) {
@@ -308,6 +309,30 @@ export async function PATCH(
 
         console.log("Travel completion fields updated successfully");
       }
+    }
+
+    // 3e. FILL_AND_SIGN COMPLETION adımı için YKB imzalı PDF path'ini uygula
+    // (Mukayese Formu — YKB Asistanı yükledikten sonra requests.pdf_path'i overwrite eder)
+    if (
+      decision === 'APPROVED' &&
+      stepData.action_type === 'FILL_AND_SIGN' &&
+      stepData.form_section_key === 'ykb_signed_pdf'
+    ) {
+      if (!ykb_signed_pdf_path?.trim()) {
+        return NextResponse.json({ error: "İmzalı PDF yüklenmeden onaylanamaz" }, { status: 400 });
+      }
+
+      const { error: pdfPathError } = await supabase
+        .from("requests")
+        .update({ pdf_path: ykb_signed_pdf_path })
+        .eq("id", requestData.id);
+
+      if (pdfPathError) {
+        console.error("Error updating pdf_path with YKB signed PDF:", pdfPathError);
+        return NextResponse.json({ error: "PDF yolu kaydedilemedi" }, { status: 500 });
+      }
+
+      console.log("YKB signed PDF path applied to request:", requestData.id);
     }
 
     // 4. Approval'ı güncelle
@@ -711,28 +736,32 @@ export async function PATCH(
           .eq("id", requestData.id);
 
         // Final PDF oluştur (gerçekleşen tarihler dolu, üzerine yazar)
-        try {
-          console.log('Generating final PDF for completed request:', requestData.id);
-          const pdfBuffer = await generateRequestPDF({
-            requestId: requestData.id,
-            supabase,
-          });
+        // COMPARISON_FORM: YKB Asistanı'nın yüklediği imzalı tarama zaten pdf_path'e
+        // yazıldı; burada otomatik PDF üretirsek o taramayı eziyor olurduk → atla.
+        if (workflowCode !== 'COMPARISON_FORM') {
+          try {
+            console.log('Generating final PDF for completed request:', requestData.id);
+            const pdfBuffer = await generateRequestPDF({
+              requestId: requestData.id,
+              supabase,
+            });
 
-          const finalPdfBuffer = await mergeAttachments(pdfBuffer, requestData.id, supabase);
+            const finalPdfBuffer = await mergeAttachments(pdfBuffer, requestData.id, supabase);
 
-          const pdfPath = await uploadRequestPDF({
-            requestId: requestData.id,
-            pdfBuffer: finalPdfBuffer,
-          });
+            const pdfPath = await uploadRequestPDF({
+              requestId: requestData.id,
+              pdfBuffer: finalPdfBuffer,
+            });
 
-          await supabase
-            .from("requests")
-            .update({ pdf_path: pdfPath })
-            .eq("id", requestData.id);
+            await supabase
+              .from("requests")
+              .update({ pdf_path: pdfPath })
+              .eq("id", requestData.id);
 
-          console.log('Final PDF uploaded:', pdfPath);
-        } catch (pdfError) {
-          console.error('Error generating final PDF:', pdfError);
+            console.log('Final PDF uploaded:', pdfPath);
+          } catch (pdfError) {
+            console.error('Error generating final PDF:', pdfError);
+          }
         }
 
         // Talep edene "tamamlandı" bildirimi gönder

@@ -10,6 +10,7 @@ import { TravelAssignmentPDFTemplate } from './travel-assignment-pdf-template';
 import { ApprovalLetterPDFTemplate } from './approval-letter-pdf-template';
 import { FinanceApprovalCoverPDFTemplate } from './finance-approval-cover-pdf-template';
 import { AccountingApprovalCoverPDFTemplate } from './accounting-approval-cover-pdf-template';
+import { ComparisonFormPDFTemplate } from './comparison-form-pdf-template';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { SignatureFont, DEFAULT_SIGNATURE_FONT } from '@/lib/signature/types';
 
@@ -74,6 +75,11 @@ export async function generateRequestPDF(
       accounting_approval_cover_request:accounting_approval_cover_requests(
         *,
         items:accounting_approval_cover_items(*)
+      ),
+      mukayese_request:mukayese_requests(
+        *,
+        items:mukayese_items(*, prices:mukayese_prices(*)),
+        suppliers:mukayese_suppliers(*)
       ),
       approvals:request_approvals(
         id,
@@ -215,6 +221,19 @@ export async function generateRequestPDF(
       request,
       requester: request.requester,
       accountingRequest: request.accounting_approval_cover_request,
+      approvals: request.approvals || [],
+      signatures,
+    }) as React.ReactElement<DocumentProps>;
+  } else if (request.mukayese_request) {
+    // Mukayese Formu PDF'i (A3 landscape)
+    // mukayese_prices, mukayese_items altında nested gelir; template top-level
+    // mukayeseRequest.prices flat array'ini bekler.
+    const m = request.mukayese_request as { items?: Array<{ prices?: unknown[] }>; prices?: unknown[] };
+    if (m.items) m.prices = m.items.flatMap((it) => it.prices ?? []);
+    pdfDocument = React.createElement(ComparisonFormPDFTemplate, {
+      request,
+      requester: request.requester,
+      mukayeseRequest: request.mukayese_request,
       approvals: request.approvals || [],
       signatures,
     }) as React.ReactElement<DocumentProps>;

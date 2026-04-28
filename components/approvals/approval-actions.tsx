@@ -16,6 +16,7 @@ import {
 import { SignaturePanel } from "@/components/signature-panel";
 import { SignatureCanvasPanel } from "@/components/signature-canvas-panel";
 import { AttachmentUploader } from "@/components/attachment-uploader";
+import { YkbSignedPdfUpload } from "@/components/approvals/ykb-signed-pdf-upload";
 import type { WorkflowStepAttachmentConfig, RequestAttachment } from "@/lib/workflow/types";
 import type { ChecklistStatus, ChecklistItem, SignatureInfo } from "@/lib/approvals/types";
 
@@ -71,6 +72,13 @@ interface ApprovalActionsProps {
   actualReturn: string;
   setActualReturn: (value: string) => void;
 
+  // YKB imzalı PDF (Mukayese Formu COMPLETION)
+  isYkbSignedPdfForm: boolean;
+  ykbSignedPdfPath: string | null;
+  setYkbSignedPdfPath: (value: string | null) => void;
+  ykbSignedPdfFileName: string | null;
+  setYkbSignedPdfFileName: (value: string | null) => void;
+
   // Actions
   canApprove: boolean;
   isSubmitting: boolean;
@@ -111,6 +119,11 @@ export function ApprovalActions({
   setActualDeparture,
   actualReturn,
   setActualReturn,
+  isYkbSignedPdfForm,
+  ykbSignedPdfPath,
+  setYkbSignedPdfPath,
+  ykbSignedPdfFileName,
+  setYkbSignedPdfFileName,
   canApprove,
   isSubmitting,
   handleDecision,
@@ -148,6 +161,24 @@ export function ApprovalActions({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Mukayese Formu COMPLETION — YKB imzalı PDF yükleme */}
+      {isYkbSignedPdfForm && (
+        <YkbSignedPdfUpload
+          requestId={requestId}
+          uploadedPath={ykbSignedPdfPath}
+          uploadedFileName={ykbSignedPdfFileName}
+          onUploaded={(path, fileName) => {
+            setYkbSignedPdfPath(path);
+            setYkbSignedPdfFileName(fileName);
+          }}
+          onCleared={() => {
+            setYkbSignedPdfPath(null);
+            setYkbSignedPdfFileName(null);
+          }}
+          disabled={isSubmitting}
+        />
       )}
 
       {/* HR Form Alanları */}

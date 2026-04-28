@@ -8,7 +8,6 @@ import { Plus, Loader2, Eye, Filter, Download, FileIcon } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import {
   Table,
   TableBody,
@@ -50,6 +49,8 @@ import {
   accountingCapacityTypeLabels,
 } from "@/lib/approvals/constants";
 import { PdfViewerDialog } from "@/components/pdf-viewer-dialog";
+import { ComparisonFormDetails } from "@/components/approvals/comparison-form-details";
+import { ApprovalStatusBadge, RequestStatusBadge } from "@/components/approvals/status-badge";
 
 interface WorkflowDefinition {
   id: string;
@@ -302,6 +303,48 @@ interface Request {
     requested_payment_amount: string | null;
     remaining_after_payment: string | null;
   };
+  mukayese_request?: {
+    id: string;
+    project_title: string;
+    form_currency: 'TRY' | 'USD' | 'EUR';
+    form_date: string;
+    preparer_full_name: string;
+    company: string;
+    subject: string;
+    request_content: string;
+    request_amount_text: string;
+    request_reason: string;
+    notes: string | null;
+    kdv_rate: number;
+    fx_eur_try: number | null;
+    fx_usd_try: number | null;
+    fx_eur_usd: number | null;
+    fx_snapshot_at: string | null;
+    items?: Array<{
+      id: string;
+      row_order: number;
+      row_type: 'ITEM' | 'SUBTOTAL';
+      description: string | null;
+      quantity: number | null;
+      unit: 'ADET' | 'SET' | 'GUN' | null;
+    }>;
+    suppliers?: Array<{
+      id: string;
+      column_order: number;
+      company_name: string;
+      payment_terms: string | null;
+      technical_description: string | null;
+      delivery_time: string | null;
+      contact_name: string | null;
+      contact_phone: string | null;
+    }>;
+    prices?: Array<{
+      id: string;
+      mukayese_item_id: string;
+      mukayese_supplier_id: string;
+      unit_price: number;
+    }>;
+  };
   requester?: Requester;
   approvals?: Approval[];
 }
@@ -313,38 +356,6 @@ interface Attachment {
   mime_type: string;
   config_label: string;
 }
-
-const statusColors: Record<string, string> = {
-  DRAFT: "bg-gray-500",
-  PENDING: "bg-yellow-500",
-  APPROVED: "bg-green-500",
-  REJECTED: "bg-red-500",
-  CANCELLED: "bg-gray-400",
-  AWAITING_COMPLETION: "bg-blue-500",
-  COMPLETED: "bg-green-700",
-};
-
-const statusLabels: Record<string, string> = {
-  DRAFT: "Taslak",
-  PENDING: "Beklemede",
-  APPROVED: "Onaylandı",
-  REJECTED: "Reddedildi",
-  CANCELLED: "İptal Edildi",
-  AWAITING_COMPLETION: "Tamamlanma Bekleniyor",
-  COMPLETED: "Tamamlandı",
-};
-
-const approvalStatusLabels: Record<string, string> = {
-  PENDING: "Bekliyor",
-  APPROVED: "Onayladı",
-  REJECTED: "Reddetti",
-};
-
-const approvalStatusColors: Record<string, string> = {
-  PENDING: "bg-yellow-500",
-  APPROVED: "bg-green-500",
-  REJECTED: "bg-red-500",
-};
 
 const leaveTypeLabels: Record<string, string> = {
   ANNUAL_LEAVE: "Yıllık İzin",
@@ -457,6 +468,9 @@ export default function MyRequestsPage() {
     }
     if (request.accounting_approval_cover_request) {
       return request.accounting_approval_cover_request.subject || "-";
+    }
+    if (request.mukayese_request) {
+      return request.mukayese_request.subject || request.mukayese_request.project_title || "-";
     }
     return "-";
   };
@@ -618,9 +632,7 @@ export default function MyRequestsPage() {
                     {format(new Date(request.created_at), "d MMM yyyy HH:mm", { locale: tr })}
                   </TableCell>
                   <TableCell>
-                    <Badge className={statusColors[request.status]}>
-                      {statusLabels[request.status]}
-                    </Badge>
+                    <RequestStatusBadge status={request.status} />
                   </TableCell>
                   <TableCell>
                     <Button
@@ -649,7 +661,7 @@ export default function MyRequestsPage() {
             </SheetDescription>
           </SheetHeader>
           {selectedRequest && (
-            <div className="grid gap-4 p-4">
+            <div className="grid grid-cols-1 gap-4 p-4">
               {/* Talep Sahibi Bilgileri */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -675,9 +687,7 @@ export default function MyRequestsPage() {
                 </div>
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Durum</p>
-                  <Badge className={statusColors[selectedRequest.status]}>
-                    {statusLabels[selectedRequest.status]}
-                  </Badge>
+                  <RequestStatusBadge status={selectedRequest.status} />
                 </div>
               </div>
 
@@ -1467,6 +1477,13 @@ export default function MyRequestsPage() {
                 );
               })()}
 
+              {/* Mukayese Formu specific fields */}
+              {selectedRequest.mukayese_request && (
+                <ComparisonFormDetails
+                  mukayese={selectedRequest.mukayese_request}
+                  approvals={selectedRequest.approvals}
+                />
+              )}
 
               {/* Ek Dosyalar - tüm talep tipleri için */}
               {attachments.length > 0 && (
@@ -1553,9 +1570,7 @@ export default function MyRequestsPage() {
                                       {approval.approver.first_name} {approval.approver.last_name}
                                     </TableCell>
                                     <TableCell>
-                                      <Badge className={approvalStatusColors[approval.status]}>
-                                        {approvalStatusLabels[approval.status]}
-                                      </Badge>
+                                      <ApprovalStatusBadge status={approval.status} />
                                     </TableCell>
                                     <TableCell className="text-muted-foreground text-xs">
                                       {approval.decided_at

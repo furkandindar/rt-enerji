@@ -65,6 +65,11 @@ export async function GET() {
             *,
             items:accounting_approval_cover_items(*)
           ),
+          mukayese_request:mukayese_requests(
+            *,
+            items:mukayese_items(*, prices:mukayese_prices(*)),
+            suppliers:mukayese_suppliers(*)
+          ),
           approvals:request_approvals(
             id,
             status,
@@ -91,6 +96,13 @@ export async function GET() {
     if (error) {
       console.error("Error fetching approvals:", error);
       return NextResponse.json({ error: "Failed to fetch approvals" }, { status: 500 });
+    }
+
+    // mukayese_prices, mukayese_items altında nested gelir; consumer'lar için
+    // top-level mukayese_request.prices flat array'ine düzleştir.
+    for (const a of allApprovals || []) {
+      const m = (a as { request?: { mukayese_request?: { items?: Array<{ prices?: unknown[] }>; prices?: unknown[] } } }).request?.mukayese_request;
+      if (m?.items) m.prices = m.items.flatMap((it) => it.prices ?? []);
     }
 
     // Bekleyen onayları filtrele (PENDING ve sırası gelen)

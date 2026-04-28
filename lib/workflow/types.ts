@@ -803,3 +803,127 @@ export interface CreateAccountingApprovalCoverInput {
   dynamic_approvers?: CreateRequestDynamicApprovers;
 }
 
+
+
+// ============================================================================
+// MUKAYESE FORMU (Comparison Form) - Tipler
+// ============================================================================
+
+export type MukayeseCurrency = 'TRY' | 'USD' | 'EUR';
+export type MukayeseUnit = 'ADET' | 'SET' | 'GUN';
+export type MukayeseRowType = 'ITEM' | 'SUBTOTAL';
+
+export interface MukayeseRequest {
+  id: string;
+  request_id: string;
+
+  // Header
+  project_title: string;
+  form_currency: MukayeseCurrency;
+
+  // FX snapshot (oluşturma anında TCMB'den)
+  fx_eur_try: number | null;
+  fx_usd_try: number | null;
+  fx_eur_usd: number | null;
+  fx_snapshot_at: string | null;
+
+  form_date: string;
+  notes: string | null;
+
+  kdv_rate: number;
+
+  // Footer
+  preparer_full_name: string;
+  company: string;
+  subject: string;
+  request_content: string;
+  request_amount_text: string;
+  request_reason: string;
+
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MukayeseItem {
+  id: string;
+  mukayese_request_id: string;
+  row_order: number;
+  row_type: MukayeseRowType;
+  description: string | null;
+  quantity: number | null;
+  unit: MukayeseUnit | null;
+  created_at: string;
+}
+
+export interface MukayeseSupplier {
+  id: string;
+  mukayese_request_id: string;
+  column_order: number;
+  company_name: string;
+  payment_terms: string | null;
+  technical_description: string | null;
+  delivery_time: string | null;
+  contact_name: string | null;
+  contact_phone: string | null;
+  created_at: string;
+}
+
+export interface MukayeseCellPrice {
+  id: string;
+  mukayese_item_id: string;
+  mukayese_supplier_id: string;
+  unit_price: number;
+  created_at: string;
+}
+
+// ----------------------------------------------------------------------------
+// Create Input'ları (POST body)
+// ----------------------------------------------------------------------------
+
+export interface CreateMukayeseItemInput {
+  row_order: number;
+  row_type: MukayeseRowType;
+  description?: string | null;
+  quantity?: number | null;
+  unit?: MukayeseUnit | null;
+}
+
+export interface CreateMukayeseSupplierInput {
+  column_order: number;
+  company_name: string;
+  payment_terms?: string | null;
+  technical_description?: string | null;
+  delivery_time?: string | null;
+  contact_name?: string | null;
+  contact_phone?: string | null;
+}
+
+// Hücre fiyatı row_order × column_order ile referans verilir
+// (client'ta henüz UUID yok; RPC fonksiyonu bunları yeni id'lerle eşleştirir)
+export interface CreateMukayeseCellPriceInput {
+  row_order: number;     // mukayese_items.row_order
+  column_order: number;  // mukayese_suppliers.column_order
+  unit_price: number;
+}
+
+export interface CreateMukayeseInput {
+  // Header
+  project_title: string;
+  form_currency: MukayeseCurrency;
+  form_date: string;
+  notes?: string | null;
+  kdv_rate: number;
+
+  // Footer
+  preparer_full_name: string;
+  company: string;
+  subject: string;
+  request_content: string;
+  request_amount_text: string;
+  request_reason: string;
+
+  // Matrix
+  items: CreateMukayeseItemInput[];
+  suppliers: CreateMukayeseSupplierInput[];
+  prices: CreateMukayeseCellPriceInput[];
+}

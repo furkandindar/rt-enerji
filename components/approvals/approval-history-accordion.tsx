@@ -2,7 +2,6 @@
 
 import { format } from "date-fns";
 import { tr } from "date-fns/locale";
-import { Badge } from "@/components/ui/badge";
 import {
   Table,
   TableBody,
@@ -24,7 +23,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import type { Approval } from "@/lib/approvals/types";
-import { approvalStatusLabels, approvalStatusColors } from "@/lib/approvals/constants";
+import { ApprovalStatusBadge } from "./status-badge";
 
 interface ApprovalHistoryAccordionProps {
   approvals: Approval[];
@@ -64,9 +63,7 @@ export function ApprovalHistoryAccordion({ approvals }: ApprovalHistoryAccordion
                           {approval.approver.first_name} {approval.approver.last_name}
                         </TableCell>
                         <TableCell>
-                          <Badge className={approvalStatusColors[approval.status]}>
-                            {approvalStatusLabels[approval.status]}
-                          </Badge>
+                          <ApprovalStatusBadge status={approval.status} />
                         </TableCell>
                         <TableCell className="text-muted-foreground text-xs">
                           {approval.decided_at

@@ -5,7 +5,6 @@ import { tr } from "date-fns/locale";
 import { useState } from "react";
 import { Download, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import {
   Sheet,
   SheetContent,
@@ -15,7 +14,7 @@ import {
 } from "@/components/ui/sheet";
 import type { WorkflowStepAttachmentConfig, RequestAttachment, PreviousStepAttachment } from "@/lib/workflow/types";
 import type { PendingApproval, ChecklistStatus, ChecklistItem, SignatureInfo } from "@/lib/approvals/types";
-import { approvalStatusLabels, approvalStatusColors } from "@/lib/approvals/constants";
+import { ApprovalStatusBadge } from "./status-badge";
 import { getRequesterFullName, getRequesterPosition } from "./utils";
 import { LeaveRequestDetails } from "./leave-request-details";
 import { SalaryAdvanceDetails } from "./salary-advance-details";
@@ -28,6 +27,7 @@ import { TravelAssignmentDetails } from "./travel-assignment-details";
 import { ApprovalLetterDetails } from "./approval-letter-details";
 import { FinanceApprovalCoverDetails } from "./finance-approval-cover-details";
 import { AccountingApprovalCoverDetails } from "./accounting-approval-cover-details";
+import { ComparisonFormDetails } from "./comparison-form-details";
 import { ApprovalHistoryAccordion } from "./approval-history-accordion";
 import { ApprovalActions } from "./approval-actions";
 import { PdfViewerDialog } from "@/components/pdf-viewer-dialog";
@@ -72,6 +72,11 @@ interface ApprovalDetailSheetProps {
   setActualDeparture: (value: string) => void;
   actualReturn: string;
   setActualReturn: (value: string) => void;
+  isYkbSignedPdfForm: boolean;
+  ykbSignedPdfPath: string | null;
+  setYkbSignedPdfPath: (value: string | null) => void;
+  ykbSignedPdfFileName: string | null;
+  setYkbSignedPdfFileName: (value: string | null) => void;
   canApprove: boolean;
   isSubmitting: boolean;
   handleDecision: (decision: "APPROVED" | "REJECTED") => void;
@@ -116,6 +121,11 @@ export function ApprovalDetailSheet({
   setActualDeparture,
   actualReturn,
   setActualReturn,
+  isYkbSignedPdfForm,
+  ykbSignedPdfPath,
+  setYkbSignedPdfPath,
+  ykbSignedPdfFileName,
+  setYkbSignedPdfFileName,
   canApprove,
   isSubmitting,
   handleDecision,
@@ -135,7 +145,7 @@ export function ApprovalDetailSheet({
           </SheetDescription>
         </SheetHeader>
         {selectedApproval && (
-          <div className="grid gap-4 p-4">
+          <div className="grid grid-cols-1 gap-4 p-4">
             {/* Talep Sahibi Bilgileri */}
             <div className="grid grid-cols-2 gap-4">
               <div>
@@ -209,6 +219,12 @@ export function ApprovalDetailSheet({
             {selectedApproval.request.accounting_approval_cover_request && (
               <AccountingApprovalCoverDetails approval={selectedApproval} previousStepAttachments={previousStepAttachments} />
             )}
+            {selectedApproval.request.mukayese_request && (
+              <ComparisonFormDetails
+                mukayese={selectedApproval.request.mukayese_request}
+                approvals={selectedApproval.request.approvals}
+              />
+            )}
 
             {/* Onay Adımı ve Oluşturulma */}
             <div className="grid grid-cols-2 gap-4">
@@ -267,6 +283,11 @@ export function ApprovalDetailSheet({
                 setActualDeparture={setActualDeparture}
                 actualReturn={actualReturn}
                 setActualReturn={setActualReturn}
+                isYkbSignedPdfForm={isYkbSignedPdfForm}
+                ykbSignedPdfPath={ykbSignedPdfPath}
+                setYkbSignedPdfPath={setYkbSignedPdfPath}
+                ykbSignedPdfFileName={ykbSignedPdfFileName}
+                setYkbSignedPdfFileName={setYkbSignedPdfFileName}
                 canApprove={canApprove}
                 isSubmitting={isSubmitting}
                 handleDecision={handleDecision}
@@ -278,9 +299,7 @@ export function ApprovalDetailSheet({
               <div className="border-t pt-4 mt-6 space-y-4">
                 <div className="flex items-center gap-2">
                   <p className="text-sm font-medium text-muted-foreground">Kararınız:</p>
-                  <Badge className={approvalStatusColors[selectedApproval.status]}>
-                    {approvalStatusLabels[selectedApproval.status]}
-                  </Badge>
+                  <ApprovalStatusBadge status={selectedApproval.status} />
                 </div>
                 {selectedApproval.decided_at && (
                   <p className="text-sm text-muted-foreground mt-2">
@@ -289,7 +308,9 @@ export function ApprovalDetailSheet({
                 )}
 
                 {/* PDF Butonları */}
-                {selectedApproval.request.status === "APPROVED" && (
+                {["APPROVED", "AWAITING_COMPLETION", "COMPLETED"].includes(
+                  selectedApproval.request.status,
+                ) && (
                   <div className="flex gap-2">
                     <Button
                       variant="outline"

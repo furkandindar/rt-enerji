@@ -123,6 +123,8 @@ export const requestStatusLabels: Record<string, string> = {
   APPROVED: "Onaylandı",
   REJECTED: "Reddedildi",
   CANCELLED: "İptal Edildi",
+  AWAITING_COMPLETION: "Tamamlanma Bekleniyor",
+  COMPLETED: "Tamamlandı",
 };
 
 export const requestStatusColors: Record<string, string> = {
@@ -131,6 +133,8 @@ export const requestStatusColors: Record<string, string> = {
   APPROVED: "bg-green-500",
   REJECTED: "bg-red-500",
   CANCELLED: "bg-gray-400",
+  AWAITING_COMPLETION: "bg-blue-500",
+  COMPLETED: "bg-green-700",
 };
 
 export const ONBOARDING_SECTION_KEYS = ['section_2', 'section_3', 'section_4', 'section_5', 'section_6'] as const;

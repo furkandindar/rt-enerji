@@ -53,6 +53,11 @@ export async function GET(request: NextRequest) {
           *,
           items:accounting_approval_cover_items(*)
         ),
+        mukayese_request:mukayese_requests(
+          *,
+          items:mukayese_items(*, prices:mukayese_prices(*)),
+          suppliers:mukayese_suppliers(*)
+        ),
         requester:employees!requester_employee_id(
           id,
           first_name,
@@ -108,6 +113,13 @@ export async function GET(request: NextRequest) {
       filteredRequests = filteredRequests.filter(
         (r) => r.workflow_definition?.code === workflowCode
       );
+    }
+
+    // mukayese_prices, mukayese_items altında nested gelir; consumer'lar için
+    // top-level mukayese_request.prices flat array'ine düzleştir.
+    for (const r of filteredRequests) {
+      const m = (r as { mukayese_request?: { items?: Array<{ prices?: unknown[] }>; prices?: unknown[] } }).mukayese_request;
+      if (m?.items) m.prices = m.items.flatMap((it) => it.prices ?? []);
     }
 
     // Get workflow definitions for filter dropdown

@@ -51,6 +51,10 @@ export function useApprovals() {
   const [actualDeparture, setActualDeparture] = useState("");
   const [actualReturn, setActualReturn] = useState("");
 
+  // YKB signed PDF upload state (mukayese formu COMPLETION fazı)
+  const [ykbSignedPdfPath, setYkbSignedPdfPath] = useState<string | null>(null);
+  const [ykbSignedPdfFileName, setYkbSignedPdfFileName] = useState<string | null>(null);
+
   // Pagination states
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
@@ -94,6 +98,10 @@ export function useApprovals() {
     selectedApproval?.workflow_step?.form_section_key === 'actual_dates' &&
     selectedApproval?.request?.travel_assignment_request != null;
 
+  // Mukayese Formu COMPLETION fazı — asistan imzalı taranmış PDF yükler
+  const isYkbSignedPdfForm = selectedApproval?.workflow_step?.action_type === 'FILL_AND_SIGN' &&
+    selectedApproval?.workflow_step?.form_section_key === 'ykb_signed_pdf';
+
   const hrFormValid = !isHrForm || (remainingDays.trim() !== "" && !isNaN(Number(remainingDays)));
   const salaryConsentFormValid = !isSalaryConsentForm || salaryDeductionConsent;
   const onboardingFormValid = !isOnboardingSectionForm || (
@@ -110,7 +118,9 @@ export function useApprovals() {
 
   const travelCompletionFormValid = !isTravelCompletionForm || (actualDeparture.trim() !== "" && actualReturn.trim() !== "");
 
-  const canApprove = hasValidSignature && signatureAccepted && hrFormValid && salaryConsentFormValid && onboardingFormValid && separationFormValid && attachmentsValid && travelCompletionFormValid;
+  const ykbSignedPdfFormValid = !isYkbSignedPdfForm || Boolean(ykbSignedPdfPath);
+
+  const canApprove = hasValidSignature && signatureAccepted && hrFormValid && salaryConsentFormValid && onboardingFormValid && separationFormValid && attachmentsValid && travelCompletionFormValid && ykbSignedPdfFormValid;
 
   // Pagination
   const totalPages = Math.ceil(approvalHistory.length / pageSize);
@@ -247,6 +257,14 @@ export function useApprovals() {
       }
     }
 
+    // YKB imzalı PDF validasyonu (Mukayese Formu COMPLETION)
+    if (decision === "APPROVED" && isYkbSignedPdfForm) {
+      if (!ykbSignedPdfPath) {
+        toast.error("İmzalı PDF yüklenmeden onaylanamaz");
+        return;
+      }
+    }
+
     // Zorunlu attachment validasyonu
     if (decision === "APPROVED" && attachmentConfigs.length > 0) {
       const missingAttachments = attachmentConfigs
@@ -270,6 +288,7 @@ export function useApprovals() {
         separation_fields?: { section_key: string; items: Record<string, { status: string; notes: string }> };
         travel_completion_fields?: { actual_departure_at: string; actual_return_at: string };
         signature_data_url?: string;
+        ykb_signed_pdf_path?: string;
       } = { decision, comment };
 
       // Stamp approval ise canvas imzasını gönder
@@ -304,6 +323,9 @@ export function useApprovals() {
           actual_return_at: new Date(actualReturn).toISOString(),
         };
       }
+      if (decision === "APPROVED" && isYkbSignedPdfForm && ykbSignedPdfPath) {
+        requestBody.ykb_signed_pdf_path = ykbSignedPdfPath;
+      }
 
       const response = await fetch(`/api/approvals/${selectedApproval.id}`, {
         method: "PATCH",
@@ -326,6 +348,8 @@ export function useApprovals() {
       setSeparationChecklist({});
       setActualDeparture("");
       setActualReturn("");
+      setYkbSignedPdfPath(null);
+      setYkbSignedPdfFileName(null);
       setAttachmentConfigs([]);
       setUploadedAttachments([]);
       fetchApprovals();
@@ -373,6 +397,8 @@ export function useApprovals() {
     setRemainingDays("");
     setHrNote("");
     setSalaryDeductionConsent(false);
+    setYkbSignedPdfPath(null);
+    setYkbSignedPdfFileName(null);
     setAttachmentConfigs([]);
     setUploadedAttachments([]);
     setPreviousStepAttachments([]);
@@ -451,6 +477,8 @@ export function useApprovals() {
     separationChecklist,
     actualDeparture,
     actualReturn,
+    ykbSignedPdfPath,
+    ykbSignedPdfFileName,
     attachmentConfigs,
     uploadedAttachments,
     previousStepAttachments,
@@ -466,6 +494,7 @@ export function useApprovals() {
     separationSectionKey,
     isStampApproval,
     isTravelCompletionForm,
+    isYkbSignedPdfForm,
     canApprove,
     hasValidSignature,
     hrFormValid,
@@ -487,6 +516,8 @@ export function useApprovals() {
     setSeparationChecklist,
     setActualDeparture,
     setActualReturn,
+    setYkbSignedPdfPath,
+    setYkbSignedPdfFileName,
     setUploadedAttachments,
 
     // Handlers

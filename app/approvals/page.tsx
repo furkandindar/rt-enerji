@@ -36,6 +36,11 @@ export default function ApprovalsPage() {
     separationSectionKey,
     isStampApproval,
     isTravelCompletionForm,
+    isYkbSignedPdfForm,
+    ykbSignedPdfPath,
+    setYkbSignedPdfPath,
+    ykbSignedPdfFileName,
+    setYkbSignedPdfFileName,
     canApprove,
     currentPage,
     pageSize,
@@ -150,6 +155,11 @@ export default function ApprovalsPage() {
         setActualDeparture={setActualDeparture}
         actualReturn={actualReturn}
         setActualReturn={setActualReturn}
+        isYkbSignedPdfForm={isYkbSignedPdfForm}
+        ykbSignedPdfPath={ykbSignedPdfPath}
+        setYkbSignedPdfPath={setYkbSignedPdfPath}
+        ykbSignedPdfFileName={ykbSignedPdfFileName}
+        setYkbSignedPdfFileName={setYkbSignedPdfFileName}
         canApprove={canApprove}
         isSubmitting={isSubmitting}
         handleDecision={handleDecision}

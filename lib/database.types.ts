@@ -14,6 +14,115 @@ export type Database = {
   }
   public: {
     Tables: {
+      accounting_approval_cover_items: {
+        Row: {
+          accounting_request_id: string
+          capacity_type: Database["public"]["Enums"]["accounting_capacity_type"]
+          company_name: string
+          created_at: string
+          id: string
+          invoice_amount: number
+          item_date: string
+          item_subject: string
+          payable_amount: number
+          payee_name: string
+          row_order: number
+        }
+        Insert: {
+          accounting_request_id: string
+          capacity_type: Database["public"]["Enums"]["accounting_capacity_type"]
+          company_name: string
+          created_at?: string
+          id?: string
+          invoice_amount: number
+          item_date: string
+          item_subject: string
+          payable_amount: number
+          payee_name: string
+          row_order: number
+        }
+        Update: {
+          accounting_request_id?: string
+          capacity_type?: Database["public"]["Enums"]["accounting_capacity_type"]
+          company_name?: string
+          created_at?: string
+          id?: string
+          invoice_amount?: number
+          item_date?: string
+          item_subject?: string
+          payable_amount?: number
+          payee_name?: string
+          row_order?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "accounting_approval_cover_items_accounting_request_id_fkey"
+            columns: ["accounting_request_id"]
+            isOneToOne: false
+            referencedRelation: "accounting_approval_cover_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      accounting_approval_cover_requests: {
+        Row: {
+          created_at: string
+          demirbas_registered: boolean
+          document_no: string
+          has_accounting_prog_entry: boolean
+          has_arvento_record: boolean
+          has_delivery_info: boolean
+          has_dispatch_note: boolean
+          has_invoice_record: boolean
+          id: string
+          paid_from_credit: boolean
+          request_date: string
+          request_id: string
+          subject: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          demirbas_registered: boolean
+          document_no: string
+          has_accounting_prog_entry: boolean
+          has_arvento_record: boolean
+          has_delivery_info: boolean
+          has_dispatch_note: boolean
+          has_invoice_record: boolean
+          id?: string
+          paid_from_credit: boolean
+          request_date?: string
+          request_id: string
+          subject: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          demirbas_registered?: boolean
+          document_no?: string
+          has_accounting_prog_entry?: boolean
+          has_arvento_record?: boolean
+          has_delivery_info?: boolean
+          has_dispatch_note?: boolean
+          has_invoice_record?: boolean
+          id?: string
+          paid_from_credit?: boolean
+          request_date?: string
+          request_id?: string
+          subject?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "accounting_approval_cover_requests_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: true
+            referencedRelation: "requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       app_users: {
         Row: {
           created_at: string
@@ -419,6 +528,207 @@ export type Database = {
             columns: ["request_id"]
             isOneToOne: true
             referencedRelation: "requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mukayese_items: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          mukayese_request_id: string
+          quantity: number | null
+          row_order: number
+          row_type: Database["public"]["Enums"]["mukayese_row_type"]
+          unit: Database["public"]["Enums"]["mukayese_unit"] | null
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          mukayese_request_id: string
+          quantity?: number | null
+          row_order: number
+          row_type?: Database["public"]["Enums"]["mukayese_row_type"]
+          unit?: Database["public"]["Enums"]["mukayese_unit"] | null
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          mukayese_request_id?: string
+          quantity?: number | null
+          row_order?: number
+          row_type?: Database["public"]["Enums"]["mukayese_row_type"]
+          unit?: Database["public"]["Enums"]["mukayese_unit"] | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mukayese_items_mukayese_request_id_fkey"
+            columns: ["mukayese_request_id"]
+            isOneToOne: false
+            referencedRelation: "mukayese_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mukayese_prices: {
+        Row: {
+          created_at: string
+          id: string
+          mukayese_item_id: string
+          mukayese_supplier_id: string
+          unit_price: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          mukayese_item_id: string
+          mukayese_supplier_id: string
+          unit_price?: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          mukayese_item_id?: string
+          mukayese_supplier_id?: string
+          unit_price?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mukayese_prices_mukayese_item_id_fkey"
+            columns: ["mukayese_item_id"]
+            isOneToOne: false
+            referencedRelation: "mukayese_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mukayese_prices_mukayese_supplier_id_fkey"
+            columns: ["mukayese_supplier_id"]
+            isOneToOne: false
+            referencedRelation: "mukayese_suppliers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mukayese_requests: {
+        Row: {
+          company: string
+          created_at: string
+          form_currency: Database["public"]["Enums"]["mukayese_currency"]
+          form_date: string
+          fx_eur_try: number | null
+          fx_eur_usd: number | null
+          fx_snapshot_at: string | null
+          fx_usd_try: number | null
+          id: string
+          kdv_rate: number
+          notes: string | null
+          preparer_full_name: string
+          project_title: string
+          request_amount_text: string
+          request_content: string
+          request_id: string
+          request_reason: string
+          subject: string
+          updated_at: string
+        }
+        Insert: {
+          company: string
+          created_at?: string
+          form_currency: Database["public"]["Enums"]["mukayese_currency"]
+          form_date?: string
+          fx_eur_try?: number | null
+          fx_eur_usd?: number | null
+          fx_snapshot_at?: string | null
+          fx_usd_try?: number | null
+          id?: string
+          kdv_rate?: number
+          notes?: string | null
+          preparer_full_name: string
+          project_title: string
+          request_amount_text: string
+          request_content: string
+          request_id: string
+          request_reason: string
+          subject: string
+          updated_at?: string
+        }
+        Update: {
+          company?: string
+          created_at?: string
+          form_currency?: Database["public"]["Enums"]["mukayese_currency"]
+          form_date?: string
+          fx_eur_try?: number | null
+          fx_eur_usd?: number | null
+          fx_snapshot_at?: string | null
+          fx_usd_try?: number | null
+          id?: string
+          kdv_rate?: number
+          notes?: string | null
+          preparer_full_name?: string
+          project_title?: string
+          request_amount_text?: string
+          request_content?: string
+          request_id?: string
+          request_reason?: string
+          subject?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mukayese_requests_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: true
+            referencedRelation: "requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mukayese_suppliers: {
+        Row: {
+          column_order: number
+          company_name: string
+          contact_name: string | null
+          contact_phone: string | null
+          created_at: string
+          delivery_time: string | null
+          id: string
+          mukayese_request_id: string
+          payment_terms: string | null
+          technical_description: string | null
+        }
+        Insert: {
+          column_order: number
+          company_name: string
+          contact_name?: string | null
+          contact_phone?: string | null
+          created_at?: string
+          delivery_time?: string | null
+          id?: string
+          mukayese_request_id: string
+          payment_terms?: string | null
+          technical_description?: string | null
+        }
+        Update: {
+          column_order?: number
+          company_name?: string
+          contact_name?: string | null
+          contact_phone?: string | null
+          created_at?: string
+          delivery_time?: string | null
+          id?: string
+          mukayese_request_id?: string
+          payment_terms?: string | null
+          technical_description?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mukayese_suppliers_mukayese_request_id_fkey"
+            columns: ["mukayese_request_id"]
+            isOneToOne: false
+            referencedRelation: "mukayese_requests"
             referencedColumns: ["id"]
           },
         ]
@@ -1766,6 +2076,39 @@ export type Database = {
         }
         Relationships: []
       }
+      user_ms_tokens: {
+        Row: {
+          access_token: string
+          access_token_expires_at: string
+          created_at: string
+          provider_user_id: string | null
+          refresh_token: string
+          scope: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          access_token: string
+          access_token_expires_at: string
+          created_at?: string
+          provider_user_id?: string | null
+          refresh_token: string
+          scope?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          access_token?: string
+          access_token_expires_at?: string
+          created_at?: string
+          provider_user_id?: string | null
+          refresh_token?: string
+          scope?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       workflow_definitions: {
         Row: {
           code: string
@@ -1972,6 +2315,7 @@ export type Database = {
       }
     }
     Enums: {
+      accounting_capacity_type: "KAPASITE" | "ANASAHA" | "YEKA"
       approval_status: "PENDING" | "APPROVED" | "REJECTED"
       approver_type:
         | "REQUESTER"
@@ -1982,6 +2326,9 @@ export type Database = {
       finance_expense_area: "ANA_SAHA" | "ELEKTRIKSEL_KAPASITE_ARTISI" | "YEKA"
       finance_funding_source: "KREDI" | "OZ_KAYNAK" | "NAKIT_FAZLASI" | "DIGER"
       leave_type: "ANNUAL_LEAVE" | "SHORT_LEAVE"
+      mukayese_currency: "TRY" | "USD" | "EUR"
+      mukayese_row_type: "ITEM" | "SUBTOTAL"
+      mukayese_unit: "ADET" | "SET" | "GUN"
       notification_type:
         | "APPROVAL_REQUIRED"
         | "REQUEST_APPROVED"
@@ -2132,6 +2479,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      accounting_capacity_type: ["KAPASITE", "ANASAHA", "YEKA"],
       approval_status: ["PENDING", "APPROVED", "REJECTED"],
       approver_type: [
         "REQUESTER",
@@ -2143,6 +2491,9 @@ export const Constants = {
       finance_expense_area: ["ANA_SAHA", "ELEKTRIKSEL_KAPASITE_ARTISI", "YEKA"],
       finance_funding_source: ["KREDI", "OZ_KAYNAK", "NAKIT_FAZLASI", "DIGER"],
       leave_type: ["ANNUAL_LEAVE", "SHORT_LEAVE"],
+      mukayese_currency: ["TRY", "USD", "EUR"],
+      mukayese_row_type: ["ITEM", "SUBTOTAL"],
+      mukayese_unit: ["ADET", "SET", "GUN"],
       notification_type: [
         "APPROVAL_REQUIRED",
         "REQUEST_APPROVED",

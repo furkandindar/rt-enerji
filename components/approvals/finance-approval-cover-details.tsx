@@ -6,15 +6,13 @@ import { useState } from "react";
 import { FileText, Download, Eye } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import type { PendingApproval } from "@/lib/approvals/types";
 import type { PreviousStepAttachment } from "@/lib/workflow/types";
 import { PdfViewerDialog } from "@/components/pdf-viewer-dialog";
+import { ApprovalStatusBadge } from "./status-badge";
 import {
   financeExpenseAreaLabels,
   financeFundingSourceLabels,
-  approvalStatusLabels,
-  approvalStatusColors,
 } from "@/lib/approvals/constants";
 
 interface FinanceApprovalCoverDetailsProps {
@@ -151,9 +149,7 @@ export function FinanceApprovalCoverDetails({
                   <p className="text-sm font-medium">
                     {ra.approver.first_name} {ra.approver.last_name}
                   </p>
-                  <Badge className={`${approvalStatusColors[ra.status]} text-white`}>
-                    {approvalStatusLabels[ra.status] || ra.status}
-                  </Badge>
+                  <ApprovalStatusBadge status={ra.status} className="text-white" />
                 </div>
                 {ra.decided_at && (
                   <p className="text-xs text-muted-foreground">

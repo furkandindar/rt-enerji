@@ -244,6 +244,48 @@ export interface PendingApproval {
         payable_amount: number;
       }>;
     };
+    mukayese_request?: {
+      id: string;
+      project_title: string;
+      form_currency: 'TRY' | 'USD' | 'EUR';
+      form_date: string;
+      preparer_full_name: string;
+      company: string;
+      subject: string;
+      request_content: string;
+      request_amount_text: string;
+      request_reason: string;
+      notes: string | null;
+      kdv_rate: number;
+      fx_eur_try: number | null;
+      fx_usd_try: number | null;
+      fx_eur_usd: number | null;
+      fx_snapshot_at: string | null;
+      items?: Array<{
+        id: string;
+        row_order: number;
+        row_type: 'ITEM' | 'SUBTOTAL';
+        description: string | null;
+        quantity: number | null;
+        unit: 'ADET' | 'SET' | 'GUN' | null;
+      }>;
+      suppliers?: Array<{
+        id: string;
+        column_order: number;
+        company_name: string;
+        payment_terms: string | null;
+        technical_description: string | null;
+        delivery_time: string | null;
+        contact_name: string | null;
+        contact_phone: string | null;
+      }>;
+      prices?: Array<{
+        id: string;
+        mukayese_item_id: string;
+        mukayese_supplier_id: string;
+        unit_price: number;
+      }>;
+    };
     approvals?: Approval[];
   };
 }

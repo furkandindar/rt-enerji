@@ -4,7 +4,6 @@ import { format } from "date-fns";
 import { tr } from "date-fns/locale";
 import { Eye, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
@@ -21,12 +20,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import type { PendingApproval } from "@/lib/approvals/types";
-import {
-  approvalStatusLabels,
-  approvalStatusColors,
-  requestStatusLabels,
-  requestStatusColors,
-} from "@/lib/approvals/constants";
+import { ApprovalStatusBadge, RequestStatusBadge } from "./status-badge";
 import { getRequestSummary } from "./utils";
 
 interface ApprovalHistoryTableProps {
@@ -96,14 +90,10 @@ export function ApprovalHistoryTable({
                     </TableCell>
                     <TableCell>{getRequestSummary(approval)}</TableCell>
                     <TableCell>
-                      <Badge className={approvalStatusColors[approval.status]}>
-                        {approvalStatusLabels[approval.status]}
-                      </Badge>
+                      <ApprovalStatusBadge status={approval.status} />
                     </TableCell>
                     <TableCell>
-                      <Badge className={requestStatusColors[approval.request.status]}>
-                        {requestStatusLabels[approval.request.status]}
-                      </Badge>
+                      <RequestStatusBadge status={approval.request.status} />
                     </TableCell>
                     <TableCell className="text-muted-foreground text-sm">
                       {approval.decided_at
