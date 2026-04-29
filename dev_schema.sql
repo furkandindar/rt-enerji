@@ -598,6 +598,52 @@ COMMENT ON COLUMN "public"."employees"."signature_font" IS 'Seçilen font: Balle
 
 
 
+CREATE TABLE IF NOT EXISTS "public"."expense_items" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "expense_request_id" "uuid" NOT NULL,
+    "row_order" smallint NOT NULL,
+    "item_date" "date" NOT NULL,
+    "document_no" "text",
+    "description" "text" NOT NULL,
+    "amount" numeric(14,2) NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "expense_items_amount_check" CHECK (("amount" >= (0)::numeric))
+);
+
+
+ALTER TABLE "public"."expense_items" OWNER TO "postgres";
+
+
+COMMENT ON TABLE "public"."expense_items" IS 'Harcama Formu - harcama satırları (min 1 satır uygulama katmanında doğrulanır)';
+
+
+
+CREATE TABLE IF NOT EXISTS "public"."expense_requests" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "request_id" "uuid" NOT NULL,
+    "request_date" "date" DEFAULT CURRENT_DATE NOT NULL,
+    "project_name" "text" NOT NULL,
+    "project_code" "text" NOT NULL,
+    "is_travel" boolean DEFAULT false NOT NULL,
+    "work_or_destination" "text" NOT NULL,
+    "travel_person_count" smallint,
+    "travel_date" "date",
+    "travel_duration" "text",
+    "advance_amount" numeric(14,2),
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "expense_requests_advance_amount_check" CHECK ((("advance_amount" IS NULL) OR ("advance_amount" >= (0)::numeric))),
+    CONSTRAINT "expense_requests_travel_person_count_check" CHECK ((("travel_person_count" IS NULL) OR ("travel_person_count" > 0)))
+);
+
+
+ALTER TABLE "public"."expense_requests" OWNER TO "postgres";
+
+
+COMMENT ON TABLE "public"."expense_requests" IS 'Harcama Formu talebinin başlık ve proje bilgileri';
+
+
+
 CREATE TABLE IF NOT EXISTS "public"."finance_approval_cover_items" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
     "finance_request_id" "uuid" NOT NULL,
@@ -1516,6 +1562,26 @@ ALTER TABLE ONLY "public"."employees"
 
 
 
+ALTER TABLE ONLY "public"."expense_items"
+    ADD CONSTRAINT "expense_items_expense_request_id_row_order_key" UNIQUE ("expense_request_id", "row_order");
+
+
+
+ALTER TABLE ONLY "public"."expense_items"
+    ADD CONSTRAINT "expense_items_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."expense_requests"
+    ADD CONSTRAINT "expense_requests_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."expense_requests"
+    ADD CONSTRAINT "expense_requests_request_id_key" UNIQUE ("request_id");
+
+
+
 ALTER TABLE ONLY "public"."finance_approval_cover_items"
     ADD CONSTRAINT "finance_approval_cover_items_finance_request_id_row_order_key" UNIQUE ("finance_request_id", "row_order");
 
@@ -1796,6 +1862,14 @@ CREATE INDEX "idx_employee_positions_position" ON "public"."employee_positions" 
 
 
 
+CREATE INDEX "idx_expense_items_parent" ON "public"."expense_items" USING "btree" ("expense_request_id");
+
+
+
+CREATE INDEX "idx_expense_requests_request_id" ON "public"."expense_requests" USING "btree" ("request_id");
+
+
+
 CREATE INDEX "idx_finance_approval_cover_items_parent" ON "public"."finance_approval_cover_items" USING "btree" ("finance_request_id");
 
 
@@ -1964,6 +2038,16 @@ ALTER TABLE ONLY "public"."employee_positions"
 
 ALTER TABLE ONLY "public"."employee_positions"
     ADD CONSTRAINT "employee_positions_position_id_fkey" FOREIGN KEY ("position_id") REFERENCES "public"."positions"("id");
+
+
+
+ALTER TABLE ONLY "public"."expense_items"
+    ADD CONSTRAINT "expense_items_expense_request_id_fkey" FOREIGN KEY ("expense_request_id") REFERENCES "public"."expense_requests"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."expense_requests"
+    ADD CONSTRAINT "expense_requests_request_id_fkey" FOREIGN KEY ("request_id") REFERENCES "public"."requests"("id") ON DELETE CASCADE;
 
 
 
@@ -2364,6 +2448,79 @@ CREATE POLICY "employees_update_own_signature" ON "public"."employees" FOR UPDAT
   WHERE ("app_users"."id" = "auth"."uid"())))) WITH CHECK (("id" = ( SELECT "app_users"."employee_id"
    FROM "public"."app_users"
   WHERE ("app_users"."id" = "auth"."uid"()))));
+
+
+
+ALTER TABLE "public"."expense_items" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "expense_items_delete" ON "public"."expense_items" FOR DELETE USING ((EXISTS ( SELECT 1
+   FROM (("public"."expense_requests" "er"
+     JOIN "public"."requests" "r" ON (("r"."id" = "er"."request_id")))
+     JOIN "public"."app_users" "au" ON (("au"."employee_id" = "r"."requester_employee_id")))
+  WHERE (("er"."id" = "expense_items"."expense_request_id") AND ("au"."id" = "auth"."uid"()) AND ("r"."status" = 'DRAFT'::"public"."request_status")))));
+
+
+
+CREATE POLICY "expense_items_insert" ON "public"."expense_items" FOR INSERT WITH CHECK ((EXISTS ( SELECT 1
+   FROM (("public"."expense_requests" "er"
+     JOIN "public"."requests" "r" ON (("r"."id" = "er"."request_id")))
+     JOIN "public"."app_users" "au" ON (("au"."employee_id" = "r"."requester_employee_id")))
+  WHERE (("er"."id" = "expense_items"."expense_request_id") AND ("au"."id" = "auth"."uid"())))));
+
+
+
+CREATE POLICY "expense_items_select" ON "public"."expense_items" FOR SELECT USING ((EXISTS ( SELECT 1
+   FROM ("public"."expense_requests" "er"
+     JOIN "public"."requests" "r" ON (("r"."id" = "er"."request_id")))
+  WHERE (("er"."id" = "expense_items"."expense_request_id") AND (("r"."requester_employee_id" IN ( SELECT "app_users"."employee_id"
+           FROM "public"."app_users"
+          WHERE ("app_users"."id" = "auth"."uid"()))) OR (EXISTS ( SELECT 1
+           FROM "public"."request_approvals" "ra"
+          WHERE (("ra"."request_id" = "r"."id") AND ("ra"."approver_employee_id" IN ( SELECT "app_users"."employee_id"
+                   FROM "public"."app_users"
+                  WHERE ("app_users"."id" = "auth"."uid"())))))) OR (EXISTS ( SELECT 1
+           FROM "public"."app_users" "au"
+          WHERE (("au"."id" = "auth"."uid"()) AND ("au"."role" = 'ORG_ADMIN'::"text")))))))));
+
+
+
+CREATE POLICY "expense_items_update" ON "public"."expense_items" FOR UPDATE USING ((EXISTS ( SELECT 1
+   FROM (("public"."expense_requests" "er"
+     JOIN "public"."requests" "r" ON (("r"."id" = "er"."request_id")))
+     JOIN "public"."app_users" "au" ON (("au"."employee_id" = "r"."requester_employee_id")))
+  WHERE (("er"."id" = "expense_items"."expense_request_id") AND ("au"."id" = "auth"."uid"()) AND ("r"."status" = 'DRAFT'::"public"."request_status")))));
+
+
+
+ALTER TABLE "public"."expense_requests" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "expense_requests_insert" ON "public"."expense_requests" FOR INSERT WITH CHECK ((EXISTS ( SELECT 1
+   FROM ("public"."requests" "r"
+     JOIN "public"."app_users" "au" ON (("au"."employee_id" = "r"."requester_employee_id")))
+  WHERE (("r"."id" = "expense_requests"."request_id") AND ("au"."id" = "auth"."uid"())))));
+
+
+
+CREATE POLICY "expense_requests_select" ON "public"."expense_requests" FOR SELECT USING ((EXISTS ( SELECT 1
+   FROM "public"."requests" "r"
+  WHERE (("r"."id" = "expense_requests"."request_id") AND (("r"."requester_employee_id" IN ( SELECT "app_users"."employee_id"
+           FROM "public"."app_users"
+          WHERE ("app_users"."id" = "auth"."uid"()))) OR (EXISTS ( SELECT 1
+           FROM "public"."request_approvals" "ra"
+          WHERE (("ra"."request_id" = "r"."id") AND ("ra"."approver_employee_id" IN ( SELECT "app_users"."employee_id"
+                   FROM "public"."app_users"
+                  WHERE ("app_users"."id" = "auth"."uid"())))))) OR (EXISTS ( SELECT 1
+           FROM "public"."app_users" "au"
+          WHERE (("au"."id" = "auth"."uid"()) AND ("au"."role" = 'ORG_ADMIN'::"text")))))))));
+
+
+
+CREATE POLICY "expense_requests_update" ON "public"."expense_requests" FOR UPDATE USING ((EXISTS ( SELECT 1
+   FROM ("public"."requests" "r"
+     JOIN "public"."app_users" "au" ON (("au"."employee_id" = "r"."requester_employee_id")))
+  WHERE (("r"."id" = "expense_requests"."request_id") AND ("au"."id" = "auth"."uid"()) AND ("r"."status" = 'DRAFT'::"public"."request_status")))));
 
 
 
@@ -3279,6 +3436,18 @@ GRANT ALL ON TABLE "public"."employee_positions" TO "service_role";
 GRANT ALL ON TABLE "public"."employees" TO "anon";
 GRANT ALL ON TABLE "public"."employees" TO "authenticated";
 GRANT ALL ON TABLE "public"."employees" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."expense_items" TO "anon";
+GRANT ALL ON TABLE "public"."expense_items" TO "authenticated";
+GRANT ALL ON TABLE "public"."expense_items" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."expense_requests" TO "anon";
+GRANT ALL ON TABLE "public"."expense_requests" TO "authenticated";
+GRANT ALL ON TABLE "public"."expense_requests" TO "service_role";
 
 
 

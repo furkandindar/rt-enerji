@@ -23,6 +23,16 @@ COMMENT ON SCHEMA "public" IS 'standard public schema';
 
 
 
+CREATE TYPE "public"."accounting_capacity_type" AS ENUM (
+    'KAPASITE',
+    'ANASAHA',
+    'YEKA'
+);
+
+
+ALTER TYPE "public"."accounting_capacity_type" OWNER TO "postgres";
+
+
 CREATE TYPE "public"."approval_status" AS ENUM (
     'PENDING',
     'APPROVED',
@@ -36,7 +46,8 @@ ALTER TYPE "public"."approval_status" OWNER TO "postgres";
 CREATE TYPE "public"."approver_type" AS ENUM (
     'REQUESTER',
     'UNIT_HEAD',
-    'STATIC_POSITION'
+    'STATIC_POSITION',
+    'DYNAMIC_USER_LIST'
 );
 
 
@@ -53,6 +64,27 @@ CREATE TYPE "public"."checklist_status" AS ENUM (
 ALTER TYPE "public"."checklist_status" OWNER TO "postgres";
 
 
+CREATE TYPE "public"."finance_expense_area" AS ENUM (
+    'ANA_SAHA',
+    'ELEKTRIKSEL_KAPASITE_ARTISI',
+    'YEKA'
+);
+
+
+ALTER TYPE "public"."finance_expense_area" OWNER TO "postgres";
+
+
+CREATE TYPE "public"."finance_funding_source" AS ENUM (
+    'KREDI',
+    'OZ_KAYNAK',
+    'NAKIT_FAZLASI',
+    'DIGER'
+);
+
+
+ALTER TYPE "public"."finance_funding_source" OWNER TO "postgres";
+
+
 CREATE TYPE "public"."leave_type" AS ENUM (
     'ANNUAL_LEAVE',
     'SHORT_LEAVE'
@@ -60,6 +92,35 @@ CREATE TYPE "public"."leave_type" AS ENUM (
 
 
 ALTER TYPE "public"."leave_type" OWNER TO "postgres";
+
+
+CREATE TYPE "public"."mukayese_currency" AS ENUM (
+    'TRY',
+    'USD',
+    'EUR'
+);
+
+
+ALTER TYPE "public"."mukayese_currency" OWNER TO "postgres";
+
+
+CREATE TYPE "public"."mukayese_row_type" AS ENUM (
+    'ITEM',
+    'SUBTOTAL'
+);
+
+
+ALTER TYPE "public"."mukayese_row_type" OWNER TO "postgres";
+
+
+CREATE TYPE "public"."mukayese_unit" AS ENUM (
+    'ADET',
+    'SET',
+    'GUN'
+);
+
+
+ALTER TYPE "public"."mukayese_unit" OWNER TO "postgres";
 
 
 CREATE TYPE "public"."notification_type" AS ENUM (
@@ -109,6 +170,134 @@ CREATE TYPE "public"."request_status" AS ENUM (
 
 
 ALTER TYPE "public"."request_status" OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."create_mukayese_request"("p_workflow_definition_id" "uuid", "p_requester_employee_id" "uuid", "p_header" "jsonb", "p_items" "jsonb", "p_suppliers" "jsonb", "p_prices" "jsonb") RETURNS "uuid"
+    LANGUAGE "plpgsql"
+    AS $$
+DECLARE
+  v_request_id          UUID;
+  v_mukayese_request_id UUID;
+BEGIN
+  -- ----------------------------------------------------------------
+  -- 1. Ana request kaydı (status = 'PENDING' → tek seferde submit)
+  -- ----------------------------------------------------------------
+  INSERT INTO public.requests (
+    workflow_definition_id,
+    requester_employee_id,
+    status,
+    current_step,
+    submitted_at
+  ) VALUES (
+    p_workflow_definition_id,
+    p_requester_employee_id,
+    'PENDING',
+    1,
+    now()
+  )
+  RETURNING id INTO v_request_id;
+
+  -- ----------------------------------------------------------------
+  -- 2. mukayese_requests (header + footer + FX snapshot)
+  -- ----------------------------------------------------------------
+  INSERT INTO public.mukayese_requests (
+    request_id,
+    project_title,
+    form_currency,
+    fx_eur_try,
+    fx_usd_try,
+    fx_eur_usd,
+    fx_snapshot_at,
+    form_date,
+    notes,
+    kdv_rate,
+    preparer_full_name,
+    company,
+    subject,
+    request_content,
+    request_amount_text,
+    request_reason
+  ) VALUES (
+    v_request_id,
+    p_header->>'project_title',
+    (p_header->>'form_currency')::public.mukayese_currency,
+    NULLIF(p_header->>'fx_eur_try','')::numeric,
+    NULLIF(p_header->>'fx_usd_try','')::numeric,
+    NULLIF(p_header->>'fx_eur_usd','')::numeric,
+    NULLIF(p_header->>'fx_snapshot_at','')::timestamptz,
+    (p_header->>'form_date')::date,
+    NULLIF(p_header->>'notes',''),
+    (p_header->>'kdv_rate')::numeric,
+    p_header->>'preparer_full_name',
+    p_header->>'company',
+    p_header->>'subject',
+    p_header->>'request_content',
+    p_header->>'request_amount_text',
+    p_header->>'request_reason'
+  )
+  RETURNING id INTO v_mukayese_request_id;
+
+  -- ----------------------------------------------------------------
+  -- 3. mukayese_items (matris satırları)
+  -- ----------------------------------------------------------------
+  INSERT INTO public.mukayese_items (
+    mukayese_request_id, row_order, row_type, description, quantity, unit
+  )
+  SELECT
+    v_mukayese_request_id,
+    (item->>'row_order')::smallint,
+    (item->>'row_type')::public.mukayese_row_type,
+    NULLIF(item->>'description',''),
+    NULLIF(item->>'quantity','')::numeric,
+    NULLIF(item->>'unit','')::public.mukayese_unit
+  FROM jsonb_array_elements(p_items) AS item;
+
+  -- ----------------------------------------------------------------
+  -- 4. mukayese_suppliers (matris sütunları + footer firma alanları)
+  -- ----------------------------------------------------------------
+  INSERT INTO public.mukayese_suppliers (
+    mukayese_request_id, column_order, company_name,
+    payment_terms, technical_description, delivery_time, contact_name, contact_phone
+  )
+  SELECT
+    v_mukayese_request_id,
+    (s->>'column_order')::smallint,
+    s->>'company_name',
+    NULLIF(s->>'payment_terms',''),
+    NULLIF(s->>'technical_description',''),
+    NULLIF(s->>'delivery_time',''),
+    NULLIF(s->>'contact_name',''),
+    NULLIF(s->>'contact_phone','')
+  FROM jsonb_array_elements(p_suppliers) AS s;
+
+  -- ----------------------------------------------------------------
+  -- 5. mukayese_prices (hücreler) - row_order/column_order ile eşle
+  -- ----------------------------------------------------------------
+  INSERT INTO public.mukayese_prices (
+    mukayese_item_id, mukayese_supplier_id, unit_price
+  )
+  SELECT
+    mi.id,
+    ms.id,
+    (price->>'unit_price')::numeric
+  FROM jsonb_array_elements(p_prices) AS price
+  JOIN public.mukayese_items mi
+    ON mi.mukayese_request_id = v_mukayese_request_id
+   AND mi.row_order = (price->>'row_order')::smallint
+  JOIN public.mukayese_suppliers ms
+    ON ms.mukayese_request_id = v_mukayese_request_id
+   AND ms.column_order = (price->>'column_order')::smallint;
+
+  RETURN v_request_id;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."create_mukayese_request"("p_workflow_definition_id" "uuid", "p_requester_employee_id" "uuid", "p_header" "jsonb", "p_items" "jsonb", "p_suppliers" "jsonb", "p_prices" "jsonb") OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."create_mukayese_request"("p_workflow_definition_id" "uuid", "p_requester_employee_id" "uuid", "p_header" "jsonb", "p_items" "jsonb", "p_suppliers" "jsonb", "p_prices" "jsonb") IS 'Mukayese Formu için atomik talep oluşturma. requests + mukayese_requests + mukayese_items + mukayese_suppliers + mukayese_prices tek transaction''da yazılır. Onay zinciri ayrıca backend tarafından createApprovalChain ile kurulur.';
+
 
 
 CREATE OR REPLACE FUNCTION "public"."create_notification"("p_user_id" "uuid", "p_title" "text", "p_message" "text", "p_type" "text", "p_reference_id" "uuid" DEFAULT NULL::"uuid") RETURNS "uuid"
@@ -232,6 +421,19 @@ $$;
 ALTER FUNCTION "public"."is_approver_for_same_request"("p_request_id" "uuid") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."set_updated_at"() RETURNS "trigger"
+    LANGUAGE "plpgsql"
+    AS $$
+begin
+  new.updated_at := now();
+  return new;
+end;
+$$;
+
+
+ALTER FUNCTION "public"."set_updated_at"() OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."update_updated_at_column"() RETURNS "trigger"
     LANGUAGE "plpgsql"
     AS $$
@@ -249,16 +451,90 @@ SET default_tablespace = '';
 SET default_table_access_method = "heap";
 
 
+CREATE TABLE IF NOT EXISTS "public"."accounting_approval_cover_items" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "accounting_request_id" "uuid" NOT NULL,
+    "row_order" smallint NOT NULL,
+    "item_date" "date" NOT NULL,
+    "company_name" "text" NOT NULL,
+    "payee_name" "text" NOT NULL,
+    "item_subject" "text" NOT NULL,
+    "capacity_type" "public"."accounting_capacity_type" NOT NULL,
+    "invoice_amount" numeric(14,2) NOT NULL,
+    "payable_amount" numeric(14,2) NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "accounting_approval_cover_items_invoice_amount_check" CHECK (("invoice_amount" >= (0)::numeric)),
+    CONSTRAINT "accounting_approval_cover_items_payable_amount_check" CHECK (("payable_amount" >= (0)::numeric))
+);
+
+
+ALTER TABLE "public"."accounting_approval_cover_items" OWNER TO "postgres";
+
+
+COMMENT ON TABLE "public"."accounting_approval_cover_items" IS 'Onay Kapağı Muhasebe - ödeme tablosu satırları (min 1 satır uygulama katmanında doğrulanır)';
+
+
+
+CREATE TABLE IF NOT EXISTS "public"."accounting_approval_cover_requests" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "request_id" "uuid" NOT NULL,
+    "subject" "text" NOT NULL,
+    "request_date" "date" DEFAULT CURRENT_DATE NOT NULL,
+    "document_no" "text" NOT NULL,
+    "demirbas_registered" boolean NOT NULL,
+    "has_dispatch_note" boolean NOT NULL,
+    "has_delivery_info" boolean NOT NULL,
+    "has_invoice_record" boolean NOT NULL,
+    "has_accounting_prog_entry" boolean NOT NULL,
+    "has_arvento_record" boolean NOT NULL,
+    "paid_from_credit" boolean NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL
+);
+
+
+ALTER TABLE "public"."accounting_approval_cover_requests" OWNER TO "postgres";
+
+
+COMMENT ON TABLE "public"."accounting_approval_cover_requests" IS 'Onay Kapağı Muhasebe talebinin başlık ve değerlendirme alanları';
+
+
+
 CREATE TABLE IF NOT EXISTS "public"."app_users" (
     "id" "uuid" NOT NULL,
     "email" "text" NOT NULL,
     "employee_id" "uuid",
     "role" "text" DEFAULT 'ORG_VIEWER'::"text" NOT NULL,
-    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "privacy_accepted_at" timestamp with time zone
 );
 
 
 ALTER TABLE "public"."app_users" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."approval_letter_requests" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "request_id" "uuid" NOT NULL,
+    "letter_date" "date" NOT NULL,
+    "company" "text" NOT NULL,
+    "project" "text" NOT NULL,
+    "subject" "text" NOT NULL,
+    "content" "text" NOT NULL,
+    "has_payment_table" boolean DEFAULT false,
+    "comparison_approval_date" "date",
+    "agreement_amount" "text",
+    "has_contract" boolean,
+    "paid_amounts" "jsonb" DEFAULT '[]'::"jsonb",
+    "remaining_payment" "text",
+    "requested_payment_amount" "text",
+    "remaining_after_payment" "text",
+    "created_at" timestamp with time zone DEFAULT "now"(),
+    "updated_at" timestamp with time zone DEFAULT "now"()
+);
+
+
+ALTER TABLE "public"."approval_letter_requests" OWNER TO "postgres";
 
 
 CREATE TABLE IF NOT EXISTS "public"."companies" (
@@ -322,6 +598,98 @@ COMMENT ON COLUMN "public"."employees"."signature_font" IS 'Seçilen font: Balle
 
 
 
+CREATE TABLE IF NOT EXISTS "public"."expense_items" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "expense_request_id" "uuid" NOT NULL,
+    "row_order" smallint NOT NULL,
+    "item_date" "date" NOT NULL,
+    "document_no" "text",
+    "description" "text" NOT NULL,
+    "amount" numeric(14,2) NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "expense_items_amount_check" CHECK (("amount" >= (0)::numeric))
+);
+
+
+ALTER TABLE "public"."expense_items" OWNER TO "postgres";
+
+
+COMMENT ON TABLE "public"."expense_items" IS 'Harcama Formu - harcama satırları (min 1 satır uygulama katmanında doğrulanır)';
+
+
+
+CREATE TABLE IF NOT EXISTS "public"."expense_requests" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "request_id" "uuid" NOT NULL,
+    "request_date" "date" DEFAULT CURRENT_DATE NOT NULL,
+    "project_name" "text" NOT NULL,
+    "project_code" "text" NOT NULL,
+    "is_travel" boolean DEFAULT false NOT NULL,
+    "work_or_destination" "text" NOT NULL,
+    "travel_person_count" smallint,
+    "travel_date" "date",
+    "travel_duration" "text",
+    "advance_amount" numeric(14,2),
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "expense_requests_advance_amount_check" CHECK ((("advance_amount" IS NULL) OR ("advance_amount" >= (0)::numeric))),
+    CONSTRAINT "expense_requests_travel_person_count_check" CHECK ((("travel_person_count" IS NULL) OR ("travel_person_count" > 0)))
+);
+
+
+ALTER TABLE "public"."expense_requests" OWNER TO "postgres";
+
+
+COMMENT ON TABLE "public"."expense_requests" IS 'Harcama Formu talebinin başlık ve proje bilgileri';
+
+
+
+CREATE TABLE IF NOT EXISTS "public"."finance_approval_cover_items" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "finance_request_id" "uuid" NOT NULL,
+    "row_order" smallint NOT NULL,
+    "item_date" "date" NOT NULL,
+    "company_name" "text" NOT NULL,
+    "payee_name" "text" NOT NULL,
+    "item_subject" "text" NOT NULL,
+    "invoice_amount" numeric(14,2) NOT NULL,
+    "payable_amount" numeric(14,2) NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "finance_approval_cover_items_invoice_amount_check" CHECK (("invoice_amount" >= (0)::numeric)),
+    CONSTRAINT "finance_approval_cover_items_payable_amount_check" CHECK (("payable_amount" >= (0)::numeric))
+);
+
+
+ALTER TABLE "public"."finance_approval_cover_items" OWNER TO "postgres";
+
+
+COMMENT ON TABLE "public"."finance_approval_cover_items" IS 'Onay Kapağı Finans - ödeme tablosu satırları (min 1 satır uygulama katmanında doğrulanır)';
+
+
+
+CREATE TABLE IF NOT EXISTS "public"."finance_approval_cover_requests" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "request_id" "uuid" NOT NULL,
+    "subject" "text" NOT NULL,
+    "request_date" "date" DEFAULT CURRENT_DATE NOT NULL,
+    "document_no" "text" NOT NULL,
+    "account_available" boolean NOT NULL,
+    "cash_flow_recorded" boolean NOT NULL,
+    "expense_area" "public"."finance_expense_area" NOT NULL,
+    "funding_source" "public"."finance_funding_source" NOT NULL,
+    "has_rt_enerji_proforma" boolean NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL
+);
+
+
+ALTER TABLE "public"."finance_approval_cover_requests" OWNER TO "postgres";
+
+
+COMMENT ON TABLE "public"."finance_approval_cover_requests" IS 'Onay Kapağı Finans talebinin başlık ve değerlendirme alanları';
+
+
+
 CREATE TABLE IF NOT EXISTS "public"."grade_levels" (
     "band" smallint NOT NULL,
     "name" "text" NOT NULL,
@@ -364,6 +732,103 @@ COMMENT ON COLUMN "public"."leave_requests"."overtime_amount" IS 'Sadece yıllı
 
 
 COMMENT ON COLUMN "public"."leave_requests"."hr_note" IS 'Personel Müdürlüğü tarafından eklenen not (opsiyonel)';
+
+
+
+CREATE TABLE IF NOT EXISTS "public"."mukayese_items" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "mukayese_request_id" "uuid" NOT NULL,
+    "row_order" smallint NOT NULL,
+    "row_type" "public"."mukayese_row_type" DEFAULT 'ITEM'::"public"."mukayese_row_type" NOT NULL,
+    "description" "text",
+    "quantity" numeric(14,4),
+    "unit" "public"."mukayese_unit",
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "mukayese_items_check" CHECK (((("row_type" = 'ITEM'::"public"."mukayese_row_type") AND ("description" IS NOT NULL) AND ("quantity" IS NOT NULL) AND ("unit" IS NOT NULL) AND ("quantity" > (0)::numeric)) OR (("row_type" = 'SUBTOTAL'::"public"."mukayese_row_type") AND ("quantity" IS NULL) AND ("unit" IS NULL))))
+);
+
+
+ALTER TABLE "public"."mukayese_items" OWNER TO "postgres";
+
+
+COMMENT ON TABLE "public"."mukayese_items" IS 'Mukayese matrisi satırları. row_type=SUBTOTAL satırları runtime''da hesaplanır.';
+
+
+
+CREATE TABLE IF NOT EXISTS "public"."mukayese_prices" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "mukayese_item_id" "uuid" NOT NULL,
+    "mukayese_supplier_id" "uuid" NOT NULL,
+    "unit_price" numeric(14,4) DEFAULT 0 NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "mukayese_prices_unit_price_check" CHECK (("unit_price" >= (0)::numeric))
+);
+
+
+ALTER TABLE "public"."mukayese_prices" OWNER TO "postgres";
+
+
+COMMENT ON TABLE "public"."mukayese_prices" IS 'Mukayese matrisi hücreleri. Yalnızca ITEM satırları için kayıt oluşturulur.';
+
+
+
+CREATE TABLE IF NOT EXISTS "public"."mukayese_requests" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "request_id" "uuid" NOT NULL,
+    "project_title" "text" NOT NULL,
+    "form_currency" "public"."mukayese_currency" NOT NULL,
+    "fx_eur_try" numeric(12,4),
+    "fx_usd_try" numeric(12,4),
+    "fx_eur_usd" numeric(12,6),
+    "fx_snapshot_at" timestamp with time zone,
+    "form_date" "date" DEFAULT CURRENT_DATE NOT NULL,
+    "notes" "text",
+    "kdv_rate" numeric(5,2) DEFAULT 20.00 NOT NULL,
+    "preparer_full_name" "text" NOT NULL,
+    "company" "text" NOT NULL,
+    "subject" "text" NOT NULL,
+    "request_content" "text" NOT NULL,
+    "request_amount_text" "text" NOT NULL,
+    "request_reason" "text" NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "mukayese_requests_kdv_rate_check" CHECK ((("kdv_rate" >= (0)::numeric) AND ("kdv_rate" <= (100)::numeric)))
+);
+
+
+ALTER TABLE "public"."mukayese_requests" OWNER TO "postgres";
+
+
+COMMENT ON TABLE "public"."mukayese_requests" IS 'Mukayese Formu başlık, FX snapshot ve footer metin alanları';
+
+
+
+COMMENT ON COLUMN "public"."mukayese_requests"."form_currency" IS 'Mukayese tablosunda kullanılacak para birimi (form genelinde tek seçim)';
+
+
+
+COMMENT ON COLUMN "public"."mukayese_requests"."fx_snapshot_at" IS 'FX kurlarının TCMB''den çekildiği zaman (geçmiş PDF üretiminde tutarlılık için)';
+
+
+
+CREATE TABLE IF NOT EXISTS "public"."mukayese_suppliers" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "mukayese_request_id" "uuid" NOT NULL,
+    "column_order" smallint NOT NULL,
+    "company_name" "text" NOT NULL,
+    "payment_terms" "text",
+    "technical_description" "text",
+    "delivery_time" "text",
+    "contact_name" "text",
+    "contact_phone" "text",
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL
+);
+
+
+ALTER TABLE "public"."mukayese_suppliers" OWNER TO "postgres";
+
+
+COMMENT ON TABLE "public"."mukayese_suppliers" IS 'Mukayese matrisi sütunları (teklif alınan firmalar) ve footer firma alanları';
 
 
 
@@ -566,7 +1031,8 @@ CREATE TABLE IF NOT EXISTS "public"."request_approvals" (
     "status" "public"."approval_status" DEFAULT 'PENDING'::"public"."approval_status" NOT NULL,
     "comment" "text",
     "decided_at" timestamp with time zone,
-    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "sequence_order" integer NOT NULL
 );
 
 
@@ -768,7 +1234,13 @@ CREATE TABLE IF NOT EXISTS "public"."stamp_requests" (
     "description" "text",
     "created_at" timestamp with time zone DEFAULT "now"(),
     "updated_at" timestamp with time zone DEFAULT "now"(),
-    "subject" "text" DEFAULT ''::"text" NOT NULL
+    "subject" "text" DEFAULT ''::"text" NOT NULL,
+    "stamp_x_ratio" numeric(7,6),
+    "stamp_y_ratio" numeric(7,6),
+    "stamp_position_overrides" "jsonb",
+    CONSTRAINT "stamp_requests_overrides_is_object" CHECK ((("stamp_position_overrides" IS NULL) OR ("jsonb_typeof"("stamp_position_overrides") = 'object'::"text"))),
+    CONSTRAINT "stamp_requests_ratio_bounds" CHECK (((("stamp_x_ratio" IS NULL) OR (("stamp_x_ratio" >= (0)::numeric) AND ("stamp_x_ratio" <= (1)::numeric))) AND (("stamp_y_ratio" IS NULL) OR (("stamp_y_ratio" >= (0)::numeric) AND ("stamp_y_ratio" <= (1)::numeric))))),
+    CONSTRAINT "stamp_requests_xy_both_or_none" CHECK (((("stamp_x_ratio" IS NULL) AND ("stamp_y_ratio" IS NULL)) OR (("stamp_x_ratio" IS NOT NULL) AND ("stamp_y_ratio" IS NOT NULL))))
 );
 
 
@@ -776,6 +1248,18 @@ ALTER TABLE "public"."stamp_requests" OWNER TO "postgres";
 
 
 COMMENT ON TABLE "public"."stamp_requests" IS 'Kaşeli belge onay süreci detayları';
+
+
+
+COMMENT ON COLUMN "public"."stamp_requests"."stamp_x_ratio" IS 'Kaşenin sol-üst köşesi için X oranı (0-1), UI top-left origin. NULL ise stamp_position preset kullanılır.';
+
+
+
+COMMENT ON COLUMN "public"."stamp_requests"."stamp_y_ratio" IS 'Kaşenin sol-üst köşesi için Y oranı (0-1), UI top-left origin. NULL ise stamp_position preset kullanılır.';
+
+
+
+COMMENT ON COLUMN "public"."stamp_requests"."stamp_position_overrides" IS 'Sayfa bazlı konum override. Format: {"<1-based_page_number>": {"x": 0-1, "y": 0-1}}. NULL veya {} ise tüm sayfalarda default ratio kullanılır.';
 
 
 
@@ -839,6 +1323,41 @@ CREATE TABLE IF NOT EXISTS "public"."unit_types" (
 
 
 ALTER TABLE "public"."unit_types" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."user_ms_tokens" (
+    "user_id" "uuid" NOT NULL,
+    "access_token" "text" NOT NULL,
+    "access_token_expires_at" timestamp with time zone NOT NULL,
+    "refresh_token" "text" NOT NULL,
+    "scope" "text",
+    "provider_user_id" "text",
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL
+);
+
+
+ALTER TABLE "public"."user_ms_tokens" OWNER TO "postgres";
+
+
+COMMENT ON TABLE "public"."user_ms_tokens" IS 'Microsoft Graph Delegated OAuth token store. Server-only via service_role; RLS bloklu.';
+
+
+
+COMMENT ON COLUMN "public"."user_ms_tokens"."user_id" IS 'auth.users.id ile 1:1. Kullanıcı silinirse cascade ile silinir.';
+
+
+
+COMMENT ON COLUMN "public"."user_ms_tokens"."access_token" IS 'Short-lived access token (~1 saat). Bitince refresh_token ile yenilenir.';
+
+
+
+COMMENT ON COLUMN "public"."user_ms_tokens"."refresh_token" IS 'Long-lived refresh token (90 güne kadar). Hassas; client''a asla gönderme.';
+
+
+
+COMMENT ON COLUMN "public"."user_ms_tokens"."scope" IS 'Son refresh sırasında Graph tarafından iade edilen scope listesi (space separated).';
+
 
 
 CREATE TABLE IF NOT EXISTS "public"."workflow_definitions" (
@@ -973,6 +1492,26 @@ COMMENT ON COLUMN "public"."workflow_steps"."phase" IS 'Adımın fazı. APPROVAL
 
 
 
+ALTER TABLE ONLY "public"."accounting_approval_cover_items"
+    ADD CONSTRAINT "accounting_approval_cover_ite_accounting_request_id_row_ord_key" UNIQUE ("accounting_request_id", "row_order");
+
+
+
+ALTER TABLE ONLY "public"."accounting_approval_cover_items"
+    ADD CONSTRAINT "accounting_approval_cover_items_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."accounting_approval_cover_requests"
+    ADD CONSTRAINT "accounting_approval_cover_requests_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."accounting_approval_cover_requests"
+    ADD CONSTRAINT "accounting_approval_cover_requests_request_id_key" UNIQUE ("request_id");
+
+
+
 ALTER TABLE ONLY "public"."app_users"
     ADD CONSTRAINT "app_users_email_key" UNIQUE ("email");
 
@@ -980,6 +1519,16 @@ ALTER TABLE ONLY "public"."app_users"
 
 ALTER TABLE ONLY "public"."app_users"
     ADD CONSTRAINT "app_users_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."approval_letter_requests"
+    ADD CONSTRAINT "approval_letter_requests_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."approval_letter_requests"
+    ADD CONSTRAINT "approval_letter_requests_request_id_key" UNIQUE ("request_id");
 
 
 
@@ -1013,6 +1562,46 @@ ALTER TABLE ONLY "public"."employees"
 
 
 
+ALTER TABLE ONLY "public"."expense_items"
+    ADD CONSTRAINT "expense_items_expense_request_id_row_order_key" UNIQUE ("expense_request_id", "row_order");
+
+
+
+ALTER TABLE ONLY "public"."expense_items"
+    ADD CONSTRAINT "expense_items_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."expense_requests"
+    ADD CONSTRAINT "expense_requests_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."expense_requests"
+    ADD CONSTRAINT "expense_requests_request_id_key" UNIQUE ("request_id");
+
+
+
+ALTER TABLE ONLY "public"."finance_approval_cover_items"
+    ADD CONSTRAINT "finance_approval_cover_items_finance_request_id_row_order_key" UNIQUE ("finance_request_id", "row_order");
+
+
+
+ALTER TABLE ONLY "public"."finance_approval_cover_items"
+    ADD CONSTRAINT "finance_approval_cover_items_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."finance_approval_cover_requests"
+    ADD CONSTRAINT "finance_approval_cover_requests_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."finance_approval_cover_requests"
+    ADD CONSTRAINT "finance_approval_cover_requests_request_id_key" UNIQUE ("request_id");
+
+
+
 ALTER TABLE ONLY "public"."grade_levels"
     ADD CONSTRAINT "grade_levels_pkey" PRIMARY KEY ("band");
 
@@ -1025,6 +1614,46 @@ ALTER TABLE ONLY "public"."leave_requests"
 
 ALTER TABLE ONLY "public"."leave_requests"
     ADD CONSTRAINT "leave_requests_request_id_key" UNIQUE ("request_id");
+
+
+
+ALTER TABLE ONLY "public"."mukayese_items"
+    ADD CONSTRAINT "mukayese_items_mukayese_request_id_row_order_key" UNIQUE ("mukayese_request_id", "row_order");
+
+
+
+ALTER TABLE ONLY "public"."mukayese_items"
+    ADD CONSTRAINT "mukayese_items_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."mukayese_prices"
+    ADD CONSTRAINT "mukayese_prices_mukayese_item_id_mukayese_supplier_id_key" UNIQUE ("mukayese_item_id", "mukayese_supplier_id");
+
+
+
+ALTER TABLE ONLY "public"."mukayese_prices"
+    ADD CONSTRAINT "mukayese_prices_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."mukayese_requests"
+    ADD CONSTRAINT "mukayese_requests_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."mukayese_requests"
+    ADD CONSTRAINT "mukayese_requests_request_id_key" UNIQUE ("request_id");
+
+
+
+ALTER TABLE ONLY "public"."mukayese_suppliers"
+    ADD CONSTRAINT "mukayese_suppliers_mukayese_request_id_column_order_key" UNIQUE ("mukayese_request_id", "column_order");
+
+
+
+ALTER TABLE ONLY "public"."mukayese_suppliers"
+    ADD CONSTRAINT "mukayese_suppliers_pkey" PRIMARY KEY ("id");
 
 
 
@@ -1094,7 +1723,7 @@ ALTER TABLE ONLY "public"."request_approvals"
 
 
 ALTER TABLE ONLY "public"."request_approvals"
-    ADD CONSTRAINT "request_approvals_request_id_workflow_step_id_key" UNIQUE ("request_id", "workflow_step_id");
+    ADD CONSTRAINT "request_approvals_request_step_approver_key" UNIQUE ("request_id", "workflow_step_id", "approver_employee_id");
 
 
 
@@ -1173,6 +1802,11 @@ ALTER TABLE ONLY "public"."unit_types"
 
 
 
+ALTER TABLE ONLY "public"."user_ms_tokens"
+    ADD CONSTRAINT "user_ms_tokens_pkey" PRIMARY KEY ("user_id");
+
+
+
 ALTER TABLE ONLY "public"."workflow_definitions"
     ADD CONSTRAINT "workflow_definitions_code_key" UNIQUE ("code");
 
@@ -1208,6 +1842,18 @@ ALTER TABLE ONLY "public"."workflow_steps"
 
 
 
+CREATE INDEX "idx_accounting_approval_cover_items_parent" ON "public"."accounting_approval_cover_items" USING "btree" ("accounting_request_id");
+
+
+
+CREATE INDEX "idx_accounting_approval_cover_requests_request_id" ON "public"."accounting_approval_cover_requests" USING "btree" ("request_id");
+
+
+
+CREATE INDEX "idx_approval_letter_requests_request_id" ON "public"."approval_letter_requests" USING "btree" ("request_id");
+
+
+
 CREATE INDEX "idx_employee_positions_employee" ON "public"."employee_positions" USING "btree" ("employee_id");
 
 
@@ -1216,11 +1862,47 @@ CREATE INDEX "idx_employee_positions_position" ON "public"."employee_positions" 
 
 
 
+CREATE INDEX "idx_expense_items_parent" ON "public"."expense_items" USING "btree" ("expense_request_id");
+
+
+
+CREATE INDEX "idx_expense_requests_request_id" ON "public"."expense_requests" USING "btree" ("request_id");
+
+
+
+CREATE INDEX "idx_finance_approval_cover_items_parent" ON "public"."finance_approval_cover_items" USING "btree" ("finance_request_id");
+
+
+
+CREATE INDEX "idx_finance_approval_cover_requests_request_id" ON "public"."finance_approval_cover_requests" USING "btree" ("request_id");
+
+
+
 CREATE INDEX "idx_leave_requests_request" ON "public"."leave_requests" USING "btree" ("request_id");
 
 
 
 CREATE INDEX "idx_leave_requests_type" ON "public"."leave_requests" USING "btree" ("leave_type");
+
+
+
+CREATE INDEX "idx_mukayese_items_parent" ON "public"."mukayese_items" USING "btree" ("mukayese_request_id");
+
+
+
+CREATE INDEX "idx_mukayese_prices_item" ON "public"."mukayese_prices" USING "btree" ("mukayese_item_id");
+
+
+
+CREATE INDEX "idx_mukayese_prices_supplier" ON "public"."mukayese_prices" USING "btree" ("mukayese_supplier_id");
+
+
+
+CREATE INDEX "idx_mukayese_requests_request_id" ON "public"."mukayese_requests" USING "btree" ("request_id");
+
+
+
+CREATE INDEX "idx_mukayese_suppliers_parent" ON "public"."mukayese_suppliers" USING "btree" ("mukayese_request_id");
 
 
 
@@ -1261,6 +1943,10 @@ CREATE INDEX "idx_request_approvals_approver" ON "public"."request_approvals" US
 
 
 CREATE INDEX "idx_request_approvals_request" ON "public"."request_approvals" USING "btree" ("request_id");
+
+
+
+CREATE INDEX "idx_request_approvals_request_sequence" ON "public"."request_approvals" USING "btree" ("request_id", "sequence_order");
 
 
 
@@ -1316,6 +2002,20 @@ CREATE OR REPLACE TRIGGER "set_updated_at_workflow_definitions" BEFORE UPDATE ON
 
 
 
+CREATE OR REPLACE TRIGGER "trg_user_ms_tokens_updated_at" BEFORE UPDATE ON "public"."user_ms_tokens" FOR EACH ROW EXECUTE FUNCTION "public"."set_updated_at"();
+
+
+
+ALTER TABLE ONLY "public"."accounting_approval_cover_items"
+    ADD CONSTRAINT "accounting_approval_cover_items_accounting_request_id_fkey" FOREIGN KEY ("accounting_request_id") REFERENCES "public"."accounting_approval_cover_requests"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."accounting_approval_cover_requests"
+    ADD CONSTRAINT "accounting_approval_cover_requests_request_id_fkey" FOREIGN KEY ("request_id") REFERENCES "public"."requests"("id") ON DELETE CASCADE;
+
+
+
 ALTER TABLE ONLY "public"."app_users"
     ADD CONSTRAINT "app_users_employee_id_fkey" FOREIGN KEY ("employee_id") REFERENCES "public"."employees"("id");
 
@@ -1323,6 +2023,11 @@ ALTER TABLE ONLY "public"."app_users"
 
 ALTER TABLE ONLY "public"."app_users"
     ADD CONSTRAINT "app_users_id_fkey" FOREIGN KEY ("id") REFERENCES "auth"."users"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."approval_letter_requests"
+    ADD CONSTRAINT "approval_letter_requests_request_id_fkey" FOREIGN KEY ("request_id") REFERENCES "public"."requests"("id") ON DELETE CASCADE;
 
 
 
@@ -1336,8 +2041,53 @@ ALTER TABLE ONLY "public"."employee_positions"
 
 
 
+ALTER TABLE ONLY "public"."expense_items"
+    ADD CONSTRAINT "expense_items_expense_request_id_fkey" FOREIGN KEY ("expense_request_id") REFERENCES "public"."expense_requests"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."expense_requests"
+    ADD CONSTRAINT "expense_requests_request_id_fkey" FOREIGN KEY ("request_id") REFERENCES "public"."requests"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."finance_approval_cover_items"
+    ADD CONSTRAINT "finance_approval_cover_items_finance_request_id_fkey" FOREIGN KEY ("finance_request_id") REFERENCES "public"."finance_approval_cover_requests"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."finance_approval_cover_requests"
+    ADD CONSTRAINT "finance_approval_cover_requests_request_id_fkey" FOREIGN KEY ("request_id") REFERENCES "public"."requests"("id") ON DELETE CASCADE;
+
+
+
 ALTER TABLE ONLY "public"."leave_requests"
     ADD CONSTRAINT "leave_requests_request_id_fkey" FOREIGN KEY ("request_id") REFERENCES "public"."requests"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."mukayese_items"
+    ADD CONSTRAINT "mukayese_items_mukayese_request_id_fkey" FOREIGN KEY ("mukayese_request_id") REFERENCES "public"."mukayese_requests"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."mukayese_prices"
+    ADD CONSTRAINT "mukayese_prices_mukayese_item_id_fkey" FOREIGN KEY ("mukayese_item_id") REFERENCES "public"."mukayese_items"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."mukayese_prices"
+    ADD CONSTRAINT "mukayese_prices_mukayese_supplier_id_fkey" FOREIGN KEY ("mukayese_supplier_id") REFERENCES "public"."mukayese_suppliers"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."mukayese_requests"
+    ADD CONSTRAINT "mukayese_requests_request_id_fkey" FOREIGN KEY ("request_id") REFERENCES "public"."requests"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."mukayese_suppliers"
+    ADD CONSTRAINT "mukayese_suppliers_mukayese_request_id_fkey" FOREIGN KEY ("mukayese_request_id") REFERENCES "public"."mukayese_requests"("id") ON DELETE CASCADE;
 
 
 
@@ -1471,6 +2221,11 @@ ALTER TABLE ONLY "public"."travel_assignment_requests"
 
 
 
+ALTER TABLE ONLY "public"."user_ms_tokens"
+    ADD CONSTRAINT "user_ms_tokens_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id") ON DELETE CASCADE;
+
+
+
 ALTER TABLE ONLY "public"."workflow_initiators"
     ADD CONSTRAINT "workflow_initiators_position_id_fkey" FOREIGN KEY ("position_id") REFERENCES "public"."positions"("id") ON DELETE CASCADE;
 
@@ -1501,6 +2256,79 @@ ALTER TABLE ONLY "public"."workflow_steps"
 
 
 
+ALTER TABLE "public"."accounting_approval_cover_items" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "accounting_approval_cover_items_delete" ON "public"."accounting_approval_cover_items" FOR DELETE USING ((EXISTS ( SELECT 1
+   FROM (("public"."accounting_approval_cover_requests" "acr"
+     JOIN "public"."requests" "r" ON (("r"."id" = "acr"."request_id")))
+     JOIN "public"."app_users" "au" ON (("au"."employee_id" = "r"."requester_employee_id")))
+  WHERE (("acr"."id" = "accounting_approval_cover_items"."accounting_request_id") AND ("au"."id" = "auth"."uid"()) AND ("r"."status" = 'DRAFT'::"public"."request_status")))));
+
+
+
+CREATE POLICY "accounting_approval_cover_items_insert" ON "public"."accounting_approval_cover_items" FOR INSERT WITH CHECK ((EXISTS ( SELECT 1
+   FROM (("public"."accounting_approval_cover_requests" "acr"
+     JOIN "public"."requests" "r" ON (("r"."id" = "acr"."request_id")))
+     JOIN "public"."app_users" "au" ON (("au"."employee_id" = "r"."requester_employee_id")))
+  WHERE (("acr"."id" = "accounting_approval_cover_items"."accounting_request_id") AND ("au"."id" = "auth"."uid"())))));
+
+
+
+CREATE POLICY "accounting_approval_cover_items_select" ON "public"."accounting_approval_cover_items" FOR SELECT USING ((EXISTS ( SELECT 1
+   FROM ("public"."accounting_approval_cover_requests" "acr"
+     JOIN "public"."requests" "r" ON (("r"."id" = "acr"."request_id")))
+  WHERE (("acr"."id" = "accounting_approval_cover_items"."accounting_request_id") AND (("r"."requester_employee_id" IN ( SELECT "app_users"."employee_id"
+           FROM "public"."app_users"
+          WHERE ("app_users"."id" = "auth"."uid"()))) OR (EXISTS ( SELECT 1
+           FROM "public"."request_approvals" "ra"
+          WHERE (("ra"."request_id" = "r"."id") AND ("ra"."approver_employee_id" IN ( SELECT "app_users"."employee_id"
+                   FROM "public"."app_users"
+                  WHERE ("app_users"."id" = "auth"."uid"())))))) OR (EXISTS ( SELECT 1
+           FROM "public"."app_users" "au"
+          WHERE (("au"."id" = "auth"."uid"()) AND ("au"."role" = 'ORG_ADMIN'::"text")))))))));
+
+
+
+CREATE POLICY "accounting_approval_cover_items_update" ON "public"."accounting_approval_cover_items" FOR UPDATE USING ((EXISTS ( SELECT 1
+   FROM (("public"."accounting_approval_cover_requests" "acr"
+     JOIN "public"."requests" "r" ON (("r"."id" = "acr"."request_id")))
+     JOIN "public"."app_users" "au" ON (("au"."employee_id" = "r"."requester_employee_id")))
+  WHERE (("acr"."id" = "accounting_approval_cover_items"."accounting_request_id") AND ("au"."id" = "auth"."uid"()) AND ("r"."status" = 'DRAFT'::"public"."request_status")))));
+
+
+
+ALTER TABLE "public"."accounting_approval_cover_requests" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "accounting_approval_cover_requests_insert" ON "public"."accounting_approval_cover_requests" FOR INSERT WITH CHECK ((EXISTS ( SELECT 1
+   FROM ("public"."requests" "r"
+     JOIN "public"."app_users" "au" ON (("au"."employee_id" = "r"."requester_employee_id")))
+  WHERE (("r"."id" = "accounting_approval_cover_requests"."request_id") AND ("au"."id" = "auth"."uid"())))));
+
+
+
+CREATE POLICY "accounting_approval_cover_requests_select" ON "public"."accounting_approval_cover_requests" FOR SELECT USING ((EXISTS ( SELECT 1
+   FROM "public"."requests" "r"
+  WHERE (("r"."id" = "accounting_approval_cover_requests"."request_id") AND (("r"."requester_employee_id" IN ( SELECT "app_users"."employee_id"
+           FROM "public"."app_users"
+          WHERE ("app_users"."id" = "auth"."uid"()))) OR (EXISTS ( SELECT 1
+           FROM "public"."request_approvals" "ra"
+          WHERE (("ra"."request_id" = "r"."id") AND ("ra"."approver_employee_id" IN ( SELECT "app_users"."employee_id"
+                   FROM "public"."app_users"
+                  WHERE ("app_users"."id" = "auth"."uid"())))))) OR (EXISTS ( SELECT 1
+           FROM "public"."app_users" "au"
+          WHERE (("au"."id" = "auth"."uid"()) AND ("au"."role" = 'ORG_ADMIN'::"text")))))))));
+
+
+
+CREATE POLICY "accounting_approval_cover_requests_update" ON "public"."accounting_approval_cover_requests" FOR UPDATE USING ((EXISTS ( SELECT 1
+   FROM ("public"."requests" "r"
+     JOIN "public"."app_users" "au" ON (("au"."employee_id" = "r"."requester_employee_id")))
+  WHERE (("r"."id" = "accounting_approval_cover_requests"."request_id") AND ("au"."id" = "auth"."uid"()) AND ("r"."status" = 'DRAFT'::"public"."request_status")))));
+
+
+
 ALTER TABLE "public"."app_users" ENABLE ROW LEVEL SECURITY;
 
 
@@ -1508,10 +2336,52 @@ CREATE POLICY "app_users_select_all" ON "public"."app_users" FOR SELECT TO "auth
 
 
 
+CREATE POLICY "app_users_update_privacy_self" ON "public"."app_users" FOR UPDATE USING (("id" = "auth"."uid"())) WITH CHECK (("id" = "auth"."uid"()));
+
+
+
+ALTER TABLE "public"."approval_letter_requests" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "approval_letter_requests_insert" ON "public"."approval_letter_requests" FOR INSERT WITH CHECK ((EXISTS ( SELECT 1
+   FROM ("public"."requests" "r"
+     JOIN "public"."app_users" "au" ON (("au"."employee_id" = "r"."requester_employee_id")))
+  WHERE (("r"."id" = "approval_letter_requests"."request_id") AND ("au"."id" = "auth"."uid"())))));
+
+
+
+CREATE POLICY "approval_letter_requests_select" ON "public"."approval_letter_requests" FOR SELECT USING ((EXISTS ( SELECT 1
+   FROM "public"."requests" "r"
+  WHERE (("r"."id" = "approval_letter_requests"."request_id") AND (("r"."requester_employee_id" IN ( SELECT "app_users"."employee_id"
+           FROM "public"."app_users"
+          WHERE ("app_users"."id" = "auth"."uid"()))) OR (EXISTS ( SELECT 1
+           FROM "public"."request_approvals" "ra"
+          WHERE (("ra"."request_id" = "r"."id") AND ("ra"."approver_employee_id" IN ( SELECT "app_users"."employee_id"
+                   FROM "public"."app_users"
+                  WHERE ("app_users"."id" = "auth"."uid"())))))))))));
+
+
+
 ALTER TABLE "public"."companies" ENABLE ROW LEVEL SECURITY;
 
 
-CREATE POLICY "companies_select" ON "public"."companies" FOR SELECT USING (true);
+CREATE POLICY "companies_insert_admin" ON "public"."companies" FOR INSERT WITH CHECK ((EXISTS ( SELECT 1
+   FROM "public"."app_users" "au"
+  WHERE (("au"."id" = "auth"."uid"()) AND ("au"."role" = 'ORG_ADMIN'::"text")))));
+
+
+
+CREATE POLICY "companies_select_auth" ON "public"."companies" FOR SELECT USING ((EXISTS ( SELECT 1
+   FROM "public"."app_users" "au"
+  WHERE (("au"."id" = "auth"."uid"()) AND ("au"."role" = ANY (ARRAY['ORG_ADMIN'::"text", 'ORG_VIEWER'::"text"]))))));
+
+
+
+CREATE POLICY "companies_update_admin" ON "public"."companies" FOR UPDATE USING ((EXISTS ( SELECT 1
+   FROM "public"."app_users" "au"
+  WHERE (("au"."id" = "auth"."uid"()) AND ("au"."role" = 'ORG_ADMIN'::"text"))))) WITH CHECK ((EXISTS ( SELECT 1
+   FROM "public"."app_users" "au"
+  WHERE (("au"."id" = "auth"."uid"()) AND ("au"."role" = 'ORG_ADMIN'::"text")))));
 
 
 
@@ -1581,6 +2451,152 @@ CREATE POLICY "employees_update_own_signature" ON "public"."employees" FOR UPDAT
 
 
 
+ALTER TABLE "public"."expense_items" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "expense_items_delete" ON "public"."expense_items" FOR DELETE USING ((EXISTS ( SELECT 1
+   FROM (("public"."expense_requests" "er"
+     JOIN "public"."requests" "r" ON (("r"."id" = "er"."request_id")))
+     JOIN "public"."app_users" "au" ON (("au"."employee_id" = "r"."requester_employee_id")))
+  WHERE (("er"."id" = "expense_items"."expense_request_id") AND ("au"."id" = "auth"."uid"()) AND ("r"."status" = 'DRAFT'::"public"."request_status")))));
+
+
+
+CREATE POLICY "expense_items_insert" ON "public"."expense_items" FOR INSERT WITH CHECK ((EXISTS ( SELECT 1
+   FROM (("public"."expense_requests" "er"
+     JOIN "public"."requests" "r" ON (("r"."id" = "er"."request_id")))
+     JOIN "public"."app_users" "au" ON (("au"."employee_id" = "r"."requester_employee_id")))
+  WHERE (("er"."id" = "expense_items"."expense_request_id") AND ("au"."id" = "auth"."uid"())))));
+
+
+
+CREATE POLICY "expense_items_select" ON "public"."expense_items" FOR SELECT USING ((EXISTS ( SELECT 1
+   FROM ("public"."expense_requests" "er"
+     JOIN "public"."requests" "r" ON (("r"."id" = "er"."request_id")))
+  WHERE (("er"."id" = "expense_items"."expense_request_id") AND (("r"."requester_employee_id" IN ( SELECT "app_users"."employee_id"
+           FROM "public"."app_users"
+          WHERE ("app_users"."id" = "auth"."uid"()))) OR (EXISTS ( SELECT 1
+           FROM "public"."request_approvals" "ra"
+          WHERE (("ra"."request_id" = "r"."id") AND ("ra"."approver_employee_id" IN ( SELECT "app_users"."employee_id"
+                   FROM "public"."app_users"
+                  WHERE ("app_users"."id" = "auth"."uid"())))))) OR (EXISTS ( SELECT 1
+           FROM "public"."app_users" "au"
+          WHERE (("au"."id" = "auth"."uid"()) AND ("au"."role" = 'ORG_ADMIN'::"text")))))))));
+
+
+
+CREATE POLICY "expense_items_update" ON "public"."expense_items" FOR UPDATE USING ((EXISTS ( SELECT 1
+   FROM (("public"."expense_requests" "er"
+     JOIN "public"."requests" "r" ON (("r"."id" = "er"."request_id")))
+     JOIN "public"."app_users" "au" ON (("au"."employee_id" = "r"."requester_employee_id")))
+  WHERE (("er"."id" = "expense_items"."expense_request_id") AND ("au"."id" = "auth"."uid"()) AND ("r"."status" = 'DRAFT'::"public"."request_status")))));
+
+
+
+ALTER TABLE "public"."expense_requests" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "expense_requests_insert" ON "public"."expense_requests" FOR INSERT WITH CHECK ((EXISTS ( SELECT 1
+   FROM ("public"."requests" "r"
+     JOIN "public"."app_users" "au" ON (("au"."employee_id" = "r"."requester_employee_id")))
+  WHERE (("r"."id" = "expense_requests"."request_id") AND ("au"."id" = "auth"."uid"())))));
+
+
+
+CREATE POLICY "expense_requests_select" ON "public"."expense_requests" FOR SELECT USING ((EXISTS ( SELECT 1
+   FROM "public"."requests" "r"
+  WHERE (("r"."id" = "expense_requests"."request_id") AND (("r"."requester_employee_id" IN ( SELECT "app_users"."employee_id"
+           FROM "public"."app_users"
+          WHERE ("app_users"."id" = "auth"."uid"()))) OR (EXISTS ( SELECT 1
+           FROM "public"."request_approvals" "ra"
+          WHERE (("ra"."request_id" = "r"."id") AND ("ra"."approver_employee_id" IN ( SELECT "app_users"."employee_id"
+                   FROM "public"."app_users"
+                  WHERE ("app_users"."id" = "auth"."uid"())))))) OR (EXISTS ( SELECT 1
+           FROM "public"."app_users" "au"
+          WHERE (("au"."id" = "auth"."uid"()) AND ("au"."role" = 'ORG_ADMIN'::"text")))))))));
+
+
+
+CREATE POLICY "expense_requests_update" ON "public"."expense_requests" FOR UPDATE USING ((EXISTS ( SELECT 1
+   FROM ("public"."requests" "r"
+     JOIN "public"."app_users" "au" ON (("au"."employee_id" = "r"."requester_employee_id")))
+  WHERE (("r"."id" = "expense_requests"."request_id") AND ("au"."id" = "auth"."uid"()) AND ("r"."status" = 'DRAFT'::"public"."request_status")))));
+
+
+
+ALTER TABLE "public"."finance_approval_cover_items" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "finance_approval_cover_items_delete" ON "public"."finance_approval_cover_items" FOR DELETE USING ((EXISTS ( SELECT 1
+   FROM (("public"."finance_approval_cover_requests" "fcr"
+     JOIN "public"."requests" "r" ON (("r"."id" = "fcr"."request_id")))
+     JOIN "public"."app_users" "au" ON (("au"."employee_id" = "r"."requester_employee_id")))
+  WHERE (("fcr"."id" = "finance_approval_cover_items"."finance_request_id") AND ("au"."id" = "auth"."uid"()) AND ("r"."status" = 'DRAFT'::"public"."request_status")))));
+
+
+
+CREATE POLICY "finance_approval_cover_items_insert" ON "public"."finance_approval_cover_items" FOR INSERT WITH CHECK ((EXISTS ( SELECT 1
+   FROM (("public"."finance_approval_cover_requests" "fcr"
+     JOIN "public"."requests" "r" ON (("r"."id" = "fcr"."request_id")))
+     JOIN "public"."app_users" "au" ON (("au"."employee_id" = "r"."requester_employee_id")))
+  WHERE (("fcr"."id" = "finance_approval_cover_items"."finance_request_id") AND ("au"."id" = "auth"."uid"())))));
+
+
+
+CREATE POLICY "finance_approval_cover_items_select" ON "public"."finance_approval_cover_items" FOR SELECT USING ((EXISTS ( SELECT 1
+   FROM ("public"."finance_approval_cover_requests" "fcr"
+     JOIN "public"."requests" "r" ON (("r"."id" = "fcr"."request_id")))
+  WHERE (("fcr"."id" = "finance_approval_cover_items"."finance_request_id") AND (("r"."requester_employee_id" IN ( SELECT "app_users"."employee_id"
+           FROM "public"."app_users"
+          WHERE ("app_users"."id" = "auth"."uid"()))) OR (EXISTS ( SELECT 1
+           FROM "public"."request_approvals" "ra"
+          WHERE (("ra"."request_id" = "r"."id") AND ("ra"."approver_employee_id" IN ( SELECT "app_users"."employee_id"
+                   FROM "public"."app_users"
+                  WHERE ("app_users"."id" = "auth"."uid"())))))) OR (EXISTS ( SELECT 1
+           FROM "public"."app_users" "au"
+          WHERE (("au"."id" = "auth"."uid"()) AND ("au"."role" = 'ORG_ADMIN'::"text")))))))));
+
+
+
+CREATE POLICY "finance_approval_cover_items_update" ON "public"."finance_approval_cover_items" FOR UPDATE USING ((EXISTS ( SELECT 1
+   FROM (("public"."finance_approval_cover_requests" "fcr"
+     JOIN "public"."requests" "r" ON (("r"."id" = "fcr"."request_id")))
+     JOIN "public"."app_users" "au" ON (("au"."employee_id" = "r"."requester_employee_id")))
+  WHERE (("fcr"."id" = "finance_approval_cover_items"."finance_request_id") AND ("au"."id" = "auth"."uid"()) AND ("r"."status" = 'DRAFT'::"public"."request_status")))));
+
+
+
+ALTER TABLE "public"."finance_approval_cover_requests" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "finance_approval_cover_requests_insert" ON "public"."finance_approval_cover_requests" FOR INSERT WITH CHECK ((EXISTS ( SELECT 1
+   FROM ("public"."requests" "r"
+     JOIN "public"."app_users" "au" ON (("au"."employee_id" = "r"."requester_employee_id")))
+  WHERE (("r"."id" = "finance_approval_cover_requests"."request_id") AND ("au"."id" = "auth"."uid"())))));
+
+
+
+CREATE POLICY "finance_approval_cover_requests_select" ON "public"."finance_approval_cover_requests" FOR SELECT USING ((EXISTS ( SELECT 1
+   FROM "public"."requests" "r"
+  WHERE (("r"."id" = "finance_approval_cover_requests"."request_id") AND (("r"."requester_employee_id" IN ( SELECT "app_users"."employee_id"
+           FROM "public"."app_users"
+          WHERE ("app_users"."id" = "auth"."uid"()))) OR (EXISTS ( SELECT 1
+           FROM "public"."request_approvals" "ra"
+          WHERE (("ra"."request_id" = "r"."id") AND ("ra"."approver_employee_id" IN ( SELECT "app_users"."employee_id"
+                   FROM "public"."app_users"
+                  WHERE ("app_users"."id" = "auth"."uid"())))))) OR (EXISTS ( SELECT 1
+           FROM "public"."app_users" "au"
+          WHERE (("au"."id" = "auth"."uid"()) AND ("au"."role" = 'ORG_ADMIN'::"text")))))))));
+
+
+
+CREATE POLICY "finance_approval_cover_requests_update" ON "public"."finance_approval_cover_requests" FOR UPDATE USING ((EXISTS ( SELECT 1
+   FROM ("public"."requests" "r"
+     JOIN "public"."app_users" "au" ON (("au"."employee_id" = "r"."requester_employee_id")))
+  WHERE (("r"."id" = "finance_approval_cover_requests"."request_id") AND ("au"."id" = "auth"."uid"()) AND ("r"."status" = 'DRAFT'::"public"."request_status")))));
+
+
+
 ALTER TABLE "public"."grade_levels" ENABLE ROW LEVEL SECURITY;
 
 
@@ -1637,6 +2653,167 @@ CREATE POLICY "leave_requests_update" ON "public"."leave_requests" FOR UPDATE US
            FROM ("public"."request_approvals" "ra"
              JOIN "public"."workflow_steps" "ws" ON (("ra"."workflow_step_id" = "ws"."id")))
           WHERE (("ra"."request_id" = "r"."id") AND ("ra"."approver_employee_id" = "public"."get_current_employee_id"()) AND ("ra"."status" = 'PENDING'::"public"."approval_status") AND ("r"."current_step" = "ws"."step_order") AND ("ws"."action_type" = 'FILL_AND_SIGN'::"text")))))))));
+
+
+
+ALTER TABLE "public"."mukayese_items" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "mukayese_items_delete" ON "public"."mukayese_items" FOR DELETE USING ((EXISTS ( SELECT 1
+   FROM (("public"."mukayese_requests" "mr"
+     JOIN "public"."requests" "r" ON (("r"."id" = "mr"."request_id")))
+     JOIN "public"."app_users" "au" ON (("au"."employee_id" = "r"."requester_employee_id")))
+  WHERE (("mr"."id" = "mukayese_items"."mukayese_request_id") AND ("au"."id" = "auth"."uid"()) AND ("r"."status" = 'DRAFT'::"public"."request_status")))));
+
+
+
+CREATE POLICY "mukayese_items_insert" ON "public"."mukayese_items" FOR INSERT WITH CHECK ((EXISTS ( SELECT 1
+   FROM (("public"."mukayese_requests" "mr"
+     JOIN "public"."requests" "r" ON (("r"."id" = "mr"."request_id")))
+     JOIN "public"."app_users" "au" ON (("au"."employee_id" = "r"."requester_employee_id")))
+  WHERE (("mr"."id" = "mukayese_items"."mukayese_request_id") AND ("au"."id" = "auth"."uid"())))));
+
+
+
+CREATE POLICY "mukayese_items_select" ON "public"."mukayese_items" FOR SELECT USING ((EXISTS ( SELECT 1
+   FROM ("public"."mukayese_requests" "mr"
+     JOIN "public"."requests" "r" ON (("r"."id" = "mr"."request_id")))
+  WHERE (("mr"."id" = "mukayese_items"."mukayese_request_id") AND (("r"."requester_employee_id" IN ( SELECT "app_users"."employee_id"
+           FROM "public"."app_users"
+          WHERE ("app_users"."id" = "auth"."uid"()))) OR (EXISTS ( SELECT 1
+           FROM "public"."request_approvals" "ra"
+          WHERE (("ra"."request_id" = "r"."id") AND ("ra"."approver_employee_id" IN ( SELECT "app_users"."employee_id"
+                   FROM "public"."app_users"
+                  WHERE ("app_users"."id" = "auth"."uid"())))))) OR (EXISTS ( SELECT 1
+           FROM "public"."app_users" "au"
+          WHERE (("au"."id" = "auth"."uid"()) AND ("au"."role" = 'ORG_ADMIN'::"text")))))))));
+
+
+
+CREATE POLICY "mukayese_items_update" ON "public"."mukayese_items" FOR UPDATE USING ((EXISTS ( SELECT 1
+   FROM (("public"."mukayese_requests" "mr"
+     JOIN "public"."requests" "r" ON (("r"."id" = "mr"."request_id")))
+     JOIN "public"."app_users" "au" ON (("au"."employee_id" = "r"."requester_employee_id")))
+  WHERE (("mr"."id" = "mukayese_items"."mukayese_request_id") AND ("au"."id" = "auth"."uid"()) AND ("r"."status" = 'DRAFT'::"public"."request_status")))));
+
+
+
+ALTER TABLE "public"."mukayese_prices" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "mukayese_prices_delete" ON "public"."mukayese_prices" FOR DELETE USING ((EXISTS ( SELECT 1
+   FROM ((("public"."mukayese_items" "mi"
+     JOIN "public"."mukayese_requests" "mr" ON (("mr"."id" = "mi"."mukayese_request_id")))
+     JOIN "public"."requests" "r" ON (("r"."id" = "mr"."request_id")))
+     JOIN "public"."app_users" "au" ON (("au"."employee_id" = "r"."requester_employee_id")))
+  WHERE (("mi"."id" = "mukayese_prices"."mukayese_item_id") AND ("au"."id" = "auth"."uid"()) AND ("r"."status" = 'DRAFT'::"public"."request_status")))));
+
+
+
+CREATE POLICY "mukayese_prices_insert" ON "public"."mukayese_prices" FOR INSERT WITH CHECK ((EXISTS ( SELECT 1
+   FROM ((("public"."mukayese_items" "mi"
+     JOIN "public"."mukayese_requests" "mr" ON (("mr"."id" = "mi"."mukayese_request_id")))
+     JOIN "public"."requests" "r" ON (("r"."id" = "mr"."request_id")))
+     JOIN "public"."app_users" "au" ON (("au"."employee_id" = "r"."requester_employee_id")))
+  WHERE (("mi"."id" = "mukayese_prices"."mukayese_item_id") AND ("au"."id" = "auth"."uid"())))));
+
+
+
+CREATE POLICY "mukayese_prices_select" ON "public"."mukayese_prices" FOR SELECT USING ((EXISTS ( SELECT 1
+   FROM (("public"."mukayese_items" "mi"
+     JOIN "public"."mukayese_requests" "mr" ON (("mr"."id" = "mi"."mukayese_request_id")))
+     JOIN "public"."requests" "r" ON (("r"."id" = "mr"."request_id")))
+  WHERE (("mi"."id" = "mukayese_prices"."mukayese_item_id") AND (("r"."requester_employee_id" IN ( SELECT "app_users"."employee_id"
+           FROM "public"."app_users"
+          WHERE ("app_users"."id" = "auth"."uid"()))) OR (EXISTS ( SELECT 1
+           FROM "public"."request_approvals" "ra"
+          WHERE (("ra"."request_id" = "r"."id") AND ("ra"."approver_employee_id" IN ( SELECT "app_users"."employee_id"
+                   FROM "public"."app_users"
+                  WHERE ("app_users"."id" = "auth"."uid"())))))) OR (EXISTS ( SELECT 1
+           FROM "public"."app_users" "au"
+          WHERE (("au"."id" = "auth"."uid"()) AND ("au"."role" = 'ORG_ADMIN'::"text")))))))));
+
+
+
+CREATE POLICY "mukayese_prices_update" ON "public"."mukayese_prices" FOR UPDATE USING ((EXISTS ( SELECT 1
+   FROM ((("public"."mukayese_items" "mi"
+     JOIN "public"."mukayese_requests" "mr" ON (("mr"."id" = "mi"."mukayese_request_id")))
+     JOIN "public"."requests" "r" ON (("r"."id" = "mr"."request_id")))
+     JOIN "public"."app_users" "au" ON (("au"."employee_id" = "r"."requester_employee_id")))
+  WHERE (("mi"."id" = "mukayese_prices"."mukayese_item_id") AND ("au"."id" = "auth"."uid"()) AND ("r"."status" = 'DRAFT'::"public"."request_status")))));
+
+
+
+ALTER TABLE "public"."mukayese_requests" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "mukayese_requests_insert" ON "public"."mukayese_requests" FOR INSERT WITH CHECK ((EXISTS ( SELECT 1
+   FROM ("public"."requests" "r"
+     JOIN "public"."app_users" "au" ON (("au"."employee_id" = "r"."requester_employee_id")))
+  WHERE (("r"."id" = "mukayese_requests"."request_id") AND ("au"."id" = "auth"."uid"())))));
+
+
+
+CREATE POLICY "mukayese_requests_select" ON "public"."mukayese_requests" FOR SELECT USING ((EXISTS ( SELECT 1
+   FROM "public"."requests" "r"
+  WHERE (("r"."id" = "mukayese_requests"."request_id") AND (("r"."requester_employee_id" IN ( SELECT "app_users"."employee_id"
+           FROM "public"."app_users"
+          WHERE ("app_users"."id" = "auth"."uid"()))) OR (EXISTS ( SELECT 1
+           FROM "public"."request_approvals" "ra"
+          WHERE (("ra"."request_id" = "r"."id") AND ("ra"."approver_employee_id" IN ( SELECT "app_users"."employee_id"
+                   FROM "public"."app_users"
+                  WHERE ("app_users"."id" = "auth"."uid"())))))) OR (EXISTS ( SELECT 1
+           FROM "public"."app_users" "au"
+          WHERE (("au"."id" = "auth"."uid"()) AND ("au"."role" = 'ORG_ADMIN'::"text")))))))));
+
+
+
+CREATE POLICY "mukayese_requests_update" ON "public"."mukayese_requests" FOR UPDATE USING ((EXISTS ( SELECT 1
+   FROM ("public"."requests" "r"
+     JOIN "public"."app_users" "au" ON (("au"."employee_id" = "r"."requester_employee_id")))
+  WHERE (("r"."id" = "mukayese_requests"."request_id") AND ("au"."id" = "auth"."uid"()) AND ("r"."status" = 'DRAFT'::"public"."request_status")))));
+
+
+
+ALTER TABLE "public"."mukayese_suppliers" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "mukayese_suppliers_delete" ON "public"."mukayese_suppliers" FOR DELETE USING ((EXISTS ( SELECT 1
+   FROM (("public"."mukayese_requests" "mr"
+     JOIN "public"."requests" "r" ON (("r"."id" = "mr"."request_id")))
+     JOIN "public"."app_users" "au" ON (("au"."employee_id" = "r"."requester_employee_id")))
+  WHERE (("mr"."id" = "mukayese_suppliers"."mukayese_request_id") AND ("au"."id" = "auth"."uid"()) AND ("r"."status" = 'DRAFT'::"public"."request_status")))));
+
+
+
+CREATE POLICY "mukayese_suppliers_insert" ON "public"."mukayese_suppliers" FOR INSERT WITH CHECK ((EXISTS ( SELECT 1
+   FROM (("public"."mukayese_requests" "mr"
+     JOIN "public"."requests" "r" ON (("r"."id" = "mr"."request_id")))
+     JOIN "public"."app_users" "au" ON (("au"."employee_id" = "r"."requester_employee_id")))
+  WHERE (("mr"."id" = "mukayese_suppliers"."mukayese_request_id") AND ("au"."id" = "auth"."uid"())))));
+
+
+
+CREATE POLICY "mukayese_suppliers_select" ON "public"."mukayese_suppliers" FOR SELECT USING ((EXISTS ( SELECT 1
+   FROM ("public"."mukayese_requests" "mr"
+     JOIN "public"."requests" "r" ON (("r"."id" = "mr"."request_id")))
+  WHERE (("mr"."id" = "mukayese_suppliers"."mukayese_request_id") AND (("r"."requester_employee_id" IN ( SELECT "app_users"."employee_id"
+           FROM "public"."app_users"
+          WHERE ("app_users"."id" = "auth"."uid"()))) OR (EXISTS ( SELECT 1
+           FROM "public"."request_approvals" "ra"
+          WHERE (("ra"."request_id" = "r"."id") AND ("ra"."approver_employee_id" IN ( SELECT "app_users"."employee_id"
+                   FROM "public"."app_users"
+                  WHERE ("app_users"."id" = "auth"."uid"())))))) OR (EXISTS ( SELECT 1
+           FROM "public"."app_users" "au"
+          WHERE (("au"."id" = "auth"."uid"()) AND ("au"."role" = 'ORG_ADMIN'::"text")))))))));
+
+
+
+CREATE POLICY "mukayese_suppliers_update" ON "public"."mukayese_suppliers" FOR UPDATE USING ((EXISTS ( SELECT 1
+   FROM (("public"."mukayese_requests" "mr"
+     JOIN "public"."requests" "r" ON (("r"."id" = "mr"."request_id")))
+     JOIN "public"."app_users" "au" ON (("au"."employee_id" = "r"."requester_employee_id")))
+  WHERE (("mr"."id" = "mukayese_suppliers"."mukayese_request_id") AND ("au"."id" = "auth"."uid"()) AND ("r"."status" = 'DRAFT'::"public"."request_status")))));
 
 
 
@@ -2106,6 +3283,9 @@ CREATE POLICY "unit_types_update_admin" ON "public"."unit_types" FOR UPDATE USIN
 
 
 
+ALTER TABLE "public"."user_ms_tokens" ENABLE ROW LEVEL SECURITY;
+
+
 ALTER TABLE "public"."workflow_definitions" ENABLE ROW LEVEL SECURITY;
 
 
@@ -2169,6 +3349,12 @@ GRANT USAGE ON SCHEMA "public" TO "service_role";
 
 
 
+GRANT ALL ON FUNCTION "public"."create_mukayese_request"("p_workflow_definition_id" "uuid", "p_requester_employee_id" "uuid", "p_header" "jsonb", "p_items" "jsonb", "p_suppliers" "jsonb", "p_prices" "jsonb") TO "anon";
+GRANT ALL ON FUNCTION "public"."create_mukayese_request"("p_workflow_definition_id" "uuid", "p_requester_employee_id" "uuid", "p_header" "jsonb", "p_items" "jsonb", "p_suppliers" "jsonb", "p_prices" "jsonb") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."create_mukayese_request"("p_workflow_definition_id" "uuid", "p_requester_employee_id" "uuid", "p_header" "jsonb", "p_items" "jsonb", "p_suppliers" "jsonb", "p_prices" "jsonb") TO "service_role";
+
+
+
 GRANT ALL ON FUNCTION "public"."create_notification"("p_user_id" "uuid", "p_title" "text", "p_message" "text", "p_type" "text", "p_reference_id" "uuid") TO "anon";
 GRANT ALL ON FUNCTION "public"."create_notification"("p_user_id" "uuid", "p_title" "text", "p_message" "text", "p_type" "text", "p_reference_id" "uuid") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."create_notification"("p_user_id" "uuid", "p_title" "text", "p_message" "text", "p_type" "text", "p_reference_id" "uuid") TO "service_role";
@@ -2199,15 +3385,39 @@ GRANT ALL ON FUNCTION "public"."is_approver_for_same_request"("p_request_id" "uu
 
 
 
+GRANT ALL ON FUNCTION "public"."set_updated_at"() TO "anon";
+GRANT ALL ON FUNCTION "public"."set_updated_at"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."set_updated_at"() TO "service_role";
+
+
+
 GRANT ALL ON FUNCTION "public"."update_updated_at_column"() TO "anon";
 GRANT ALL ON FUNCTION "public"."update_updated_at_column"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."update_updated_at_column"() TO "service_role";
 
 
 
+GRANT ALL ON TABLE "public"."accounting_approval_cover_items" TO "anon";
+GRANT ALL ON TABLE "public"."accounting_approval_cover_items" TO "authenticated";
+GRANT ALL ON TABLE "public"."accounting_approval_cover_items" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."accounting_approval_cover_requests" TO "anon";
+GRANT ALL ON TABLE "public"."accounting_approval_cover_requests" TO "authenticated";
+GRANT ALL ON TABLE "public"."accounting_approval_cover_requests" TO "service_role";
+
+
+
 GRANT ALL ON TABLE "public"."app_users" TO "anon";
 GRANT ALL ON TABLE "public"."app_users" TO "authenticated";
 GRANT ALL ON TABLE "public"."app_users" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."approval_letter_requests" TO "anon";
+GRANT ALL ON TABLE "public"."approval_letter_requests" TO "authenticated";
+GRANT ALL ON TABLE "public"."approval_letter_requests" TO "service_role";
 
 
 
@@ -2229,6 +3439,30 @@ GRANT ALL ON TABLE "public"."employees" TO "service_role";
 
 
 
+GRANT ALL ON TABLE "public"."expense_items" TO "anon";
+GRANT ALL ON TABLE "public"."expense_items" TO "authenticated";
+GRANT ALL ON TABLE "public"."expense_items" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."expense_requests" TO "anon";
+GRANT ALL ON TABLE "public"."expense_requests" TO "authenticated";
+GRANT ALL ON TABLE "public"."expense_requests" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."finance_approval_cover_items" TO "anon";
+GRANT ALL ON TABLE "public"."finance_approval_cover_items" TO "authenticated";
+GRANT ALL ON TABLE "public"."finance_approval_cover_items" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."finance_approval_cover_requests" TO "anon";
+GRANT ALL ON TABLE "public"."finance_approval_cover_requests" TO "authenticated";
+GRANT ALL ON TABLE "public"."finance_approval_cover_requests" TO "service_role";
+
+
+
 GRANT ALL ON TABLE "public"."grade_levels" TO "anon";
 GRANT ALL ON TABLE "public"."grade_levels" TO "authenticated";
 GRANT ALL ON TABLE "public"."grade_levels" TO "service_role";
@@ -2238,6 +3472,30 @@ GRANT ALL ON TABLE "public"."grade_levels" TO "service_role";
 GRANT ALL ON TABLE "public"."leave_requests" TO "anon";
 GRANT ALL ON TABLE "public"."leave_requests" TO "authenticated";
 GRANT ALL ON TABLE "public"."leave_requests" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."mukayese_items" TO "anon";
+GRANT ALL ON TABLE "public"."mukayese_items" TO "authenticated";
+GRANT ALL ON TABLE "public"."mukayese_items" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."mukayese_prices" TO "anon";
+GRANT ALL ON TABLE "public"."mukayese_prices" TO "authenticated";
+GRANT ALL ON TABLE "public"."mukayese_prices" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."mukayese_requests" TO "anon";
+GRANT ALL ON TABLE "public"."mukayese_requests" TO "authenticated";
+GRANT ALL ON TABLE "public"."mukayese_requests" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."mukayese_suppliers" TO "anon";
+GRANT ALL ON TABLE "public"."mukayese_suppliers" TO "authenticated";
+GRANT ALL ON TABLE "public"."mukayese_suppliers" TO "service_role";
 
 
 
@@ -2340,6 +3598,12 @@ GRANT ALL ON TABLE "public"."travel_assignment_requests" TO "service_role";
 GRANT ALL ON TABLE "public"."unit_types" TO "anon";
 GRANT ALL ON TABLE "public"."unit_types" TO "authenticated";
 GRANT ALL ON TABLE "public"."unit_types" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."user_ms_tokens" TO "anon";
+GRANT ALL ON TABLE "public"."user_ms_tokens" TO "authenticated";
+GRANT ALL ON TABLE "public"."user_ms_tokens" TO "service_role";
 
 
 
