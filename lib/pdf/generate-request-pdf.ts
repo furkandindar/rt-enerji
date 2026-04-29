@@ -11,6 +11,7 @@ import { ApprovalLetterPDFTemplate } from './approval-letter-pdf-template';
 import { FinanceApprovalCoverPDFTemplate } from './finance-approval-cover-pdf-template';
 import { AccountingApprovalCoverPDFTemplate } from './accounting-approval-cover-pdf-template';
 import { ComparisonFormPDFTemplate } from './comparison-form-pdf-template';
+import { ExpenseFormPDFTemplate } from './expense-form-pdf-template';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { SignatureFont, DEFAULT_SIGNATURE_FONT } from '@/lib/signature/types';
 
@@ -80,6 +81,10 @@ export async function generateRequestPDF(
         *,
         items:mukayese_items(*, prices:mukayese_prices(*)),
         suppliers:mukayese_suppliers(*)
+      ),
+      expense_request:expense_requests(
+        *,
+        items:expense_items(*)
       ),
       approvals:request_approvals(
         id,
@@ -234,6 +239,15 @@ export async function generateRequestPDF(
       request,
       requester: request.requester,
       mukayeseRequest: request.mukayese_request,
+      approvals: request.approvals || [],
+      signatures,
+    }) as React.ReactElement<DocumentProps>;
+  } else if (request.expense_request) {
+    // Harcama Formu PDF'i
+    pdfDocument = React.createElement(ExpenseFormPDFTemplate, {
+      request,
+      requester: request.requester,
+      expenseRequest: request.expense_request,
       approvals: request.approvals || [],
       signatures,
     }) as React.ReactElement<DocumentProps>;

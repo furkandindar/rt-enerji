@@ -286,6 +286,26 @@ export interface PendingApproval {
         unit_price: number;
       }>;
     };
+    expense_request?: {
+      id: string;
+      request_date: string;
+      project_name: string;
+      project_code: string;
+      is_travel: boolean;
+      work_or_destination: string;
+      travel_person_count: number | null;
+      travel_date: string | null;
+      travel_duration: string | null;
+      advance_amount: number | null;
+      items?: Array<{
+        id: string;
+        row_order: number;
+        item_date: string;
+        document_no: string | null;
+        description: string;
+        amount: number;
+      }>;
+    };
     approvals?: Approval[];
   };
 }

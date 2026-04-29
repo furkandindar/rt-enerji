@@ -28,6 +28,7 @@ import { ApprovalLetterDetails } from "./approval-letter-details";
 import { FinanceApprovalCoverDetails } from "./finance-approval-cover-details";
 import { AccountingApprovalCoverDetails } from "./accounting-approval-cover-details";
 import { ComparisonFormDetails } from "./comparison-form-details";
+import { ExpenseFormDetails } from "./expense-form-details";
 import { ApprovalHistoryAccordion } from "./approval-history-accordion";
 import { ApprovalActions } from "./approval-actions";
 import { PdfViewerDialog } from "@/components/pdf-viewer-dialog";
@@ -224,6 +225,9 @@ export function ApprovalDetailSheet({
                 mukayese={selectedApproval.request.mukayese_request}
                 approvals={selectedApproval.request.approvals}
               />
+            )}
+            {selectedApproval.request.expense_request && (
+              <ExpenseFormDetails approval={selectedApproval} previousStepAttachments={previousStepAttachments} />
             )}
 
             {/* Onay Adımı ve Oluşturulma */}

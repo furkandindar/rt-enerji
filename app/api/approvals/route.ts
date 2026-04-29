@@ -70,6 +70,10 @@ export async function GET() {
             items:mukayese_items(*, prices:mukayese_prices(*)),
             suppliers:mukayese_suppliers(*)
           ),
+          expense_request:expense_requests(
+            *,
+            items:expense_items(*)
+          ),
           approvals:request_approvals(
             id,
             status,

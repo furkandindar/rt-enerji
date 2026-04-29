@@ -58,6 +58,10 @@ export async function GET(request: NextRequest) {
           items:mukayese_items(*, prices:mukayese_prices(*)),
           suppliers:mukayese_suppliers(*)
         ),
+        expense_request:expense_requests(
+          *,
+          items:expense_items(*)
+        ),
         requester:employees!requester_employee_id(
           id,
           first_name,

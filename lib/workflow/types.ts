@@ -927,3 +927,55 @@ export interface CreateMukayeseInput {
   suppliers: CreateMukayeseSupplierInput[];
   prices: CreateMukayeseCellPriceInput[];
 }
+
+
+// ============================================================================
+// Expense Form (Harcama Formu) Types
+// ============================================================================
+
+export interface ExpenseItem {
+  id: string;
+  expense_request_id: string;
+  row_order: number;
+  item_date: string;
+  document_no: string | null;
+  description: string;
+  amount: number;
+  created_at: string;
+}
+
+export interface ExpenseRequest {
+  id: string;
+  request_id: string;
+  request_date: string;
+  project_name: string;
+  project_code: string;
+  is_travel: boolean;
+  work_or_destination: string;
+  travel_person_count: number | null;
+  travel_date: string | null;
+  travel_duration: string | null;
+  advance_amount: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateExpenseItemInput {
+  item_date: string;
+  document_no?: string | null;
+  description: string;
+  amount: number;
+}
+
+export interface CreateExpenseFormInput {
+  request_date: string;
+  project_name: string;
+  project_code: string;
+  is_travel: boolean;
+  work_or_destination: string;
+  travel_person_count?: number | null;
+  travel_date?: string | null;
+  travel_duration?: string | null;
+  advance_amount?: number | null;
+  items: CreateExpenseItemInput[];
+}

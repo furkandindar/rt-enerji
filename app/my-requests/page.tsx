@@ -345,6 +345,26 @@ interface Request {
       unit_price: number;
     }>;
   };
+  expense_request?: {
+    id: string;
+    request_date: string;
+    project_name: string;
+    project_code: string;
+    is_travel: boolean;
+    work_or_destination: string;
+    travel_person_count: number | null;
+    travel_date: string | null;
+    travel_duration: string | null;
+    advance_amount: number | null;
+    items?: Array<{
+      id: string;
+      row_order: number;
+      item_date: string;
+      document_no: string | null;
+      description: string;
+      amount: number;
+    }>;
+  };
   requester?: Requester;
   approvals?: Approval[];
 }
@@ -471,6 +491,9 @@ export default function MyRequestsPage() {
     }
     if (request.mukayese_request) {
       return request.mukayese_request.subject || request.mukayese_request.project_title || "-";
+    }
+    if (request.expense_request) {
+      return request.expense_request.project_name || request.expense_request.work_or_destination || "-";
     }
     return "-";
   };
@@ -1484,6 +1507,113 @@ export default function MyRequestsPage() {
                   approvals={selectedRequest.approvals}
                 />
               )}
+
+              {/* Harcama Formu specific fields */}
+              {selectedRequest.expense_request && (() => {
+                const exp = selectedRequest.expense_request;
+                const items = [...(exp.items || [])].sort((a, b) => a.row_order - b.row_order);
+                const totalAmount = items.reduce((sum, it) => sum + Number(it.amount || 0), 0);
+                const advance = Number(exp.advance_amount || 0);
+                const balance = advance - totalAmount;
+                const fmt = (v: number) => new Intl.NumberFormat("tr-TR", {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                }).format(v);
+                return (
+                  <>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <p className="text-sm font-medium text-muted-foreground">Tarih</p>
+                        <p className="text-sm font-semibold">
+                          {format(new Date(exp.request_date), "d MMMM yyyy", { locale: tr })}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-muted-foreground">Proje Adı</p>
+                        <p className="text-sm font-semibold">{exp.project_name}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-muted-foreground">Proje Kodu</p>
+                        <p className="text-sm font-semibold">{exp.project_code}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-muted-foreground">
+                          {exp.is_travel ? "Seyahat Yapılan Yer" : "İşin Adı"}
+                        </p>
+                        <p className="text-sm font-semibold">{exp.work_or_destination}</p>
+                      </div>
+                    </div>
+                    {exp.is_travel && (
+                      <div className="grid grid-cols-3 gap-4">
+                        <div>
+                          <p className="text-sm font-medium text-muted-foreground">Seyahat Eden Kişi Sayısı</p>
+                          <p className="text-sm font-semibold">{exp.travel_person_count ?? "-"}</p>
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-muted-foreground">Seyahat Tarihi</p>
+                          <p className="text-sm font-semibold">
+                            {exp.travel_date
+                              ? format(new Date(exp.travel_date), "d MMMM yyyy", { locale: tr })
+                              : "-"}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-muted-foreground">Seyahat Süresi</p>
+                          <p className="text-sm font-semibold">{exp.travel_duration || "-"}</p>
+                        </div>
+                      </div>
+                    )}
+                    {items.length > 0 && (
+                      <div className="border rounded-lg p-3 space-y-2">
+                        <p className="text-sm font-semibold">Harcama Kalemleri</p>
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-xs">
+                            <thead>
+                              <tr className="border-b text-left text-muted-foreground">
+                                <th className="py-1.5 pr-2 font-medium w-10">Sıra</th>
+                                <th className="py-1.5 pr-2 font-medium">Tarih</th>
+                                <th className="py-1.5 pr-2 font-medium">Evrak No</th>
+                                <th className="py-1.5 pr-2 font-medium">Açıklama</th>
+                                <th className="py-1.5 font-medium text-right">Tutar (TL)</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {items.map((it) => (
+                                <tr key={it.id} className="border-b last:border-0 align-top">
+                                  <td className="py-1.5 pr-2">{it.row_order}</td>
+                                  <td className="py-1.5 pr-2 whitespace-nowrap">
+                                    {format(new Date(it.item_date), "d MMM yyyy", { locale: tr })}
+                                  </td>
+                                  <td className="py-1.5 pr-2">{it.document_no || "-"}</td>
+                                  <td className="py-1.5 pr-2">{it.description}</td>
+                                  <td className="py-1.5 text-right whitespace-nowrap">
+                                    {fmt(Number(it.amount))}
+                                  </td>
+                                </tr>
+                              ))}
+                              <tr className="font-semibold">
+                                <td colSpan={4} className="py-1.5 pr-2 text-right">Toplam</td>
+                                <td className="py-1.5 text-right whitespace-nowrap">{fmt(totalAmount)}</td>
+                              </tr>
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+                    <div className="border rounded-lg p-3 space-y-2">
+                      <p className="text-sm font-semibold">Özet</p>
+                      <div className="grid grid-cols-2 gap-2 text-sm">
+                        <span className="text-muted-foreground">Avans Tutarı (a):</span>
+                        <span className="font-medium text-right">{fmt(advance)} TL</span>
+                        <span className="text-muted-foreground">Harcamalar Toplamı (b):</span>
+                        <span className="font-medium text-right">{fmt(totalAmount)} TL</span>
+                        <span className="text-muted-foreground">Bakiye Tutar (a-b):</span>
+                        <span className="font-semibold text-right">{fmt(balance)} TL</span>
+                      </div>
+                    </div>
+                  </>
+                );
+              })()}
 
               {/* Ek Dosyalar - tüm talep tipleri için */}
               {attachments.length > 0 && (

@@ -35,6 +35,12 @@ Bu doküman, RT Enerji Workflow Engine V3'e yeni bir süreç eklemek isteyen gel
 > 5. **Kod tarafındaki değişiklikler (TypeScript, React, API route'ları vb.) AI tarafından yapılır.** Bu kısıtlama yalnızca veritabanı yazma işlemlerini kapsar.
 >
 > 6. **Her sürece ek dosya desteği zorunludur.** İstisnasız her yeni süreç, `workflow_step_attachments` konfigürasyonuyla birlikte gelir ve talep formunda `<AttachmentUploader>` component'i bulundurur. Ek dosya alanı genellikle ilk adıma (Talep Eden) tanımlanır; is_required varsayılan olarak `false` olsa da bazı süreçlerde zorunlu olabilir. Detaylar için bkz. [Adım 1.5](#adım-15-ek-dosya-konfigürasyonu-zorunlu) ve [Adım 3.2](#adım-32-ek-dosya-yükleme-alanı-ekle-zorunlu).
+>
+> 7. **Aşamalı (incremental) implementasyon zorunludur.** AI asistan, yeni bir süreci **tek seferde baştan sona implement etmez**. Bunun yerine:
+>    - **Önce planlama yapılır.** Süreç gereksinimleri toplandıktan sonra AI, implementasyonu fazlara ayıran (genellikle [Implementasyon Fazları](#implementasyon-fazları) bölümündeki 4 faz) kısa bir plan sunar ve kullanıcının onayını bekler.
+>    - **Her faz ayrı ayrı uygulanır.** AI bir fazı tamamladıktan sonra **durur**, yapılan değişikliklerin kısa bir özetini verir ve kullanıcıdan geri bildirim / "devam" onayı bekler.
+>    - **Bir sonraki faza ancak kullanıcı onay verince geçilir.** Faz arası duraklamalar, kullanıcının her aşamada inceleme, test ve düzeltme yapabilmesi için kritiktir; özellikle Faz 1'deki SQL'lerin Supabase'de çalıştırılması bu duraklama sırasında yapılır.
+>    - **İstisna:** Kullanıcı açıkça "tek seferde tamamla" / "hepsini implement et" gibi bir talimat verirse bu kuralı bırakabilir; aksi halde varsayılan davranış faz-bazlı durmaktır.
 
 ---
 
@@ -113,6 +119,8 @@ Her yeni süreç 4 fazda implement edilir:
 | **Faz 2** | Backend (types + API endpoint) | ✅ Evet |
 | **Faz 3** | Frontend (form + menü + detay gösterimi) | ✅ Evet |
 | **Faz 4** | PDF template | ✅ Evet |
+
+> **🛑 Faz-bazlı durma kuralı:** AI asistan tüm fazları tek bir cevapta implement etmez. Her fazın sonunda durur, yapılan değişikliklerin kısa özetini sunar ve kullanıcının onayını bekledikten sonra bir sonraki faza geçer. Detay için bkz. [Çalışma Prensibi madde 7](#çalışma-prensibi).
 
 ---
 
