@@ -7,11 +7,31 @@
 // Config
 // ============================================================================
 
-const TENANT_ID = process.env.AZURE_TENANT_ID;
-const CLIENT_ID = process.env.AZURE_CLIENT_ID;
-const CLIENT_SECRET = process.env.AZURE_CLIENT_SECRET;
-
 const GRAPH_BASE_URL = "https://graph.microsoft.com/v1.0";
+
+interface AppConfig {
+  tenantId: string;
+  clientId: string;
+  clientSecret: string;
+}
+
+/**
+ * Env değişkenlerini okuyup tip-güvenli AppConfig döndürür.
+ * Eksik değişken varsa fırlatır; çağıran taraf string olarak güvenle kullanır.
+ */
+function getAppConfig(): AppConfig {
+  const tenantId = process.env.AZURE_TENANT_ID;
+  const clientId = process.env.AZURE_CLIENT_ID;
+  const clientSecret = process.env.AZURE_CLIENT_SECRET;
+
+  if (!tenantId || !clientId || !clientSecret) {
+    throw new Error(
+      "Microsoft Graph app config eksik: AZURE_TENANT_ID, AZURE_CLIENT_ID ve AZURE_CLIENT_SECRET gerekli."
+    );
+  }
+
+  return { tenantId, clientId, clientSecret };
+}
 
 // ============================================================================
 // Token cache (in-memory, process-wide)
@@ -19,30 +39,22 @@ const GRAPH_BASE_URL = "https://graph.microsoft.com/v1.0";
 
 let cachedToken: { token: string; expiresAt: number } | null = null;
 
-function assertAppConfig(): asserts TENANT_ID is string {
-  if (!TENANT_ID || !CLIENT_ID || !CLIENT_SECRET) {
-    throw new Error(
-      "Microsoft Graph app config eksik: AZURE_TENANT_ID, AZURE_CLIENT_ID ve AZURE_CLIENT_SECRET gerekli."
-    );
-  }
-}
-
 /**
  * Client Credentials flow ile app-level access token alır.
  * Token'ı in-memory cache'ler, süresi dolmadan 60s kalaya kadar yeniden kullanır.
  */
 export async function getAppAccessToken(): Promise<string> {
-  assertAppConfig();
-
   if (cachedToken && Date.now() < cachedToken.expiresAt - 60_000) {
     return cachedToken.token;
   }
 
-  const tokenUrl = `https://login.microsoftonline.com/${TENANT_ID}/oauth2/v2.0/token`;
+  const { tenantId, clientId, clientSecret } = getAppConfig();
+
+  const tokenUrl = `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`;
 
   const body = new URLSearchParams({
-    client_id: CLIENT_ID!,
-    client_secret: CLIENT_SECRET!,
+    client_id: clientId,
+    client_secret: clientSecret,
     scope: "https://graph.microsoft.com/.default",
     grant_type: "client_credentials",
   });
