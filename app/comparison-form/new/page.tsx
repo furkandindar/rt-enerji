@@ -6,7 +6,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
-import { Loader2, Scale, AlertCircle, TrendingUp } from "lucide-react";
+import { Loader2, Scale, AlertCircle, TrendingUp, Upload, X, FileText } from "lucide-react";
 
 import { createClient } from "@/lib/supabase/client";
 import { SignaturePanel } from "@/components/signature-panel";
@@ -186,6 +186,14 @@ export default function NewComparisonFormPage() {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [companiesLoading, setCompaniesLoading] = useState(true);
 
+  // Ek dosyalar (workflow_step_attachments config'inden gelir)
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [attachmentConfigId, setAttachmentConfigId] = useState<string | null>(null);
+  const [attachmentLabel, setAttachmentLabel] = useState<string>("Ek Dosya");
+  const [allowedMimeTypes, setAllowedMimeTypes] = useState<string[] | null>(null);
+  const [maxFileSizeBytes, setMaxFileSizeBytes] = useState<number>(10485760);
+  const [maxFiles, setMaxFiles] = useState<number>(5);
+
   // Matris state — items / suppliers / prices (test seed ile başlatılır)
   const [matrixSeed] = useState(() => seedMatrix());
   const [matrixItems, setMatrixItems] = useState<MatrixItem[]>(matrixSeed.items);
@@ -302,6 +310,70 @@ export default function NewComparisonFormPage() {
     };
   }, []);
 
+  // Attachment config yükle (workflow_step_attachments — COMPARISON_FORM step 1)
+  useEffect(() => {
+    const loadAttachmentConfig = async () => {
+      try {
+        const { data: wfDef } = await supabase
+          .from("workflow_definitions")
+          .select("id")
+          .eq("code", "COMPARISON_FORM")
+          .single();
+        if (!wfDef) return;
+
+        const { data: step } = await supabase
+          .from("workflow_steps")
+          .select("id")
+          .eq("workflow_definition_id", wfDef.id)
+          .eq("step_order", 1)
+          .single();
+        if (!step) return;
+
+        const { data: configs } = await supabase
+          .from("workflow_step_attachments")
+          .select("id, label, allowed_mime_types, max_file_size_bytes, max_files")
+          .eq("workflow_step_id", step.id);
+
+        if (configs && configs.length > 0) {
+          const config = configs[0];
+          setAttachmentConfigId(config.id);
+          setAttachmentLabel(config.label);
+          setAllowedMimeTypes(config.allowed_mime_types);
+          setMaxFileSizeBytes(config.max_file_size_bytes);
+          setMaxFiles(config.max_files);
+        }
+      } catch (error) {
+        console.error("Error loading attachment config:", error);
+      }
+    };
+    loadAttachmentConfig();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    const validFiles = files.filter((file) => {
+      if (allowedMimeTypes && !allowedMimeTypes.includes(file.type)) {
+        toast.error(`${file.name}: Desteklenmeyen dosya türü`);
+        return false;
+      }
+      if (file.size > maxFileSizeBytes) {
+        toast.error(`${file.name}: Dosya boyutu çok büyük (maks ${Math.round(maxFileSizeBytes / 1048576)} MB)`);
+        return false;
+      }
+      return true;
+    });
+    setPendingFiles((prev) => {
+      const combined = [...prev, ...validFiles];
+      return combined.slice(0, maxFiles);
+    });
+    e.target.value = "";
+  };
+
+  const removeFile = (index: number) => {
+    setPendingFiles((prev) => prev.filter((_, i) => i !== index));
+  };
+
   const onSubmit = async (values: HeaderFormValues) => {
     // Matris ön-validasyonu (backend de doğrular ama UX için erken hata)
     const itemRows = matrixItems.filter((it) => it.row_type === "ITEM");
@@ -385,6 +457,27 @@ export default function NewComparisonFormPage() {
       if (!res.ok) {
         toast.error(data?.error ?? "Talep oluşturulamadı");
         return;
+      }
+
+      // Dosyaları yükle (talep oluşturulduktan sonra)
+      const newRequestId: string | undefined = data?.id;
+      if (newRequestId && pendingFiles.length > 0) {
+        for (const file of pendingFiles) {
+          const formData = new FormData();
+          formData.append("file", file);
+          formData.append("request_id", newRequestId);
+          if (attachmentConfigId) {
+            formData.append("step_attachment_config_id", attachmentConfigId);
+          }
+          const uploadRes = await fetch("/api/attachments/upload", {
+            method: "POST",
+            body: formData,
+          });
+          if (!uploadRes.ok) {
+            console.error("Dosya yüklenemedi:", file.name);
+            toast.warning(`${file.name} yüklenemedi, talep yine de oluşturuldu`);
+          }
+        }
       }
 
       toast.success("Mukayese formu talebi oluşturuldu");
@@ -698,6 +791,55 @@ export default function NewComparisonFormPage() {
                   disabled={isSubmitting}
                 />
               </section>
+
+              {/* Ek Dosyalar */}
+              {attachmentConfigId && (
+                <section className="space-y-3">
+                  <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                    {attachmentLabel}
+                  </h2>
+                  {pendingFiles.length > 0 && (
+                    <div className="space-y-1.5">
+                      {pendingFiles.map((file, index) => (
+                        <div
+                          key={index}
+                          className="flex items-center justify-between rounded-md border px-3 py-2 bg-muted/30"
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                            <span className="text-sm truncate">{file.name}</span>
+                            <span className="text-xs text-muted-foreground shrink-0">
+                              ({(file.size / 1024).toFixed(0)} KB)
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => removeFile(index)}
+                            className="ml-2 shrink-0 text-muted-foreground hover:text-destructive"
+                            disabled={isSubmitting}
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {pendingFiles.length < maxFiles && (
+                    <label className={`flex items-center gap-2 w-full cursor-pointer rounded-md border border-dashed px-4 py-3 text-sm text-muted-foreground hover:bg-muted/30 transition-colors ${isSubmitting ? "opacity-50 pointer-events-none" : ""}`}>
+                      <Upload className="h-4 w-4 shrink-0" />
+                      <span>{allowedMimeTypes ? "Dosya seç" : "Dosya seç (Tüm dosya türleri)"} — maks {Math.round(maxFileSizeBytes / 1048576)} MB · en fazla {maxFiles} dosya</span>
+                      <input
+                        type="file"
+                        className="hidden"
+                        multiple
+                        accept={allowedMimeTypes ? allowedMimeTypes.join(",") : undefined}
+                        onChange={handleFileChange}
+                        disabled={isSubmitting}
+                      />
+                    </label>
+                  )}
+                </section>
+              )}
 
               {/* İmza paneli */}
               <SignaturePanel

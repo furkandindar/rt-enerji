@@ -224,6 +224,7 @@ export function ApprovalDetailSheet({
               <ComparisonFormDetails
                 mukayese={selectedApproval.request.mukayese_request}
                 approvals={selectedApproval.request.approvals}
+                previousStepAttachments={previousStepAttachments}
               />
             )}
             {selectedApproval.request.expense_request && (
