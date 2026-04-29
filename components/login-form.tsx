@@ -70,7 +70,7 @@ export function LoginForm({
               onClick={handleAzureLogin}
               disabled={isLoading}
             >
-              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-black/5 to-transparent transition-transform duration-1000 group-hover:translate-x-full -translate-x-full dark:via-white/5" />
+              <div className="absolute inset-0 bg-linear-to-r from-transparent via-black/5 to-transparent transition-transform duration-1000 group-hover:translate-x-full -translate-x-full dark:via-white/5" />
               <svg className="mr-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 23 23">
                 <path fill="#f35325" d="M1 1h10v10H1z" />
                 <path fill="#81bc06" d="M12 1h10v10H12z" />
