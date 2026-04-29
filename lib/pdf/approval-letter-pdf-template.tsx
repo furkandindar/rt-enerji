@@ -64,13 +64,16 @@ const styles = StyleSheet.create({
   paymentValue: { flex: 1, padding: 4 },
 
   // Signature rows
-  signatureRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 18 },
+  signatureBlock: { marginBottom: 18 },
+  signatureRow: { flexDirection: 'row', alignItems: 'center' },
   signatureLabel: { width: 170, fontWeight: 700 },
   signatureColon: { width: 10 },
   signatureValue: { flex: 1, flexDirection: 'row', alignItems: 'center' },
   signatureName: { fontSize: 10, marginRight: 8 },
   signatureText: { fontSize: 16, color: '#1a365d' },
   signaturePending: { fontSize: 9, color: colors.muted },
+  signatureNoteRow: { paddingLeft: 180, marginTop: 3 },
+  signatureNoteText: { fontSize: 8, color: colors.muted },
 
   // Final approval (physical signature by company owner)
   finalApprovalBlock: { marginTop: 30, alignItems: 'center' },
@@ -104,8 +107,8 @@ export const ApprovalLetterPDFTemplate: React.FC<ApprovalLetterPDFTemplateProps>
   };
 
   const getApprovalColumns = () => {
-    const columns: { title: string; name: string; employeeId: string }[] = [
-      { title: 'Hazırlayan', name: `${requester.first_name} ${requester.last_name}`, employeeId: requester.id },
+    const columns: { title: string; name: string; employeeId: string; note: string }[] = [
+      { title: 'Hazırlayan', name: `${requester.first_name} ${requester.last_name}`, employeeId: requester.id, note: '' },
     ];
     const sortedApprovals = approvals
       .filter((a) => a.workflow_step.step_order > 1)
@@ -118,6 +121,7 @@ export const ApprovalLetterPDFTemplate: React.FC<ApprovalLetterPDFTemplateProps>
         title: positionTitle,
         name: `${approval.approver.first_name} ${approval.approver.last_name}`,
         employeeId: approval.approver.id,
+        note: approval.comment || '',
       });
     });
     return columns;
@@ -208,13 +212,20 @@ export const ApprovalLetterPDFTemplate: React.FC<ApprovalLetterPDFTemplateProps>
 
         {/* İmza Satırları */}
         {approvalColumns.map((col, index) => (
-          <View key={index} style={styles.signatureRow}>
-            <Text style={styles.signatureLabel}>{col.title}</Text>
-            <Text style={styles.signatureColon}>:</Text>
-            <View style={styles.signatureValue}>
-              <Text style={styles.signatureName}>{col.name}</Text>
-              {renderSignature(col.employeeId)}
+          <View key={index} style={styles.signatureBlock}>
+            <View style={styles.signatureRow}>
+              <Text style={styles.signatureLabel}>{col.title}</Text>
+              <Text style={styles.signatureColon}>:</Text>
+              <View style={styles.signatureValue}>
+                <Text style={styles.signatureName}>{col.name}</Text>
+                {renderSignature(col.employeeId)}
+              </View>
             </View>
+            {col.note ? (
+              <View style={styles.signatureNoteRow}>
+                <Text style={styles.signatureNoteText}>{col.note}</Text>
+              </View>
+            ) : null}
           </View>
         ))}
 

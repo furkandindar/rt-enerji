@@ -366,9 +366,9 @@ export const RequestPDFTemplate: React.FC<RequestPDFTemplateProps> = ({
       });
     });
 
-    // İnsan Kaynakları için özel not
+    // İnsan Kaynakları için özel not (gerçek onayci yorumu yoksa placeholder göster)
     const hrIndex = columns.findIndex(c => c.title.toLowerCase().includes('insan kaynakları') || c.title.toLowerCase().includes('personel'));
-    if (hrIndex > -1) {
+    if (hrIndex > -1 && !columns[hrIndex].note) {
       columns[hrIndex].note = 'Fazla Mesai oluşup oluşmadığı yazılmalıdır.\nOluşuyorsa izin boyunca oluşacak toplam tutar yazılmalıdır.';
     }
 

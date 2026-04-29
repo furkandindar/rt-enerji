@@ -113,6 +113,7 @@ const styles = StyleSheet.create({
   signatureText: { fontSize: 14, color: colors.navy },
   signaturePending: { fontSize: 7, color: colors.grey },
   signatureMeta: { fontSize: 6, color: colors.grey, marginTop: 2 },
+  signatureComment: { fontSize: 6, color: colors.grey, marginTop: 2, textAlign: 'center', paddingHorizontal: 2 },
 
   // Sayfa altı
   pageFooter: { position: 'absolute', bottom: 8, left: 18, right: 18, borderTopWidth: 0.5, borderColor: colors.black, paddingTop: 3, alignItems: 'center' },
@@ -703,6 +704,7 @@ const SignatureSection: React.FC<SignatureSectionProps> = ({
       ? renderSig(signatures, a.approver?.id)
       : <Text style={styles.signaturePending}>{a.status === 'REJECTED' ? 'Reddedildi' : ''}</Text>,
     meta: a.decided_at ? format(new Date(a.decided_at), 'dd.MM.yyyy') : '',
+    comment: a.comment || '',
   }));
   const cellW = Math.floor(totalRowW / Math.max(blocks.length, 1));
   return (
@@ -718,6 +720,7 @@ const SignatureSection: React.FC<SignatureSectionProps> = ({
             <Text style={styles.signatureNameText}>{b.name}</Text>
             <View style={styles.signatureBox}>{b.sig}</View>
             {b.meta ? <Text style={styles.signatureMeta}>{b.meta}</Text> : null}
+            {b.comment ? <Text style={styles.signatureComment}>{b.comment}</Text> : null}
           </View>
         );
       })}

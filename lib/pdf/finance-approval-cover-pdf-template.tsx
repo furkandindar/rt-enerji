@@ -98,10 +98,12 @@ const styles = StyleSheet.create({
   staticTitleRight: { fontSize: 8, fontWeight: 700, textAlign: 'right', marginBottom: 2 },
   staticSubtitleRight: { fontSize: 8, fontWeight: 700, textAlign: 'right', marginBottom: 4 },
   staticNameRight: { fontSize: 9, fontWeight: 700, textAlign: 'right', marginTop: 2 },
+  staticCommentRight: { fontSize: 7, color: colors.grey, textAlign: 'right', marginTop: 2, maxWidth: 220 },
 
   // Genel Müdür (sola yaslı, dinamik imza)
   genelMudurBlock: { marginTop: 18, alignItems: 'flex-start' },
   genelMudurName: { fontSize: 9, fontWeight: 700, marginTop: 2 },
+  genelMudurComment: { fontSize: 7, color: colors.grey, marginTop: 2, maxWidth: 220 },
 
   // ONAY center (statik — şirket kurucusu, fiziksel olarak imzalanacak)
   onayCenter: { marginTop: 36, alignItems: 'center' },
@@ -298,6 +300,9 @@ export const FinanceApprovalCoverPDFTemplate: React.FC<FinanceApprovalCoverPDFTe
             <Text style={styles.staticNameRight}>
               {finansMuduru.approver?.first_name} {finansMuduru.approver?.last_name}
             </Text>
+            {finansMuduru.comment ? (
+              <Text style={styles.staticCommentRight}>{finansMuduru.comment}</Text>
+            ) : null}
           </View>
         ) : null}
 
@@ -308,6 +313,9 @@ export const FinanceApprovalCoverPDFTemplate: React.FC<FinanceApprovalCoverPDFTe
             <Text style={styles.genelMudurName}>
               {genelMudur.approver?.first_name} {genelMudur.approver?.last_name}
             </Text>
+            {genelMudur.comment ? (
+              <Text style={styles.genelMudurComment}>{genelMudur.comment}</Text>
+            ) : null}
           </View>
         ) : null}
 
