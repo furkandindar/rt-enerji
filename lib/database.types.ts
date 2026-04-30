@@ -349,6 +349,103 @@ export type Database = {
         }
         Relationships: []
       }
+      expense_items: {
+        Row: {
+          amount: number
+          created_at: string
+          description: string
+          document_no: string | null
+          expense_request_id: string
+          id: string
+          item_date: string
+          row_order: number
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          description: string
+          document_no?: string | null
+          expense_request_id: string
+          id?: string
+          item_date: string
+          row_order: number
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          description?: string
+          document_no?: string | null
+          expense_request_id?: string
+          id?: string
+          item_date?: string
+          row_order?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "expense_items_expense_request_id_fkey"
+            columns: ["expense_request_id"]
+            isOneToOne: false
+            referencedRelation: "expense_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      expense_requests: {
+        Row: {
+          advance_amount: number | null
+          created_at: string
+          id: string
+          is_travel: boolean
+          project_code: string
+          project_name: string
+          request_date: string
+          request_id: string
+          travel_date: string | null
+          travel_duration: string | null
+          travel_person_count: number | null
+          updated_at: string
+          work_or_destination: string
+        }
+        Insert: {
+          advance_amount?: number | null
+          created_at?: string
+          id?: string
+          is_travel?: boolean
+          project_code: string
+          project_name: string
+          request_date?: string
+          request_id: string
+          travel_date?: string | null
+          travel_duration?: string | null
+          travel_person_count?: number | null
+          updated_at?: string
+          work_or_destination: string
+        }
+        Update: {
+          advance_amount?: number | null
+          created_at?: string
+          id?: string
+          is_travel?: boolean
+          project_code?: string
+          project_name?: string
+          request_date?: string
+          request_id?: string
+          travel_date?: string | null
+          travel_duration?: string | null
+          travel_person_count?: number | null
+          updated_at?: string
+          work_or_destination?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "expense_requests_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: true
+            referencedRelation: "requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       finance_approval_cover_items: {
         Row: {
           company_name: string
@@ -2294,6 +2391,17 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      create_mukayese_request: {
+        Args: {
+          p_header: Json
+          p_items: Json
+          p_prices: Json
+          p_requester_employee_id: string
+          p_suppliers: Json
+          p_workflow_definition_id: string
+        }
+        Returns: string
+      }
       create_notification: {
         Args: {
           p_message: string
