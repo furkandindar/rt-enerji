@@ -1,6 +1,12 @@
+import type { Metadata } from "next";
+
 import { CalendarWidget } from "./_home/calendar-widget";
 import { FxRatesWidget } from "./_home/fx-rates-widget";
 import { NotesWidget } from "./_home/notes-widget";
+
+export const metadata: Metadata = {
+  title: "Ana Sayfa | RT Enerji",
+};
 
 export default function HomePage() {
   return (

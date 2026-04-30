@@ -75,12 +75,12 @@ function AppShellContent({ children }: { children: ReactNode }) {
               <BreadcrumbList>
                 {pathname === "/" ? (
                   <BreadcrumbItem>
-                    <BreadcrumbPage>Home</BreadcrumbPage>
+                    <BreadcrumbPage>Ana Sayfa</BreadcrumbPage>
                   </BreadcrumbItem>
                 ) : (
                   <>
                     <BreadcrumbItem className="hidden md:block">
-                      <BreadcrumbLink href="/">Home</BreadcrumbLink>
+                      <BreadcrumbLink href="/">Ana Sayfa</BreadcrumbLink>
                     </BreadcrumbItem>
                     {pathname
                       .split("/")

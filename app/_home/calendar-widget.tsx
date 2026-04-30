@@ -1,9 +1,15 @@
 "use client";
 
-import { useState } from "react";
-import { format } from "date-fns";
+import { useEffect, useMemo, useState } from "react";
+import {
+  addDays,
+  endOfMonth,
+  format,
+  isSameDay,
+  startOfMonth,
+} from "date-fns";
 import { tr } from "date-fns/locale";
-import { CalendarDays } from "lucide-react";
+import { CalendarDays, Loader2 } from "lucide-react";
 
 import { Calendar } from "@/components/ui/calendar";
 import {
@@ -14,10 +20,83 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 
-export function CalendarWidget() {
-  const [selected, setSelected] = useState<Date | undefined>(new Date());
+interface CalendarEvent {
+  id: string;
+  subject: string;
+  startUtc: string;
+  endUtc: string;
+  isAllDay: boolean;
+  location: string | null;
+  webLink: string | null;
+  showAs: string;
+}
 
-  const headerDate = selected ?? new Date();
+export function CalendarWidget() {
+  const today = new Date();
+  const [month, setMonth] = useState<Date>(today);
+  const [selected, setSelected] = useState<Date | undefined>(today);
+  const [events, setEvents] = useState<CalendarEvent[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const fromDate = startOfMonth(month);
+    const toDate = addDays(endOfMonth(month), 1);
+
+    const params = new URLSearchParams({
+      from: fromDate.toISOString(),
+      to: toDate.toISOString(),
+    });
+
+    setLoading(true);
+    setError(null);
+
+    fetch(`/api/calendar/events?${params}`, { signal: controller.signal })
+      .then(async (res) => {
+        const data = await res.json().catch(() => null);
+        if (!res.ok) {
+          if (res.status === 412 && data?.error === "reauth_required") {
+            throw new Error("Microsoft hesabı bağlı değil. Çıkış yapıp tekrar girin.");
+          }
+          if (res.status === 412 && data?.error === "reconsent_required") {
+            throw new Error("Oturum yenilenmeli. Çıkış yapıp tekrar girin.");
+          }
+          throw new Error(data?.message ?? `Hata: ${res.status}`);
+        }
+        return data as { events: CalendarEvent[] };
+      })
+      .then((data) => setEvents(data.events ?? []))
+      .catch((err: unknown) => {
+        if (err instanceof DOMException && err.name === "AbortError") return;
+        setError(err instanceof Error ? err.message : "Bilinmeyen hata");
+        setEvents([]);
+      })
+      .finally(() => setLoading(false));
+
+    return () => controller.abort();
+  }, [month]);
+
+  const eventDays = useMemo(() => {
+    const dates = new Map<string, Date>();
+    for (const ev of events) {
+      const d = new Date(ev.startUtc);
+      const key = format(d, "yyyy-MM-dd");
+      if (!dates.has(key)) {
+        dates.set(key, new Date(d.getFullYear(), d.getMonth(), d.getDate()));
+      }
+    }
+    return Array.from(dates.values());
+  }, [events]);
+
+  const selectedDayEvents = useMemo(() => {
+    if (!selected) return [];
+    return events
+      .filter((ev) => isSameDay(new Date(ev.startUtc), selected))
+      .sort((a, b) => a.startUtc.localeCompare(b.startUtc));
+  }, [events, selected]);
+
+  const headerDate = selected ?? today;
 
   return (
     <Card className="h-full">
@@ -30,16 +109,64 @@ export function CalendarWidget() {
         </div>
         <CalendarDays className="h-5 w-5 text-muted-foreground" />
       </CardHeader>
-      <CardContent className="flex justify-center">
+      <CardContent className="flex flex-col items-center gap-4">
         <Calendar
           mode="single"
+          month={month}
+          onMonthChange={setMonth}
           selected={selected}
           onSelect={setSelected}
           locale={tr}
           weekStartsOn={1}
           showOutsideDays
+          modifiers={{ hasEvent: eventDays }}
+          modifiersClassNames={{
+            hasEvent:
+              "relative after:pointer-events-none after:absolute after:bottom-1 after:left-1/2 after:-translate-x-1/2 after:h-1 after:w-1 after:rounded-full after:bg-current after:opacity-70",
+          }}
           className="w-full max-w-sm"
         />
+
+        <div className="w-full max-w-sm border-t pt-3">
+          <div className="mb-2 flex items-center justify-between text-xs">
+            <span className="text-muted-foreground">
+              {selected ? format(selected, "d MMMM EEEE", { locale: tr }) : "—"}
+            </span>
+            {loading && (
+              <span className="flex items-center gap-1 text-muted-foreground">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                Yükleniyor
+              </span>
+            )}
+          </div>
+
+          {error ? (
+            <p className="text-xs text-destructive">{error}</p>
+          ) : selectedDayEvents.length === 0 ? (
+            <p className="text-xs text-muted-foreground">Bu gün için etkinlik yok</p>
+          ) : (
+            <ul className="flex flex-col gap-1.5">
+              {selectedDayEvents.map((ev) => (
+                <li key={ev.id} className="flex items-start gap-2 text-xs">
+                  <span className="mt-0.5 shrink-0 font-medium tabular-nums text-muted-foreground">
+                    {ev.isAllDay ? "Tüm gün" : format(new Date(ev.startUtc), "HH:mm")}
+                  </span>
+                  <a
+                    href={ev.webLink ?? "#"}
+                    target={ev.webLink ? "_blank" : undefined}
+                    rel="noopener noreferrer"
+                    className="line-clamp-2 hover:underline"
+                  >
+                    {ev.subject}
+                    {ev.location && (
+                      <span className="text-muted-foreground"> • {ev.location}</span>
+                    )}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       </CardContent>
     </Card>
   );

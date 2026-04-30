@@ -5,9 +5,9 @@ Login sonrası landing page'i `/org-chart`'tan `/` (ana sayfa) a çevirmek ve bu
 ## Amaç
 - Kullanıcı sisteme giriş yaptığında `/org-chart` yerine `/` 'a düşsün.
 - Ana sayfada üç widget bulunsun:
-  1. **Takvim** — sade görsel takvim (v1). Sonraki sürümde izin/onay tarihleri işaretlenebilir.
+  1. **Takvim** — Outlook calendar event'leri (delegated MS Graph) ile gün bazlı liste + dot işaretleri.
   2. **Döviz Kurları** — TCMB kaynaklı EUR/TRY, USD/TRY, EUR/USD kurları.
-  3. **Notlarım** — kullanıcıya özel, RLS korumalı kişisel notlar (title + body, v1).
+  3. **Notlarım** — Microsoft To Do (delegated MS Graph) "RT Enerji" listesi üzerinden CRUD.
 - Sidebar'a "Ana Sayfa" linki eklenecek.
 - `/org-chart` erişilebilir olmaya devam eder — sadece default landing değil.
 
@@ -18,9 +18,11 @@ Login sonrası landing page'i `/org-chart`'tan `/` (ana sayfa) a çevirmek ve bu
 | 1 | Redirect'leri `/` a çevir | ✅ Tamamlandı |
 | 2 | Ana sayfa iskeleti (3 placeholder widget) | ✅ Tamamlandı |
 | 3 | Takvim widget'ı (sade) | ✅ Tamamlandı |
+| 3b | Takvim — Outlook event overlay | ✅ Tamamlandı |
 | 4 | Döviz kurları (TCMB + dinamik TTL cache) | ✅ Tamamlandı |
-| 5 | Notlarım (DB + API + UI) | ⏳ |
-| 6 | Sidebar linki + cleanup | ⏳ |
+| 5a | MS Graph delegated altyapısı (token store + user-client + app-client) | ✅ Tamamlandı |
+| 5 | Notlarım — Microsoft To Do entegrasyonu | ✅ Tamamlandı |
+| 6 | Sidebar linki + breadcrumb/metadata cleanup | ✅ Tamamlandı |
 
 ---
 
@@ -204,12 +206,126 @@ TCMB yanıtı XML olduğu için parser gerekti.
 
 ---
 
-## Faz 5 — Notlarım Widget'ı ⏳
+## Faz 3b — Takvim: Outlook Event Overlay ✅
 
-_Uygulama sırası geldiğinde güncellenecek. SQL kullanıcı tarafından Supabase SQL Editor'da çalıştırılacak._
+### Amaç
+Outlook (MS Graph delegated) event'lerini takvim üzerinde göstermek; kullanıcının seçtiği günün etkinliklerini liste halinde altına dökmek.
+
+### Yapılan Değişiklikler
+
+**1. `lib/msgraph/calendar.ts`** — `getEventsInRange(userId, fromUtcIso, toUtcIso)` helper'ı.
+- `/me/calendarView` endpoint'i kullanılır (recurring event'leri otomatik occurrence'lara açar).
+- `URLSearchParams` `$` karakterini encode ettiği için `replace(/%24/g, "$")` ile geri çevriliyor — Graph aksini reddediyor.
+- `start.dateTime` UTC olarak okunup ISO Z formatına normalize ediliyor.
+
+**2. `app/api/calendar/events/route.ts`** — `GET ?from=&to=`.
+- `auth.getUser()` ile kullanıcı, `getEventsInRange(user.id, ...)` ile event'ler.
+- `MsTokenNotFoundError` / `MsReconsentRequiredError` → `412` + Türkçe mesaj.
+
+**3. `app/_home/calendar-widget.tsx`** — controlled month, event fetch, dot modifier.
+- `month` state'i + `onMonthChange` ile ay değişiminde fetch tekrar tetiklenir; `AbortController` ile eski request iptal.
+- `modifiers={{ hasEvent: eventDays }}` + `modifiersClassNames` ile event olan günlere `after:` pseudo-element ile küçük dot.
+- Seçili günün event'leri saat + subject (+ konum) olarak listelenir; başlık tıklanınca `webLink` yeni sekmede açılır.
 
 ---
 
-## Faz 6 — Cleanup ⏳
+## Faz 5a — Microsoft Graph Delegated Altyapısı ✅
 
-_Uygulama sırası geldiğinde güncellenecek._
+### Amaç
+Hem Calendar hem To Do widget'larının ortak kullanacağı, kullanıcı bazlı (delegated) MS Graph altyapısını kurmak. App-only (sadece e-posta gönderme) flow'u da aynı paterne refactor edildi.
+
+### Mimari
+
+```
+Kullanıcı login (Azure SSO)
+   │  scopes: openid profile email offline_access Calendars.ReadWrite Tasks.ReadWrite
+   ▼
+app/auth/callback → provider_refresh_token + access_token capture
+   ▼
+user_ms_tokens tablosu (Supabase, RLS = service role only)
+   ▼
+lib/msgraph/user-client.ts
+   • getUserAccessToken(userId) — DB'den token, expire'a yakınsa refresh
+   • graphUserFetch(userId, path, init?) — /me/... çağrıları
+   • In-memory dedup map → aynı kullanıcı için paralel refresh tek isteğe toplanır
+   • invalid_grant → DB'den sil + MsReconsentRequiredError
+```
+
+### Eklenen Dosyalar
+- `lib/msgraph/token-store.ts` — Supabase service-role ile `user_ms_tokens` upsert/get/delete.
+- `lib/msgraph/user-client.ts` — refresh + graphUserFetch + custom errors.
+- `lib/msgraph/app-client.ts` — Application permission'lar için `getAppAccessToken` + `graphAppFetch` (client-credentials flow, in-memory cache, 60 sn güvenlik payı).
+
+### Refactor
+- `lib/email/email-service.ts` — kendi token logic'i silindi, `graphAppFetch("/users/${MAIL_FROM}/sendMail", ...)` kullanır oldu. ~60 satır azaldı, davranış değişmedi.
+
+### Token Saklama
+- DB: `user_ms_tokens` (user_id PK, access_token, refresh_token, access_token_expires_at, scope, updated_at).
+- RLS: Sadece `service_role` erişebilir; client tarafına token sızdırılmaz.
+- Şifreleme: v1'de plaintext (sadece service-role accessible). v2'de Vault/pgsodium düşünülebilir.
+
+### Azure App Permissions
+- **Delegated:** `User.Read`, `Calendars.ReadWrite`, `Tasks.ReadWrite`, `offline_access`.
+- **Application:** `Mail.Send` (mevcut email servisi için).
+- Tenant'ta user consent açık; admin consent gerekmedi.
+
+---
+
+## Faz 5 — Notlarım: Microsoft To Do Entegrasyonu ✅
+
+### Amaç
+Placeholder "Notlarım" widget'ını Microsoft To Do üzerinden gerçek task CRUD'a çevirmek. Kullanıcının default Tasks listesini kirletmemek için ayrı bir **"RT Enerji"** listesi oluşturulup kullanılır.
+
+### Yapılan Değişiklikler
+
+**1. `lib/msgraph/todo.ts`**
+- `getOrCreateRtEnerjiListId(userId)` — `/me/todo/lists?$filter=displayName eq 'RT Enerji'`. Yoksa `POST /me/todo/lists`.
+- In-memory `Map<userId, listId>` cache — list ID'leri stabil; 404 gelirse invalidate + 1 retry.
+- `listTasks` / `createTask` / `updateTask` / `deleteTask` — `/me/todo/lists/{listId}/tasks` üzerinden.
+- Status: `notStarted` ↔ `completed` toggle (diğer Graph status'leri de kabul edilir).
+
+**2. API Route'ları**
+- `app/api/todo/tasks/route.ts` — `GET` (list), `POST` (create) `{ title, body? }`.
+- `app/api/todo/tasks/[taskId]/route.ts` — `PATCH` `{ title?, body?, status? }`, `DELETE`.
+- Hata kategorileri: `reauth_required` / `reconsent_required` → 412.
+
+**3. `app/_home/notes-widget.tsx`**
+- Optimistic UI: toggle/delete anında uygulanır, hata olursa revert + sonner toast.
+- `pendingIds` ref ile aynı task'a paralel işlem engellenir.
+- Sıralama: aktifler önce (en yeni üstte), tamamlananlar altta line-through.
+- Çöp kutusu sadece hover'da görünür (kazara silmeyi azaltır).
+- ScrollArea h-64 (200+ task'a kadar pürüzsüz).
+
+### Cross-Device Senkron
+Microsoft To Do uygulamalarında (web/desktop/mobile) "RT Enerji" listesi otomatik görünür ve iki yönlü senkron çalışır.
+
+---
+
+## Faz 6 — Sidebar Linki + Cleanup ✅
+
+### Yapılan Değişiklikler
+
+**1. `components/nav-home.tsx` (yeni)**
+- Tek item'lı `SidebarGroup` — Home icon + "Ana Sayfa" linki.
+- `pathname === "/"` ile `isActive` highlighting.
+
+**2. `components/app-sidebar.tsx`**
+- `<NavHome />` `SidebarContent`'in **en üstüne** eklendi (NavWorkflow'un üstü).
+
+**3. `components/app-shell.tsx` — Breadcrumb**
+- `pathname === "/"` için `BreadcrumbPage`: `"Home"` → `"Ana Sayfa"`.
+- Diğer sayfalar için kök `BreadcrumbLink`: `"Home"` → `"Ana Sayfa"` (TR tutarlılığı).
+
+**4. `app/page.tsx` — Metadata**
+- `export const metadata: Metadata = { title: "Ana Sayfa | RT Enerji" }` eklendi (browser tab'ı).
+
+### Responsive / Tema
+- Grid: mobile/tablet → tek kolon stack, `lg+` → 3 kolon (Calendar 2 + FX 1, Notes 3 full-width).
+- Tüm widget'lar shadcn `Card` ve theme-aware tokens (`text-muted-foreground`, `bg-muted`, `border`) kullanır → dark/light otomatik.
+
+### Hâlâ Bekleyen / Sonraki Sürüm
+- `app/api/dashboard/workflow-summary` orphan kontrolü (eski page tarafından çağrılıyordu) — gerek varsa Faz 7'de.
+- Token şifreleme (Vault / pgsodium) — güvenlik artırımı.
+- Calendar widget'ında "Bugüne dön" butonu.
+- FX widget'ında ↑/↓ değişim badge'i.
+- To Do widget'ında inline edit + body alanı UI'ı.

@@ -4,6 +4,7 @@ import * as React from "react"
 import Image from "next/image"
 
 import { NavDictionaries } from "@/components/nav-dictionaries"
+import { NavHome } from "@/components/nav-home"
 import { NavOrganization } from "@/components/nav-organization"
 import { NavWorkflow } from "@/components/nav-workflow"
 import { NavUser } from "@/components/nav-user"
@@ -63,6 +64,7 @@ export function AppSidebar({ user, ...props }: React.ComponentProps<typeof Sideb
       <SidebarContent>
         {/* <NavMain items={data.navMain} /> */}
         {/* <NavProjects projects={data.projects} /> */}
+        <NavHome />
         <NavWorkflow />
         <NavDictionaries />
         <NavOrganization />
