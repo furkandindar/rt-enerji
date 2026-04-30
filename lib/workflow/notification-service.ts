@@ -3,7 +3,8 @@
 
 import { SupabaseClient } from '@supabase/supabase-js';
 import { NotificationType } from './types';
-import { sendNotificationEmail } from '@/lib/email/email-service';
+import { sendNotificationEmail, type SendNotificationEmailParams } from '@/lib/email/email-service';
+import { buildRequestEmailContext } from '@/lib/email/request-summary';
 
 // ============================================================================
 // Types
@@ -20,6 +21,12 @@ interface CreateNotificationParams {
 interface UserInfo {
   id: string;
   email: string | null;
+  fullName: string | null;
+}
+
+export interface DecisionExtras {
+  decidedByName?: string;
+  decisionComment?: string;
 }
 
 // ============================================================================
@@ -27,7 +34,7 @@ interface UserInfo {
 // ============================================================================
 
 /**
- * Employee ID'den user ID ve email'i bulur
+ * Employee ID'den user ID, email ve ad-soyad bilgisini bulur.
  */
 async function getUserInfoByEmployeeId(
   supabase: SupabaseClient,
@@ -35,23 +42,50 @@ async function getUserInfoByEmployeeId(
 ): Promise<UserInfo | null> {
   const { data } = await supabase
     .from('app_users')
-    .select('id, email')
+    .select('id, email, employee:employees(first_name, last_name)')
     .eq('employee_id', employeeId)
     .single();
 
   if (!data) return null;
-  return { id: data.id, email: data.email };
+  const emp = (data as { employee?: { first_name?: string; last_name?: string } }).employee;
+  const fullName = emp ? `${emp.first_name || ''} ${emp.last_name || ''}`.trim() || null : null;
+  return { id: data.id, email: data.email, fullName };
 }
 
 /**
- * Employee ID'den user ID'yi bulur (backward compatibility)
+ * Email payload'ını request bağlamından zenginleştirir.
+ * Helper hata verirse minimal payload döner — email gönderimi engellenmemeli.
  */
-async function getUserIdByEmployeeId(
+async function enrichEmailPayload(
   supabase: SupabaseClient,
-  employeeId: string
-): Promise<string | null> {
-  const userInfo = await getUserInfoByEmployeeId(supabase, employeeId);
-  return userInfo?.id || null;
+  requestId: string,
+  base: SendNotificationEmailParams,
+  recipientName: string | null,
+  extras?: DecisionExtras
+): Promise<SendNotificationEmailParams> {
+  try {
+    const ctx = await buildRequestEmailContext(supabase, requestId);
+    if (!ctx) return base;
+    return {
+      ...base,
+      recipientName: recipientName || undefined,
+      requesterName: ctx.requesterName || undefined,
+      requesterPosition: ctx.requesterPosition || undefined,
+      workflowName: ctx.workflowName,
+      workflowCode: ctx.workflowCode,
+      requestId: ctx.requestId,
+      submittedAt: ctx.submittedAt || undefined,
+      details: ctx.details,
+      currentStep: ctx.currentStep,
+      totalSteps: ctx.totalSteps,
+      nextApproverName: ctx.nextApproverName || undefined,
+      decidedByName: extras?.decidedByName,
+      decisionComment: extras?.decisionComment,
+    };
+  } catch (err) {
+    console.error('[Email] enrichEmailPayload failed, sending minimal payload:', err);
+    return base;
+  }
 }
 
 // ============================================================================
@@ -83,7 +117,7 @@ export async function createNotification(
 }
 
 /**
- * Onaycıya "onay bekliyor" bildirimi gönderir + Email
+ * Onaycıya "onay bekliyor" bildirimi gönderir + zenginleştirilmiş email
  */
 export async function notifyApprover(
   supabase: SupabaseClient,
@@ -101,7 +135,7 @@ export async function notifyApprover(
   const message = `${requesterName} tarafından oluşturulan ${workflowName} süreci onayınızı bekliyor.${subjectLine}`;
   const type = 'APPROVAL_REQUIRED';
 
-  // In-app bildirim oluştur
+  // In-app bildirim — kısa metin
   await createNotification(supabase, {
     userId: userInfo.id,
     title,
@@ -110,26 +144,28 @@ export async function notifyApprover(
     referenceId: requestId,
   });
 
-  // Email gönder
+  // Email — zengin payload (helper hata verirse minimal payload ile fallback)
   if (userInfo.email) {
-    await sendNotificationEmail({
-      to: userInfo.email,
-      title,
-      message,
-      type,
-    });
+    const payload = await enrichEmailPayload(
+      supabase,
+      requestId,
+      { to: userInfo.email, title, message, type, ctaPath: '/approvals' },
+      userInfo.fullName
+    );
+    await sendNotificationEmail(payload);
   }
 }
 
 /**
- * Talep edene "onaylandı" bildirimi gönderir + Email
+ * Talep edene "onaylandı" bildirimi gönderir + zenginleştirilmiş email
  */
 export async function notifyRequestApproved(
   supabase: SupabaseClient,
   requesterEmployeeId: string,
   requestId: string,
   workflowName: string,
-  subject?: string
+  subject?: string,
+  extras?: DecisionExtras
 ): Promise<void> {
   const userInfo = await getUserInfoByEmployeeId(supabase, requesterEmployeeId);
   if (!userInfo) return;
@@ -139,7 +175,6 @@ export async function notifyRequestApproved(
   const message = `${workflowName} talebiniz onaylandı.${subjectLine}`;
   const type = 'REQUEST_APPROVED';
 
-  // In-app bildirim oluştur
   await createNotification(supabase, {
     userId: userInfo.id,
     title,
@@ -148,19 +183,20 @@ export async function notifyRequestApproved(
     referenceId: requestId,
   });
 
-  // Email gönder
   if (userInfo.email) {
-    await sendNotificationEmail({
-      to: userInfo.email,
-      title,
-      message,
-      type,
-    });
+    const payload = await enrichEmailPayload(
+      supabase,
+      requestId,
+      { to: userInfo.email, title, message, type, ctaPath: '/my-requests' },
+      userInfo.fullName,
+      extras
+    );
+    await sendNotificationEmail(payload);
   }
 }
 
 /**
- * Talep edene "reddedildi" bildirimi gönderir + Email
+ * Talep edene "reddedildi" bildirimi gönderir + zenginleştirilmiş email
  */
 export async function notifyRequestRejected(
   supabase: SupabaseClient,
@@ -168,7 +204,8 @@ export async function notifyRequestRejected(
   requestId: string,
   workflowName: string,
   rejectedBy: string,
-  subject?: string
+  subject?: string,
+  extras?: DecisionExtras
 ): Promise<void> {
   const userInfo = await getUserInfoByEmployeeId(supabase, requesterEmployeeId);
   if (!userInfo) return;
@@ -178,7 +215,6 @@ export async function notifyRequestRejected(
   const message = `${workflowName} talebiniz ${rejectedBy} tarafından reddedildi.${subjectLine}`;
   const type = 'REQUEST_REJECTED';
 
-  // In-app bildirim oluştur
   await createNotification(supabase, {
     userId: userInfo.id,
     title,
@@ -187,14 +223,20 @@ export async function notifyRequestRejected(
     referenceId: requestId,
   });
 
-  // Email gönder
   if (userInfo.email) {
-    await sendNotificationEmail({
-      to: userInfo.email,
-      title,
-      message,
-      type,
-    });
+    // Reddeden kişi rejectedBy parametresi olarak zaten geliyor; extras override edebilir.
+    const mergedExtras: DecisionExtras = {
+      decidedByName: extras?.decidedByName || rejectedBy,
+      decisionComment: extras?.decisionComment,
+    };
+    const payload = await enrichEmailPayload(
+      supabase,
+      requestId,
+      { to: userInfo.email, title, message, type, ctaPath: '/my-requests' },
+      userInfo.fullName,
+      mergedExtras
+    );
+    await sendNotificationEmail(payload);
   }
 }
 

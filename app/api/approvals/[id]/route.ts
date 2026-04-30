@@ -434,7 +434,8 @@ export async function PATCH(
         requestData.id,
         workflowName,
         approverName,
-        stampSubject
+        stampSubject,
+        { decidedByName: approverName, decisionComment: comment }
       );
     } else {
       // Onaylandı - sonraki adıma geç veya tamamla
@@ -675,7 +676,8 @@ export async function PATCH(
           requestData.requester_employee_id,
           requestData.id,
           workflowName,
-          stampSubject
+          stampSubject,
+          { decidedByName: approverName, decisionComment: comment }
         );
 
       } else if (isEnteringCompletionPhase) {
@@ -724,7 +726,8 @@ export async function PATCH(
           requestData.requester_employee_id,
           requestData.id,
           workflowName,
-          stampSubject
+          stampSubject,
+          { decidedByName: approverName, decisionComment: comment }
         );
 
         // COMPLETION fazındaki ilk onaycıya bildirim gönder
@@ -804,7 +807,8 @@ export async function PATCH(
           requestData.requester_employee_id,
           requestData.id,
           workflowName,
-          stampSubject
+          stampSubject,
+          { decidedByName: approverName, decisionComment: comment }
         );
 
       } else {
