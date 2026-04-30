@@ -133,6 +133,7 @@ export function ApprovalDetailSheet({
   handleDownloadPDF,
 }: ApprovalDetailSheetProps) {
   const [showPdfPreview, setShowPdfPreview] = useState(false);
+  const [showLivePreview, setShowLivePreview] = useState(false);
 
   return (
     <Sheet open={selectedApproval !== null} onOpenChange={(open) => {
@@ -339,6 +340,20 @@ export function ApprovalDetailSheet({
                 )}
               </div>
             )}
+
+            {/* Anlık Önizleme - Süreç devam ediyorsa (PENDING / AWAITING_COMPLETION) */}
+            {["PENDING", "AWAITING_COMPLETION"].includes(selectedApproval.request.status) && (
+              <div className="border-t pt-4 mt-6">
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => setShowLivePreview(true)}
+                >
+                  <Eye className="mr-2 h-4 w-4" />
+                  Anlık Önizleme (Mevcut Hal)
+                </Button>
+              </div>
+            )}
           </div>
         )}
       </SheetContent>
@@ -350,6 +365,16 @@ export function ApprovalDetailSheet({
           previewUrl={`/api/requests/${selectedApproval.request.id}/pdf/preview`}
           downloadUrl={`/api/requests/${selectedApproval.request.id}/pdf`}
           fileName={`talep_${selectedApproval.request.id}.pdf`}
+        />
+      )}
+
+      {selectedApproval && showLivePreview && (
+        <PdfViewerDialog
+          open={showLivePreview}
+          onOpenChange={setShowLivePreview}
+          previewUrl={`/api/requests/${selectedApproval.request.id}/pdf/preview-live`}
+          downloadUrl={`/api/requests/${selectedApproval.request.id}/pdf/preview-live`}
+          fileName={`talep_${selectedApproval.request.id}_onizleme.pdf`}
         />
       )}
     </Sheet>

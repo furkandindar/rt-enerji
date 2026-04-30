@@ -402,6 +402,7 @@ export default function MyRequestsPage() {
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [showPdfPreview, setShowPdfPreview] = useState(false);
+  const [showLivePreview, setShowLivePreview] = useState(false);
   const [previewAttachment, setPreviewAttachment] = useState<{ id: string; name: string } | null>(null);
 
   // Filters
@@ -1756,6 +1757,20 @@ export default function MyRequestsPage() {
                   </Button>
                 </div>
               )}
+
+              {/* Anlık Önizleme - Süreç devam ediyorsa (PENDING / AWAITING_COMPLETION) */}
+              {(selectedRequest.status === "PENDING" || selectedRequest.status === "AWAITING_COMPLETION") && (
+                <div className="border-t pt-4 mt-6">
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => setShowLivePreview(true)}
+                  >
+                    <Eye className="mr-2 h-4 w-4" />
+                    Anlık Önizleme (Mevcut Hal)
+                  </Button>
+                </div>
+              )}
             </div>
           )}
         </SheetContent>
@@ -1768,6 +1783,16 @@ export default function MyRequestsPage() {
           previewUrl={`/api/requests/${selectedRequest.id}/pdf/preview`}
           downloadUrl={`/api/requests/${selectedRequest.id}/pdf`}
           fileName={`talep_${selectedRequest.id}.pdf`}
+        />
+      )}
+
+      {selectedRequest && showLivePreview && (
+        <PdfViewerDialog
+          open={showLivePreview}
+          onOpenChange={setShowLivePreview}
+          previewUrl={`/api/requests/${selectedRequest.id}/pdf/preview-live`}
+          downloadUrl={`/api/requests/${selectedRequest.id}/pdf/preview-live`}
+          fileName={`talep_${selectedRequest.id}_onizleme.pdf`}
         />
       )}
 
