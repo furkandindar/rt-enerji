@@ -8,6 +8,7 @@ import {
 import { generateRequestPDF } from "@/lib/pdf/generate-request-pdf";
 import { mergeAttachments } from "@/lib/pdf/merge-attachments";
 import { uploadRequestPDF } from "@/lib/storage/upload-request-pdf";
+import { buildAndUploadRequestPDF } from "@/lib/pdf/build-and-upload-request-pdf";
 import { stampPDF, type StampPositionOverrides } from "@/lib/pdf/stamp-pdf";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { StampPosition } from "@/lib/workflow/types";
@@ -392,6 +393,39 @@ export async function PATCH(
           completed_at: new Date().toISOString(),
         })
         .eq("id", requestData.id);
+
+      // Reddedilen talep için de PDF üret (müşteri talebi)
+      // STAMP_APPROVAL: kaşelenmiş PDF üretmek mümkün değil, orijinal yüklenen
+      // PDF'i pdf_path'e kopyala. Diğer workflow'lar standart pipeline.
+      try {
+        if (workflowCode === 'STAMP_APPROVAL') {
+          const { data: stampReq } = await supabase
+            .from("stamp_requests")
+            .select("original_pdf_path")
+            .eq("request_id", requestData.id)
+            .single();
+
+          if (stampReq?.original_pdf_path) {
+            await supabase
+              .from("requests")
+              .update({ pdf_path: stampReq.original_pdf_path })
+              .eq("id", requestData.id);
+            console.log('Rejected stamp request: original PDF path copied to pdf_path:', stampReq.original_pdf_path);
+          } else {
+            console.warn('Rejected stamp request has no original_pdf_path:', requestData.id);
+          }
+        } else {
+          console.log('Generating PDF for rejected request:', requestData.id);
+          const pdfPath = await buildAndUploadRequestPDF({
+            requestId: requestData.id,
+            supabase,
+          });
+          console.log('Rejected request PDF uploaded:', pdfPath);
+        }
+      } catch (pdfError) {
+        // PDF üretim hatası bildirimi engellemesin
+        console.error('Error generating/uploading PDF for rejected request:', pdfError);
+      }
 
       // Talep edene "reddedildi" bildirimi gönder
       await notifyRequestRejected(

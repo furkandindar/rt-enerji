@@ -315,7 +315,10 @@ export const RequestPDFTemplate: React.FC<RequestPDFTemplateProps> = ({
   signatures = {},
 }) => {
   // İmza render helper
-  const renderSignature = (employeeId: string) => {
+  const renderSignature = (employeeId: string, status?: string) => {
+    if (status === 'REJECTED') {
+      return <Text style={{ fontSize: 9, fontWeight: 700, color: '#DC2626' }}>Reddedildi</Text>;
+    }
     const sig = signatures[employeeId];
     if (sig) {
       return (
@@ -345,7 +348,7 @@ export const RequestPDFTemplate: React.FC<RequestPDFTemplateProps> = ({
 
   // Onay sütunları - Screenshot'taki gibi 5 sütun
   const getApprovalColumns = () => {
-    const columns = [
+    const columns: { title: string; name: string; employeeId: string; note: string; status?: string }[] = [
       { title: 'Talep Eden', name: `${requester.first_name} ${requester.last_name}`, employeeId: requester.id, note: '' },
     ];
 
@@ -363,6 +366,7 @@ export const RequestPDFTemplate: React.FC<RequestPDFTemplateProps> = ({
         name: `${approval.approver.first_name} ${approval.approver.last_name}`,
         employeeId: approval.approver.id,
         note: approval.comment || '',
+        status: approval.status,
       });
     });
 
@@ -518,7 +522,7 @@ export const RequestPDFTemplate: React.FC<RequestPDFTemplateProps> = ({
               {/* Signature Row - Ad Soyad + İmza */}
               <View style={styles.onaySignatureRow}>
                 <Text style={styles.onayNameText}>{col.name}</Text>
-                {renderSignature(col.employeeId)}
+                {renderSignature(col.employeeId, col.status)}
               </View>
               {/* Note Row - Yorum varsa göster */}
               {col.note ? (

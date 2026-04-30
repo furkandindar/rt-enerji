@@ -138,7 +138,11 @@ export async function generateRequestPDF(
   }
 
   // Onaylayanların imzaları
+  // Sadece APPROVED durumundaki adımlar için imza üret. REJECTED/PENDING
+  // adımlarda imza yerine template'in placeholder'ı (veya "Reddedildi" yazısı)
+  // görünmeli — aksi halde reddeden kişi imzalı görünür.
   for (const approval of request.approvals || []) {
+    if (approval.status !== 'APPROVED') continue;
     if (approval.approver.signature_text && approval.approver.signature_font) {
       signatures[approval.approver.id] = {
         text: approval.approver.signature_text,

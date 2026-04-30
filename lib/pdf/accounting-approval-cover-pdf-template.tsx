@@ -153,7 +153,10 @@ export const AccountingApprovalCoverPDFTemplate: React.FC<AccountingApprovalCove
   approvals,
   signatures = {},
 }) => {
-  const renderSignature = (employeeId: string) => {
+  const renderSignature = (employeeId: string, status?: string) => {
+    if (status === 'REJECTED') {
+      return <Text style={{ fontSize: 9, fontWeight: 700, color: '#DC2626' }}>Reddedildi</Text>;
+    }
     const sig = signatures[employeeId];
     if (sig) return <Text style={[styles.signatureText, { fontFamily: signatureFontMap[sig.font] }]}>{sig.text}</Text>;
     return <Text style={styles.signaturePending}>İmza</Text>;
@@ -301,7 +304,7 @@ export const AccountingApprovalCoverPDFTemplate: React.FC<AccountingApprovalCove
             <View style={styles.ilgilerGrid}>
               {dynamicApprovals.map((a, idx) => (
                 <View key={a.id || idx} style={styles.ilgilerCell}>
-                  {renderSignature(a.approver?.id)}
+                  {renderSignature(a.approver?.id, a.status)}
                   <Text style={styles.ilgilerName}>
                     {a.approver?.first_name} {a.approver?.last_name}
                   </Text>
@@ -319,7 +322,7 @@ export const AccountingApprovalCoverPDFTemplate: React.FC<AccountingApprovalCove
             <Text style={styles.staticSubtitleRight}>
               {muhasebeMuduru.workflow_step?.static_position?.title || muhasebeMuduru.workflow_step?.name || 'İlgili Birim Yetkilisi / Müdürü'}
             </Text>
-            {renderSignature(muhasebeMuduru.approver?.id)}
+            {renderSignature(muhasebeMuduru.approver?.id, muhasebeMuduru.status)}
             <Text style={styles.staticNameRight}>
               {muhasebeMuduru.approver?.first_name} {muhasebeMuduru.approver?.last_name}
             </Text>
@@ -332,7 +335,7 @@ export const AccountingApprovalCoverPDFTemplate: React.FC<AccountingApprovalCove
         {/* Genel Müdür (sola yaslı, dinamik imza) */}
         {genelMudur && genelMudur !== muhasebeMuduru ? (
           <View style={styles.genelMudurBlock} wrap={false}>
-            {renderSignature(genelMudur.approver?.id)}
+            {renderSignature(genelMudur.approver?.id, genelMudur.status)}
             <Text style={styles.genelMudurName}>
               {genelMudur.approver?.first_name} {genelMudur.approver?.last_name}
             </Text>

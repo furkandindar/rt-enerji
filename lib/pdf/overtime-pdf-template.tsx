@@ -60,6 +60,7 @@ const staffStyles = StyleSheet.create({
   onayNoteText: { fontSize: 5.5, color: '#666', lineHeight: 1.3 },
   onaySignatureText: { fontSize: 14, color: '#1a365d' },
   onaySignatureStatus: { fontSize: 7, color: '#666' },
+  onaySignatureRejected: { fontSize: 9, fontWeight: 700, color: '#DC2626' },
   footer: { marginTop: 10, fontSize: 6, color: '#666' },
   // Emergency field rows
   fieldTable: { borderWidth: 1, borderColor: '#000000', marginBottom: 10 },
@@ -100,14 +101,15 @@ interface StaffShortageProps {
   requester: any;
   overtimeRequest: any;
   entries: OvertimeEntry[];
-  approvalColumns: { title: string; name: string; employeeId: string; note: string }[];
+  approvalColumns: { title: string; name: string; employeeId: string; note: string; status?: string }[];
   signatures: Record<string, SignatureInfo>;
 }
 
 const StaffShortagePDF: React.FC<StaffShortageProps> = ({
   request, requester, overtimeRequest, entries, approvalColumns, signatures,
 }) => {
-  const renderSig = (employeeId: string) => {
+  const renderSig = (employeeId: string, status?: string) => {
+    if (status === 'REJECTED') return <Text style={staffStyles.onaySignatureRejected}>Reddedildi</Text>;
     const sig = signatures[employeeId];
     if (sig) return <Text style={[staffStyles.onaySignatureText, { fontFamily: signatureFontMap[sig.font] }]}>{sig.text}</Text>;
     return <Text style={staffStyles.onaySignatureStatus}>İmza</Text>;
@@ -180,7 +182,7 @@ const StaffShortagePDF: React.FC<StaffShortageProps> = ({
             <View style={staffStyles.onayTitleRow}><Text style={staffStyles.onayTitleText}>{col.title}</Text></View>
             <View style={staffStyles.onaySignatureRow}>
               <Text style={staffStyles.onayNameText}>{col.name}</Text>
-              {renderSig(col.employeeId)}
+              {renderSig(col.employeeId, col.status)}
             </View>
             {col.note ? (<View style={staffStyles.onayNoteRow}><Text style={staffStyles.onayNoteText}>{col.note}</Text></View>) : null}
           </View>
@@ -195,14 +197,15 @@ interface EmergencyProps {
   request: any;
   requester: any;
   overtimeRequest: any;
-  approvalColumns: { title: string; name: string; employeeId: string; note: string }[];
+  approvalColumns: { title: string; name: string; employeeId: string; note: string; status?: string }[];
   signatures: Record<string, SignatureInfo>;
 }
 
 const EmergencyPDF: React.FC<EmergencyProps> = ({
   request, requester, overtimeRequest, approvalColumns, signatures,
 }) => {
-  const renderSig = (employeeId: string) => {
+  const renderSig = (employeeId: string, status?: string) => {
+    if (status === 'REJECTED') return <Text style={staffStyles.onaySignatureRejected}>Reddedildi</Text>;
     const sig = signatures[employeeId];
     if (sig) return <Text style={[staffStyles.onaySignatureText, { fontFamily: signatureFontMap[sig.font] }]}>{sig.text}</Text>;
     return <Text style={staffStyles.onaySignatureStatus}>İmza</Text>;
@@ -272,7 +275,7 @@ const EmergencyPDF: React.FC<EmergencyProps> = ({
             <View style={staffStyles.onayTitleRow}><Text style={staffStyles.onayTitleText}>{col.title}</Text></View>
             <View style={staffStyles.onaySignatureRow}>
               <Text style={staffStyles.onayNameText}>{col.name}</Text>
-              {renderSig(col.employeeId)}
+              {renderSig(col.employeeId, col.status)}
             </View>
             {col.note ? (<View style={staffStyles.onayNoteRow}><Text style={staffStyles.onayNoteText}>{col.note}</Text></View>) : null}
           </View>
@@ -286,11 +289,11 @@ export const OvertimePDFTemplate: React.FC<OvertimePDFTemplateProps> = ({
   request, requester, overtimeRequest, entries = [], approvals, signatures = {},
 }) => {
   const getApprovalColumns = () => {
-    const columns: { title: string; name: string; employeeId: string; note: string }[] = [{ title: 'İnsan Kaynakları', name: `${requester.first_name} ${requester.last_name}`, employeeId: requester.id, note: '' }];
+    const columns: { title: string; name: string; employeeId: string; note: string; status?: string }[] = [{ title: 'İnsan Kaynakları', name: `${requester.first_name} ${requester.last_name}`, employeeId: requester.id, note: '' }];
     const sortedApprovals = approvals.filter((a) => a.workflow_step.step_order > 1).sort((a, b) => a.workflow_step.step_order - b.workflow_step.step_order);
     sortedApprovals.forEach((approval) => {
       const positionTitle = approval.workflow_step.static_position ? approval.workflow_step.static_position.title : approval.workflow_step.name;
-      columns.push({ title: positionTitle, name: `${approval.approver.first_name} ${approval.approver.last_name}`, employeeId: approval.approver.id, note: approval.comment || '' });
+      columns.push({ title: positionTitle, name: `${approval.approver.first_name} ${approval.approver.last_name}`, employeeId: approval.approver.id, note: approval.comment || '', status: approval.status });
     });
     return columns;
   };

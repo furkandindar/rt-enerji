@@ -97,7 +97,10 @@ export const SalaryAdvancePDFTemplate: React.FC<SalaryAdvancePDFTemplateProps> =
   approvals,
   signatures = {},
 }) => {
-  const renderSignature = (employeeId: string) => {
+  const renderSignature = (employeeId: string, status?: string) => {
+    if (status === 'REJECTED') {
+      return <Text style={{ fontSize: 9, fontWeight: 700, color: '#DC2626' }}>Reddedildi</Text>;
+    }
     const sig = signatures[employeeId];
     if (sig) {
       return <Text style={[styles.signatureText, { fontFamily: signatureFontMap[sig.font] }]}>{sig.text}</Text>;
@@ -114,11 +117,11 @@ export const SalaryAdvancePDFTemplate: React.FC<SalaryAdvancePDFTemplateProps> =
   const paymentMethodLabels: Record<string, string> = { CASH: 'Nakit', BANK_TRANSFER: 'Banka Havalesi' };
 
   const getApprovalColumns = () => {
-    const columns: { title: string; name: string; employeeId: string; note: string }[] = [{ title: 'Talep Eden', name: `${requester.first_name} ${requester.last_name}`, employeeId: requester.id, note: '' }];
+    const columns: { title: string; name: string; employeeId: string; note: string; status?: string }[] = [{ title: 'Talep Eden', name: `${requester.first_name} ${requester.last_name}`, employeeId: requester.id, note: '' }];
     const sortedApprovals = approvals.filter((a) => a.workflow_step.step_order > 1).sort((a, b) => a.workflow_step.step_order - b.workflow_step.step_order);
     sortedApprovals.forEach((approval) => {
       const positionTitle = approval.workflow_step.static_position ? approval.workflow_step.static_position.title : approval.workflow_step.name;
-      columns.push({ title: positionTitle, name: `${approval.approver.first_name} ${approval.approver.last_name}`, employeeId: approval.approver.id, note: approval.comment || '' });
+      columns.push({ title: positionTitle, name: `${approval.approver.first_name} ${approval.approver.last_name}`, employeeId: approval.approver.id, note: approval.comment || '', status: approval.status });
     });
     return columns;
   };
@@ -161,7 +164,7 @@ export const SalaryAdvancePDFTemplate: React.FC<SalaryAdvancePDFTemplateProps> =
           {approvalColumns.map((col, index) => (
             <View key={index} style={index === approvalColumns.length - 1 ? styles.onayColumnLast : styles.onayColumn}>
               <View style={styles.onayTitleRow}><Text style={styles.onayTitleText}>{col.title}</Text></View>
-              <View style={styles.onaySignatureRow}><Text style={styles.onayNameText}>{col.name}</Text>{renderSignature(col.employeeId)}</View>
+              <View style={styles.onaySignatureRow}><Text style={styles.onayNameText}>{col.name}</Text>{renderSignature(col.employeeId, col.status)}</View>
               {col.note ? (<View style={styles.onayNoteRow}><Text style={styles.onayNoteText}>{col.note}</Text></View>) : null}
             </View>
           ))}

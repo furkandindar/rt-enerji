@@ -98,7 +98,10 @@ export const ApprovalLetterPDFTemplate: React.FC<ApprovalLetterPDFTemplateProps>
   approvals,
   signatures = {},
 }) => {
-  const renderSignature = (employeeId: string) => {
+  const renderSignature = (employeeId: string, status?: string) => {
+    if (status === 'REJECTED') {
+      return <Text style={{ fontSize: 9, fontWeight: 700, color: '#DC2626' }}>Reddedildi</Text>;
+    }
     const sig = signatures[employeeId];
     if (sig) {
       return <Text style={[styles.signatureText, { fontFamily: signatureFontMap[sig.font] }]}>{sig.text}</Text>;
@@ -107,7 +110,7 @@ export const ApprovalLetterPDFTemplate: React.FC<ApprovalLetterPDFTemplateProps>
   };
 
   const getApprovalColumns = () => {
-    const columns: { title: string; name: string; employeeId: string; note: string }[] = [
+    const columns: { title: string; name: string; employeeId: string; note: string; status?: string }[] = [
       { title: 'Hazırlayan', name: `${requester.first_name} ${requester.last_name}`, employeeId: requester.id, note: '' },
     ];
     const sortedApprovals = approvals
@@ -122,6 +125,7 @@ export const ApprovalLetterPDFTemplate: React.FC<ApprovalLetterPDFTemplateProps>
         name: `${approval.approver.first_name} ${approval.approver.last_name}`,
         employeeId: approval.approver.id,
         note: approval.comment || '',
+        status: approval.status,
       });
     });
     return columns;
@@ -218,7 +222,7 @@ export const ApprovalLetterPDFTemplate: React.FC<ApprovalLetterPDFTemplateProps>
               <Text style={styles.signatureColon}>:</Text>
               <View style={styles.signatureValue}>
                 <Text style={styles.signatureName}>{col.name}</Text>
-                {renderSignature(col.employeeId)}
+                {renderSignature(col.employeeId, col.status)}
               </View>
             </View>
             {col.note ? (

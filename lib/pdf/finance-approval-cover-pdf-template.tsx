@@ -146,7 +146,10 @@ export const FinanceApprovalCoverPDFTemplate: React.FC<FinanceApprovalCoverPDFTe
   approvals,
   signatures = {},
 }) => {
-  const renderSignature = (employeeId: string) => {
+  const renderSignature = (employeeId: string, status?: string) => {
+    if (status === 'REJECTED') {
+      return <Text style={{ fontSize: 9, fontWeight: 700, color: '#DC2626' }}>Reddedildi</Text>;
+    }
     const sig = signatures[employeeId];
     if (sig) return <Text style={[styles.signatureText, { fontFamily: signatureFontMap[sig.font] }]}>{sig.text}</Text>;
     return <Text style={styles.signaturePending}>İmza</Text>;
@@ -278,7 +281,7 @@ export const FinanceApprovalCoverPDFTemplate: React.FC<FinanceApprovalCoverPDFTe
             <View style={styles.ilgilerGrid}>
               {dynamicApprovals.map((a, idx) => (
                 <View key={a.id || idx} style={styles.ilgilerCell}>
-                  {renderSignature(a.approver?.id)}
+                  {renderSignature(a.approver?.id, a.status)}
                   <Text style={styles.ilgilerName}>
                     {a.approver?.first_name} {a.approver?.last_name}
                   </Text>
@@ -296,7 +299,7 @@ export const FinanceApprovalCoverPDFTemplate: React.FC<FinanceApprovalCoverPDFTe
             <Text style={styles.staticSubtitleRight}>
               {finansMuduru.workflow_step?.static_position?.title || finansMuduru.workflow_step?.name || 'İlgili Birim Yetkilisi / Müdürü'}
             </Text>
-            {renderSignature(finansMuduru.approver?.id)}
+            {renderSignature(finansMuduru.approver?.id, finansMuduru.status)}
             <Text style={styles.staticNameRight}>
               {finansMuduru.approver?.first_name} {finansMuduru.approver?.last_name}
             </Text>
@@ -309,7 +312,7 @@ export const FinanceApprovalCoverPDFTemplate: React.FC<FinanceApprovalCoverPDFTe
         {/* Genel Müdür (sola yaslı, dinamik imza) */}
         {genelMudur && genelMudur !== finansMuduru ? (
           <View style={styles.genelMudurBlock} wrap={false}>
-            {renderSignature(genelMudur.approver?.id)}
+            {renderSignature(genelMudur.approver?.id, genelMudur.status)}
             <Text style={styles.genelMudurName}>
               {genelMudur.approver?.first_name} {genelMudur.approver?.last_name}
             </Text>

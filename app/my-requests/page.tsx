@@ -206,6 +206,7 @@ interface Request {
   status: string;
   current_step: number;
   created_at: string;
+  pdf_path?: string | null;
   workflow_definition: WorkflowDefinition;
   leave_request?: LeaveRequestData;
   salary_advance_request?: SalaryAdvanceRequest;
@@ -1734,8 +1735,8 @@ export default function MyRequestsPage() {
                 </Accordion>
               )}
 
-              {/* PDF Butonları - Sadece onaylanmış talepler için */}
-              {(selectedRequest.status === "APPROVED" || selectedRequest.status === "AWAITING_COMPLETION" || selectedRequest.status === "COMPLETED") && (
+              {/* PDF Butonları - Onaylanmış veya pdf_path mevcut reddedilmiş talepler için */}
+              {(selectedRequest.status === "APPROVED" || selectedRequest.status === "AWAITING_COMPLETION" || selectedRequest.status === "COMPLETED" || (selectedRequest.status === "REJECTED" && !!selectedRequest.pdf_path)) && (
                 <div className="border-t pt-4 mt-6 flex gap-2">
                   <Button
                     variant="outline"

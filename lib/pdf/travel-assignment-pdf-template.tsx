@@ -97,7 +97,10 @@ export const TravelAssignmentPDFTemplate: React.FC<TravelAssignmentPDFTemplatePr
   approvals,
   signatures = {},
 }) => {
-  const renderSignature = (employeeId: string) => {
+  const renderSignature = (employeeId: string, status?: string) => {
+    if (status === 'REJECTED') {
+      return <Text style={{ fontSize: 9, fontWeight: 700, color: '#DC2626' }}>Reddedildi</Text>;
+    }
     const sig = signatures[employeeId];
     if (sig) {
       return <Text style={[styles.signatureText, { fontFamily: signatureFontMap[sig.font] }]}>{sig.text}</Text>;
@@ -112,7 +115,7 @@ export const TravelAssignmentPDFTemplate: React.FC<TravelAssignmentPDFTemplatePr
   };
 
   const getApprovalColumns = () => {
-    const columns: { title: string; name: string; employeeId: string; note: string }[] = [
+    const columns: { title: string; name: string; employeeId: string; note: string; status?: string }[] = [
       { title: 'Talep Eden', name: `${requester.first_name} ${requester.last_name}`, employeeId: requester.id, note: '' },
     ];
     const sortedApprovals = approvals
@@ -127,6 +130,7 @@ export const TravelAssignmentPDFTemplate: React.FC<TravelAssignmentPDFTemplatePr
         name: `${approval.approver.first_name} ${approval.approver.last_name}`,
         employeeId: approval.approver.id,
         note: approval.comment || '',
+        status: approval.status,
       });
     });
     return columns;
@@ -223,7 +227,7 @@ export const TravelAssignmentPDFTemplate: React.FC<TravelAssignmentPDFTemplatePr
               <View style={styles.onayTitleRow}><Text style={styles.onayTitleText}>{col.title}</Text></View>
               <View style={styles.onaySignatureRow}>
                 <Text style={styles.onayNameText}>{col.name}</Text>
-                {renderSignature(col.employeeId)}
+                {renderSignature(col.employeeId, col.status)}
               </View>
               {col.note ? (<View style={styles.onayNoteRow}><Text style={styles.onayNoteText}>{col.note}</Text></View>) : null}
             </View>

@@ -702,7 +702,9 @@ const SignatureSection: React.FC<SignatureSectionProps> = ({
       : '-',
     sig: a.status === 'APPROVED'
       ? renderSig(signatures, a.approver?.id)
-      : <Text style={styles.signaturePending}>{a.status === 'REJECTED' ? 'Reddedildi' : ''}</Text>,
+      : a.status === 'REJECTED'
+        ? <Text style={{ fontSize: 9, fontWeight: 700, color: '#DC2626' }}>Reddedildi</Text>
+        : <Text style={styles.signaturePending}></Text>,
     meta: a.decided_at ? format(new Date(a.decided_at), 'dd.MM.yyyy') : '',
     comment: a.comment || '',
   }));

@@ -143,7 +143,10 @@ export const ExpenseFormPDFTemplate: React.FC<ExpenseFormPDFTemplateProps> = ({
   approvals,
   signatures = {},
 }) => {
-  const renderSignature = (employeeId: string) => {
+  const renderSignature = (employeeId: string, status?: string) => {
+    if (status === 'REJECTED') {
+      return <Text style={{ fontSize: 9, fontWeight: 700, color: '#DC2626' }}>Reddedildi</Text>;
+    }
     const sig = signatures[employeeId];
     if (sig) return <Text style={[styles.signatureText, { fontFamily: signatureFontMap[sig.font] }]}>{sig.text}</Text>;
     return <Text style={styles.signaturePending}>İmza</Text>;
@@ -157,7 +160,7 @@ export const ExpenseFormPDFTemplate: React.FC<ExpenseFormPDFTemplateProps> = ({
   const balance = advance - totalAmount;
 
   // Onay kolonları: Talep Eden + sıralı onaylayanlar
-  const approvalColumns: Array<{ title: string; name: string; employeeId: string; note: string }> = [
+  const approvalColumns: Array<{ title: string; name: string; employeeId: string; note: string; status?: string }> = [
     {
       title: 'Talep Eden',
       name: `${requester.first_name} ${requester.last_name}`,
@@ -175,6 +178,7 @@ export const ExpenseFormPDFTemplate: React.FC<ExpenseFormPDFTemplateProps> = ({
       name: `${a.approver?.first_name ?? ''} ${a.approver?.last_name ?? ''}`.trim(),
       employeeId: a.approver?.id,
       note: a.comment || '',
+      status: a.status,
     });
   });
 
@@ -277,7 +281,7 @@ export const ExpenseFormPDFTemplate: React.FC<ExpenseFormPDFTemplateProps> = ({
             <View key={index} style={index === approvalColumns.length - 1 ? styles.onayColumnLast : styles.onayColumn}>
               <View style={styles.onayTitleRow}><Text style={styles.onayTitleText}>{col.title}</Text></View>
               <View style={styles.onaySignatureRow}>
-                {renderSignature(col.employeeId)}
+                {renderSignature(col.employeeId, col.status)}
                 <Text style={styles.onayNameText}>{col.name}</Text>
               </View>
               {col.note ? (

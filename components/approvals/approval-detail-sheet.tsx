@@ -312,10 +312,12 @@ export function ApprovalDetailSheet({
                   </p>
                 )}
 
-                {/* PDF Butonları */}
-                {["APPROVED", "AWAITING_COMPLETION", "COMPLETED"].includes(
+                {/* PDF Butonları - Onaylanmış veya pdf_path mevcut reddedilmiş talepler için */}
+                {(["APPROVED", "AWAITING_COMPLETION", "COMPLETED"].includes(
                   selectedApproval.request.status,
-                ) && (
+                ) ||
+                  (selectedApproval.request.status === "REJECTED" &&
+                    !!selectedApproval.request.pdf_path)) && (
                   <div className="flex gap-2">
                     <Button
                       variant="outline"

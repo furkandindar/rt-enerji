@@ -149,7 +149,10 @@ interface OnboardingPDFTemplateProps {
 export const OnboardingPDFTemplate: React.FC<OnboardingPDFTemplateProps> = ({
   request: _request, requester, onboardingRequest, approvals, signatures = {},
 }) => {
-  const renderSignature = (employeeId: string, small = false) => {
+  const renderSignature = (employeeId: string, small = false, status?: string) => {
+    if (status === 'REJECTED') {
+      return <Text style={{ fontSize: small ? 8 : 9, fontWeight: 700, color: '#DC2626' }}>Reddedildi</Text>;
+    }
     const sig = signatures[employeeId];
     if (sig) return <Text style={[small ? styles.signatureTextSmall : styles.signatureText, { fontFamily: signatureFontMap[sig.font] }]}>{sig.text}</Text>;
     return null;
@@ -157,6 +160,7 @@ export const OnboardingPDFTemplate: React.FC<OnboardingPDFTemplateProps> = ({
 
   // Build a map: sectionKey -> employeeId of the person who filled that section
   const sectionToEmployeeId: Record<string, string> = {};
+  const sectionToStatus: Record<string, string> = {};
   // section_1 and section_3 are filled by the requester (IK)
   sectionToEmployeeId['section_1'] = requester.id;
   sectionToEmployeeId['section_3'] = requester.id;
@@ -164,6 +168,7 @@ export const OnboardingPDFTemplate: React.FC<OnboardingPDFTemplateProps> = ({
   approvals.forEach((a: any) => {
     if (a.workflow_step.form_section_key) {
       sectionToEmployeeId[a.workflow_step.form_section_key] = a.approver.id;
+      sectionToStatus[a.workflow_step.form_section_key] = a.status;
     }
   });
 
@@ -223,7 +228,7 @@ export const OnboardingPDFTemplate: React.FC<OnboardingPDFTemplateProps> = ({
                 <View style={{ ...styles.tableCell, width: 22 }}><Text style={styles.tableCellCenter}>{index + 1}</Text></View>
                 <View style={{ ...styles.tableCell, width: 230 }}><Text style={styles.tableCellText}>{item.label}</Text></View>
                 <View style={{ ...styles.tableCell, width: 45, alignItems: 'center' }}>{getStatusIcon(onboardingRequest[item.statusKey])}</View>
-                <View style={{ ...styles.tableCell, width: 80, alignItems: 'center' }}>{sectionEmployeeId ? renderSignature(sectionEmployeeId, true) : null}</View>
+                <View style={{ ...styles.tableCell, width: 80, alignItems: 'center' }}>{sectionEmployeeId ? renderSignature(sectionEmployeeId, true, sectionToStatus[item.sectionKey]) : null}</View>
                 <View style={{ ...styles.tableCellLast, flex: 1 }}><Text style={styles.tableCellText}>{onboardingRequest[item.notesKey] || ''}</Text></View>
               </View>
             );
@@ -244,7 +249,7 @@ export const OnboardingPDFTemplate: React.FC<OnboardingPDFTemplateProps> = ({
                 <Text style={styles.approvalSubtitle}>{secondToLastApproval.workflow_step.static_position?.title?.toUpperCase() || secondToLastApproval.workflow_step.name.toUpperCase()}</Text>
                 <Text style={styles.approvalName}>{secondToLastApproval.approver.first_name} {secondToLastApproval.approver.last_name}</Text>
                 {secondToLastApproval.decided_at ? <Text style={styles.approvalName}>{format(new Date(secondToLastApproval.decided_at), 'dd/MM/yyyy')}</Text> : null}
-                {renderSignature(secondToLastApproval.approver.id)}
+                {renderSignature(secondToLastApproval.approver.id, false, secondToLastApproval.status)}
               </>
             ) : null}
           </View>
@@ -255,7 +260,7 @@ export const OnboardingPDFTemplate: React.FC<OnboardingPDFTemplateProps> = ({
               <>
                 <Text style={styles.approvalSubtitle}>{lastApproval.workflow_step.static_position?.title?.toUpperCase() || lastApproval.workflow_step.name.toUpperCase()}</Text>
                 <Text style={styles.approvalName}>{lastApproval.approver.first_name} {lastApproval.approver.last_name}</Text>
-                {renderSignature(lastApproval.approver.id)}
+                {renderSignature(lastApproval.approver.id, false, lastApproval.status)}
               </>
             ) : null}
           </View>

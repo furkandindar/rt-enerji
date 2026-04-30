@@ -90,6 +90,7 @@ export interface PendingApproval {
     status: string;
     current_step: number;
     created_at: string;
+    pdf_path?: string | null;
     workflow_definition: {
       name: string;
     };
