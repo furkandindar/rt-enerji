@@ -124,10 +124,10 @@ export function CalendarWidget() {
             hasEvent:
               "relative after:pointer-events-none after:absolute after:bottom-1 after:left-1/2 after:-translate-x-1/2 after:h-1 after:w-1 after:rounded-full after:bg-current after:opacity-70",
           }}
-          className="w-full max-w-sm"
+          className="w-full"
         />
 
-        <div className="w-full max-w-sm border-t pt-3">
+        <div className="w-full border-t pt-3">
           <div className="mb-2 flex items-center justify-between text-xs">
             <span className="text-muted-foreground">
               {selected ? format(selected, "d MMMM EEEE", { locale: tr }) : "—"}

@@ -23,6 +23,7 @@ Login sonrası landing page'i `/org-chart`'tan `/` (ana sayfa) a çevirmek ve bu
 | 5a | MS Graph delegated altyapısı (token store + user-client + app-client) | ✅ Tamamlandı |
 | 5 | Notlarım — Microsoft To Do entegrasyonu | ✅ Tamamlandı |
 | 6 | Sidebar linki + breadcrumb/metadata cleanup | ✅ Tamamlandı |
+| 7 | FX widget'ını header'a taşıma + 2 kolon dashboard | ✅ Tamamlandı |
 
 ---
 
@@ -324,8 +325,37 @@ Microsoft To Do uygulamalarında (web/desktop/mobile) "RT Enerji" listesi otomat
 - Tüm widget'lar shadcn `Card` ve theme-aware tokens (`text-muted-foreground`, `bg-muted`, `border`) kullanır → dark/light otomatik.
 
 ### Hâlâ Bekleyen / Sonraki Sürüm
-- `app/api/dashboard/workflow-summary` orphan kontrolü (eski page tarafından çağrılıyordu) — gerek varsa Faz 7'de.
+- `app/api/dashboard/workflow-summary` orphan kontrolü (eski page tarafından çağrılıyordu).
 - Token şifreleme (Vault / pgsodium) — güvenlik artırımı.
 - Calendar widget'ında "Bugüne dön" butonu.
 - FX widget'ında ↑/↓ değişim badge'i.
 - To Do widget'ında inline edit + body alanı UI'ı.
+
+---
+
+## Faz 7 — FX Header'a Taşındı + 2 Kolon Dashboard ✅
+
+### Amaç
+Dashboard görsel dengesini iyileştirmek: FX widget'ı 3 küçük rakam yer kaplıyordu, Calendar (geniş) + Notes (full-width) yapısı dengesizdi. FX'i global header'a taşıyıp dashboard'u 2 kolona indirgedik.
+
+### Yapılan Değişiklikler
+
+**1. `components/fx-rates-header.tsx` (yeni)**
+- **Desktop (`sm+`):** 3 kur inline küçük yazı: `EUR/TRY 52,74 ₺ · USD/TRY 45,07 ₺ · EUR/USD 1,1702 $`. `tabular-nums` ile rakamlar hizalı; TCMB tarihi `title` attribute'unda hover'da görünür.
+- **Mobile (`<sm`):** TrendingUp icon button → Popover ile tam görünüm (başlık, TCMB tarihi, 3 kur ayrı satırlarda).
+- Aynı `/api/fx-rates` endpoint, aynı dinamik TTL cache.
+
+**2. `components/app-shell.tsx`**
+- Header'da: `FxRatesHeader` → `NotificationPopover` → `ThemeSwitcher` sırası.
+- **Tüm authenticated sayfalarda görünür** (sadece ana sayfada değil) — extra bir değer.
+
+**3. `app/page.tsx`**
+- `FxRatesWidget` import + render kaldırıldı.
+- Grid: `lg:grid-cols-3` → `lg:grid-cols-2`. Calendar + Notes 50/50 yan yana.
+- Açıklama: "Takvim, güncel döviz kurları ve kişisel notlarınız" → "Takvim ve kişisel notlarınız".
+
+**4. `app/_home/calendar-widget.tsx`**
+- Calendar `max-w-sm` kaldırıldı → kolon genişliğini doldurur (eskiden `lg:col-span-2`'de center'lanmıştı).
+
+**5. `app/_home/fx-rates-widget.tsx`**
+- **Silindi** — orphan'a düşmesin.

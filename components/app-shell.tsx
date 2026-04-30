@@ -4,6 +4,7 @@ import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 
 import { AppSidebar } from "@/components/app-sidebar";
+import { FxRatesHeader } from "@/components/fx-rates-header";
 import { NotificationPopover } from "@/components/notification-popover";
 import { ThemeSwitcher } from "@/components/theme-switcher";
 import { UserProvider, useUser } from "@/lib/contexts/user-context";
@@ -115,6 +116,7 @@ function AppShellContent({ children }: { children: ReactNode }) {
             </Breadcrumb>
           </div>
           <div className="ml-auto flex items-center gap-2 px-4">
+            <FxRatesHeader />
             <NotificationPopover />
             <ThemeSwitcher />
           </div>
