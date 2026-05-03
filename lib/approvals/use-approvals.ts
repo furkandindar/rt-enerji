@@ -451,8 +451,9 @@ export function useApprovals() {
       fetchAttachmentData(selectedApproval.workflow_step.id, selectedApproval.request.id);
     }
 
-    // Onboarding, separation, overtime, request form, approval letter veya mukayese formu ise önceki adımlardaki ekleri de çek
-    if ((selectedApproval?.request?.onboarding_request || selectedApproval?.request?.separation_request || selectedApproval?.request?.overtime_request || selectedApproval?.request?.request_form_request || selectedApproval?.request?.approval_letter_request || selectedApproval?.request?.mukayese_request) && selectedApproval?.request?.id) {
+    // Önceki adımlarda yüklenen ek dosyaları her zaman çek; talep türünden bağımsız
+    // (hiç attachment olmayan türlerde sorgu boş array döner, yan etki yoktur).
+    if (selectedApproval?.request?.id) {
       fetchPreviousStepAttachments(selectedApproval.request.id);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
