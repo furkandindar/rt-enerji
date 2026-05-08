@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import type { WorkflowStepAttachmentConfig, RequestAttachment, PreviousStepAttachment } from "@/lib/workflow/types";
 import type { PendingApproval, ChecklistStatus, SignatureInfo } from "./types";
 import { onboardingSectionConfig, ONBOARDING_SECTION_KEYS, separationSectionConfig, SEPARATION_SECTION_KEYS } from "./constants";
+import { parseContentDispositionFilename } from "@/lib/pdf/file-naming";
 
 export function useApprovals() {
   const [pendingApprovals, setPendingApprovals] = useState<PendingApproval[]>([]);
@@ -368,11 +369,14 @@ export function useApprovals() {
         const error = await response.json();
         throw new Error(error.error || "PDF indirilemedi");
       }
+      const fileName =
+        parseContentDispositionFilename(response.headers.get("Content-Disposition")) ||
+        `talep_${requestId}.pdf`;
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `talep_${requestId}.pdf`;
+      a.download = fileName;
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);

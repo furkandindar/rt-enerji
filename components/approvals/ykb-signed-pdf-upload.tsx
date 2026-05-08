@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { PdfViewerDialog } from "@/components/pdf-viewer-dialog";
+import { parseContentDispositionFilename } from "@/lib/pdf/file-naming";
 
 const MAX_PDF_BYTES = 25 * 1024 * 1024;
 
@@ -37,11 +38,14 @@ export function YkbSignedPdfUpload({
         const err = await response.json();
         throw new Error(err.error || "PDF indirilemedi");
       }
+      const fileName =
+        parseContentDispositionFilename(response.headers.get("Content-Disposition")) ||
+        `talep_${requestId}.pdf`;
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `signed_${requestId}.pdf`;
+      a.download = fileName;
       document.body.appendChild(a);
       a.click();
       URL.revokeObjectURL(url);

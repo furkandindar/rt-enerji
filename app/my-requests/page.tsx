@@ -52,6 +52,7 @@ import { getApproverDisplayName } from "@/lib/approvals/types";
 import { PdfViewerDialog } from "@/components/pdf-viewer-dialog";
 import { ComparisonFormDetails } from "@/components/approvals/comparison-form-details";
 import { ApprovalStatusBadge, RequestStatusBadge } from "@/components/approvals/status-badge";
+import { parseContentDispositionFilename } from "@/lib/pdf/file-naming";
 
 interface WorkflowDefinition {
   id: string;
@@ -206,6 +207,7 @@ interface SeparationRequestData {
 
 interface Request {
   id: string;
+  request_no: string;
   status: string;
   current_step: number;
   created_at: string;
@@ -544,18 +546,19 @@ export default function MyRequestsPage() {
         throw new Error(error.error || "PDF indirilemedi");
       }
 
-      // PDF'i blob olarak al
-      const blob = await response.blob();
+      // Sunucunun verdiği insan-okur dosya adını kullan (Content-Disposition)
+      const fileName =
+        parseContentDispositionFilename(response.headers.get("Content-Disposition")) ||
+        `talep_${requestId}.pdf`;
 
-      // Download link oluştur
+      const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `talep_${requestId}.pdf`;
+      a.download = fileName;
       document.body.appendChild(a);
       a.click();
 
-      // Cleanup
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
 
@@ -638,10 +641,11 @@ export default function MyRequestsPage() {
           </Button>
         </div>
       ) : (
-        <div className="rounded-md border">
+        <div className="rounded-md border overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-[130px]">Talep No</TableHead>
                 <TableHead>Talep Tipi</TableHead>
                 <TableHead>Detay</TableHead>
                 <TableHead>Oluşturulma</TableHead>
@@ -652,6 +656,11 @@ export default function MyRequestsPage() {
             <TableBody>
               {requests.map((request) => (
                 <TableRow key={request.id}>
+                  <TableCell>
+                    <span className="font-mono text-xs text-muted-foreground">
+                      {request.request_no || "-"}
+                    </span>
+                  </TableCell>
                   <TableCell className="font-medium">
                     {request.workflow_definition?.name || "-"}
                   </TableCell>
@@ -690,8 +699,16 @@ export default function MyRequestsPage() {
           </SheetHeader>
           {selectedRequest && (
             <div className="grid grid-cols-1 gap-4 p-4">
+              {/* Talep No */}
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Talep No</p>
+                <p className="text-sm font-mono font-semibold">
+                  {selectedRequest.request_no || "-"}
+                </p>
+              </div>
+
               {/* Talep Sahibi Bilgileri */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Talep Sahibi</p>
                   <p className="text-sm font-semibold">
@@ -706,7 +723,7 @@ export default function MyRequestsPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Talep Tipi</p>
                   <p className="text-sm font-semibold">

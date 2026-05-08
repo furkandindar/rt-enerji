@@ -1657,6 +1657,7 @@ export type Database = {
           id: string
           parent_request_id: string | null
           pdf_path: string | null
+          request_no: string
           requester_employee_id: string
           status: Database["public"]["Enums"]["request_status"]
           submitted_at: string | null
@@ -1670,6 +1671,7 @@ export type Database = {
           id?: string
           parent_request_id?: string | null
           pdf_path?: string | null
+          request_no?: string
           requester_employee_id: string
           status?: Database["public"]["Enums"]["request_status"]
           submitted_at?: string | null
@@ -1683,6 +1685,7 @@ export type Database = {
           id?: string
           parent_request_id?: string | null
           pdf_path?: string | null
+          request_no?: string
           requester_employee_id?: string
           status?: Database["public"]["Enums"]["request_status"]
           submitted_at?: string | null

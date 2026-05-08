@@ -148,8 +148,16 @@ export function ApprovalDetailSheet({
         </SheetHeader>
         {selectedApproval && (
           <div className="grid grid-cols-1 gap-4 p-4">
+            {/* Talep No */}
+            <div>
+              <p className="text-sm font-medium text-muted-foreground">Talep No</p>
+              <p className="text-sm font-mono font-semibold">
+                {selectedApproval.request.request_no || "-"}
+              </p>
+            </div>
+
             {/* Talep Sahibi Bilgileri */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Talep Sahibi</p>
                 <p className="text-sm font-semibold">
@@ -164,7 +172,7 @@ export function ApprovalDetailSheet({
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Talep Tipi</p>
                 <p className="text-sm font-semibold">

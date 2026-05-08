@@ -100,6 +100,7 @@ export interface PendingApproval {
   };
   request: {
     id: string;
+    request_no: string;
     status: string;
     current_step: number;
     created_at: string;

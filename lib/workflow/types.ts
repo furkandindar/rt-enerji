@@ -61,6 +61,7 @@ export interface WorkflowInitiator {
 
 export interface Request {
   id: string;
+  request_no: string;
   workflow_definition_id: string;
   requester_employee_id: string;
   status: RequestStatus;

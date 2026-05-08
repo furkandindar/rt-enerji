@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Download, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { parseContentDispositionFilename } from "@/lib/pdf/file-naming";
 
 interface PdfViewerDialogBaseProps {
   open: boolean;
@@ -34,6 +35,7 @@ type PdfViewerDialogProps = AttachmentPdfViewerProps | CustomPdfViewerProps;
 export function PdfViewerDialog(props: PdfViewerDialogProps) {
   const { open, onOpenChange, fileName } = props;
   const [loading, setLoading] = useState(true);
+  const [resolvedFileName, setResolvedFileName] = useState(fileName);
 
   const resolvedPreviewUrl = props.attachmentId
     ? `/api/attachments/${props.attachmentId}/preview`
@@ -43,16 +45,44 @@ export function PdfViewerDialog(props: PdfViewerDialogProps) {
     ? `/api/attachments/${props.attachmentId}/download`
     : props.downloadUrl;
 
+  // Dialog açıldığında preview URL'in Content-Disposition header'ından gerçek
+  // dosya adını çekmeye çalış; yoksa prop'tan gelen fallback'e düş.
+  useEffect(() => {
+    if (!open || !resolvedPreviewUrl) {
+      setResolvedFileName(fileName);
+      return;
+    }
+    let cancelled = false;
+    fetch(resolvedPreviewUrl, { method: "HEAD" })
+      .then((res) => {
+        if (cancelled || !res.ok) return;
+        const name = parseContentDispositionFilename(
+          res.headers.get("Content-Disposition")
+        );
+        setResolvedFileName(name || fileName);
+      })
+      .catch(() => {
+        // Sessizce fallback'e düş — prop adı zaten gösterilecek.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, resolvedPreviewUrl, fileName]);
+
   const handleDownload = async () => {
     try {
       if (!resolvedDownloadUrl) throw new Error("İndirme URL'si bulunamadı");
       const response = await fetch(resolvedDownloadUrl);
       if (!response.ok) throw new Error("Dosya indirilemedi");
+      // Sunucunun verdiği insan-okur dosya adını tercih et, yoksa prop'a düş
+      const serverFileName = parseContentDispositionFilename(
+        response.headers.get("Content-Disposition")
+      );
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = fileName;
+      link.download = serverFileName || resolvedFileName;
       document.body.appendChild(link);
       link.click();
       URL.revokeObjectURL(url);
@@ -67,7 +97,7 @@ export function PdfViewerDialog(props: PdfViewerDialogProps) {
       <DialogContent className="sm:max-w-4xl h-[90vh] flex flex-col p-0">
         <DialogHeader className="px-6 pt-6 pb-0">
           <div className="flex items-center justify-between pr-8">
-            <DialogTitle className="truncate text-base">{fileName}</DialogTitle>
+            <DialogTitle className="truncate text-base">{resolvedFileName}</DialogTitle>
             <Button variant="outline" size="sm" onClick={handleDownload}>
               <Download className="mr-2 h-4 w-4" />
               İndir

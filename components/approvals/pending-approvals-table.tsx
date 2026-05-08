@@ -35,10 +35,11 @@ export function PendingApprovalsTable({ approvals, onSelect }: PendingApprovalsT
           <p className="text-muted-foreground">Bekleyen onayınız bulunmuyor</p>
         </div>
       ) : (
-        <div className="rounded-md border">
+        <div className="rounded-md border overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-[130px]">Talep No</TableHead>
                 <TableHead>Talep Sahibi</TableHead>
                 <TableHead>Talep Tipi</TableHead>
                 <TableHead>Detay</TableHead>
@@ -49,6 +50,11 @@ export function PendingApprovalsTable({ approvals, onSelect }: PendingApprovalsT
             <TableBody>
               {approvals.map((approval) => (
                 <TableRow key={approval.id}>
+                  <TableCell>
+                    <span className="font-mono text-xs text-muted-foreground">
+                      {approval.request.request_no || "-"}
+                    </span>
+                  </TableCell>
                   <TableCell>
                     <div className="flex flex-col">
                       <span className="font-medium">
