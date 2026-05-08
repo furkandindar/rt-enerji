@@ -53,6 +53,7 @@ import { PdfViewerDialog } from "@/components/pdf-viewer-dialog";
 import { ComparisonFormDetails } from "@/components/approvals/comparison-form-details";
 import { ApprovalStatusBadge, RequestStatusBadge } from "@/components/approvals/status-badge";
 import { parseContentDispositionFilename } from "@/lib/pdf/file-naming";
+import { RichTextDisplay } from "@/components/ui/rich-text-display";
 
 interface WorkflowDefinition {
   id: string;
@@ -1298,7 +1299,7 @@ export default function MyRequestsPage() {
                   </div>
                   <div>
                     <p className="text-sm font-medium text-muted-foreground">Yazı</p>
-                    <p className="text-sm font-semibold whitespace-pre-wrap">{selectedRequest.approval_letter_request.content}</p>
+                    <RichTextDisplay content={selectedRequest.approval_letter_request.content} />
                   </div>
                   {selectedRequest.approval_letter_request.has_payment_table && (
                     <div className="border rounded-lg p-3 space-y-2">

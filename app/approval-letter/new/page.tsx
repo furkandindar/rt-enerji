@@ -22,7 +22,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
+import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import {
@@ -390,10 +390,10 @@ export default function NewApprovalLetterPage() {
                   <FormItem>
                     <FormLabel>Yazı</FormLabel>
                     <FormControl>
-                      <Textarea
+                      <RichTextEditor
+                        value={field.value}
+                        onChange={field.onChange}
                         placeholder="Olur yazısı içeriğini yazın..."
-                        className="min-h-[120px]"
-                        {...field}
                       />
                     </FormControl>
                     <FormMessage />

@@ -4,6 +4,7 @@ import { format } from 'date-fns';
 import { SignatureFont } from '@/lib/signature/types';
 import type { PdfApproval, PdfRequest, PdfRequester, SignatureInfo } from './types';
 import path from 'path';
+import { isHtmlContent, renderHtmlContent } from './html-to-pdf-content';
 
 const getLogoPath = () => path.join(process.cwd(), 'public', 'logo-w-text.png');
 
@@ -14,6 +15,8 @@ Font.register({
     { src: 'https://cdnjs.cloudflare.com/ajax/libs/ink/3.1.10/fonts/Roboto/roboto-regular-webfont.ttf', fontWeight: 400 },
     { src: 'https://cdnjs.cloudflare.com/ajax/libs/ink/3.1.10/fonts/Roboto/roboto-medium-webfont.ttf', fontWeight: 500 },
     { src: 'https://cdnjs.cloudflare.com/ajax/libs/ink/3.1.10/fonts/Roboto/roboto-bold-webfont.ttf', fontWeight: 700 },
+    { src: 'https://cdnjs.cloudflare.com/ajax/libs/ink/3.1.10/fonts/Roboto/roboto-italic-webfont.ttf', fontWeight: 400, fontStyle: 'italic' },
+    { src: 'https://cdnjs.cloudflare.com/ajax/libs/ink/3.1.10/fonts/Roboto/roboto-bolditalic-webfont.ttf', fontWeight: 700, fontStyle: 'italic' },
   ],
 });
 
@@ -147,10 +150,11 @@ export const ApprovalLetterPDFTemplate: React.FC<ApprovalLetterPDFTemplateProps>
   const approvalColumns = getApprovalColumns();
   const letter = approvalLetterRequest;
   const paidAmounts: string[] = letter.paid_amounts || [];
-  const contentItems: string[] = (letter.content || '')
-    .split(/\r?\n/)
-    .map((s: string) => s.trim())
-    .filter((s: string) => s.length > 0);
+  const rawContent: string = letter.content || '';
+  const isRichContent = isHtmlContent(rawContent);
+  const contentItems: string[] = isRichContent
+    ? []
+    : rawContent.split(/\r?\n/).map((s: string) => s.trim()).filter((s: string) => s.length > 0);
 
   return (
     <Document>
@@ -180,13 +184,17 @@ export const ApprovalLetterPDFTemplate: React.FC<ApprovalLetterPDFTemplateProps>
 
         <Text style={styles.intro}>Yukarıda belirtilen firmamız/projemiz kapsamında;</Text>
 
-        {/* Numaralı İçerik */}
-        {contentItems.map((item, idx) => (
-          <View key={idx} style={styles.listItem}>
-            <Text style={styles.listNumber}>{idx + 1}.</Text>
-            <Text style={styles.listText}>{item}</Text>
-          </View>
-        ))}
+        {/* İçerik — yeni kayıtlar zengin metin (HTML), eski kayıtlar satır bazlı numaralı liste */}
+        {isRichContent ? (
+          <View>{renderHtmlContent(rawContent)}</View>
+        ) : (
+          contentItems.map((item, idx) => (
+            <View key={idx} style={styles.listItem}>
+              <Text style={styles.listNumber}>{idx + 1}.</Text>
+              <Text style={styles.listText}>{item}</Text>
+            </View>
+          ))
+        )}
 
         {/* Ödeme Tablosu (opsiyonel) */}
         {letter.has_payment_table && (

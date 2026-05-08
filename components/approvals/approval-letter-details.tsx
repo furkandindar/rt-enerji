@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import type { PendingApproval } from "@/lib/approvals/types";
 import type { PreviousStepAttachment } from "@/lib/workflow/types";
 import { PdfViewerDialog } from "@/components/pdf-viewer-dialog";
+import { RichTextDisplay } from "@/components/ui/rich-text-display";
 
 interface ApprovalLetterDetailsProps {
   approval: PendingApproval;
@@ -44,7 +45,7 @@ export function ApprovalLetterDetails({ approval, previousStepAttachments = [] }
       </div>
       <div>
         <p className="text-sm font-medium text-muted-foreground">Yazı</p>
-        <p className="text-sm font-semibold whitespace-pre-wrap">{letter.content}</p>
+        <RichTextDisplay content={letter.content} />
       </div>
 
       {/* Ödeme Tablosu */}
