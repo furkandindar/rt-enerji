@@ -14,16 +14,11 @@ import { ComparisonFormPDFTemplate } from './comparison-form-pdf-template';
 import { ExpenseFormPDFTemplate } from './expense-form-pdf-template';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { SignatureFont, DEFAULT_SIGNATURE_FONT } from '@/lib/signature/types';
+import type { PdfApproval, SignatureInfo } from './types';
 
 interface GeneratePDFOptions {
   requestId: string;
   supabase: SupabaseClient;
-}
-
-// Font-based signature info
-interface SignatureInfo {
-  text: string;
-  font: SignatureFont;
 }
 
 /**
@@ -98,6 +93,7 @@ export async function generateRequestPDF(
           name,
           approver_type,
           form_section_key,
+          phase,
           static_position:positions(
             id,
             title
@@ -120,6 +116,31 @@ export async function generateRequestPDF(
     throw new Error(`Request not found: ${requestId}. Error: ${requestError?.message || 'Unknown error'}`);
   }
 
+  // COMPLETION fazındaki ykb_signed_pdf adımı için approver bilgisini override
+  // et: bu adımda imzalı taranmış PDF'i sisteme yükleyen kişi (asistan) sadece
+  // teknik vekildir; yazılı/üretilen PDF'te ilgili kolonun altında şirket
+  // sahibinin adı görünmelidir. Pseudo bir id kullanarak signatures lookup'ının
+  // başarısız olmasını ve "İmza" placeholder'ının kalmasını sağlıyoruz —
+  // ıslak imza basılı PDF üzerinde alınacak.
+  const FOUNDER_PSEUDO_ID = '__ykb_signed_pdf_founder__';
+  const approvals: PdfApproval[] = ((request.approvals || []) as PdfApproval[]).map((approval) => {
+    const step = approval.workflow_step;
+    if (step?.phase === 'COMPLETION' && step?.form_section_key === 'ykb_signed_pdf') {
+      return {
+        ...approval,
+        approver: {
+          ...approval.approver,
+          id: FOUNDER_PSEUDO_ID,
+          first_name: 'RAMAZAN',
+          last_name: 'TAŞ',
+          signature_text: null,
+          signature_font: null,
+        },
+      };
+    }
+    return approval;
+  });
+
   // Font-based imzaları topla
   const signatures: Record<string, SignatureInfo> = {};
 
@@ -141,8 +162,9 @@ export async function generateRequestPDF(
   // Sadece APPROVED durumundaki adımlar için imza üret. REJECTED/PENDING
   // adımlarda imza yerine template'in placeholder'ı (veya "Reddedildi" yazısı)
   // görünmeli — aksi halde reddeden kişi imzalı görünür.
-  for (const approval of request.approvals || []) {
+  for (const approval of approvals) {
     if (approval.status !== 'APPROVED') continue;
+    if (approval.approver.id === FOUNDER_PSEUDO_ID) continue;
     if (approval.approver.signature_text && approval.approver.signature_font) {
       signatures[approval.approver.id] = {
         text: approval.approver.signature_text,
@@ -167,7 +189,7 @@ export async function generateRequestPDF(
       requester: request.requester,
       overtimeRequest: request.overtime_request,
       entries: request.overtime_request.entries || [],
-      approvals: request.approvals || [],
+      approvals,
       signatures,
     }) as React.ReactElement<DocumentProps>;
   } else if (request.onboarding_request) {
@@ -176,7 +198,7 @@ export async function generateRequestPDF(
       request,
       requester: request.requester,
       onboardingRequest: request.onboarding_request,
-      approvals: request.approvals || [],
+      approvals,
       signatures,
     }) as React.ReactElement<DocumentProps>;
   } else if (request.separation_request) {
@@ -185,7 +207,7 @@ export async function generateRequestPDF(
       request,
       requester: request.requester,
       separationRequest: request.separation_request,
-      approvals: request.approvals || [],
+      approvals,
       signatures,
     }) as React.ReactElement<DocumentProps>;
   } else if (request.request_form_request) {
@@ -194,7 +216,7 @@ export async function generateRequestPDF(
       request,
       requester: request.requester,
       requestFormRequest: request.request_form_request,
-      approvals: request.approvals || [],
+      approvals,
       signatures,
     }) as React.ReactElement<DocumentProps>;
   } else if (request.travel_assignment_request) {
@@ -203,7 +225,7 @@ export async function generateRequestPDF(
       request,
       requester: request.requester,
       travelAssignmentRequest: request.travel_assignment_request,
-      approvals: request.approvals || [],
+      approvals,
       signatures,
     }) as React.ReactElement<DocumentProps>;
   } else if (request.approval_letter_request) {
@@ -212,25 +234,21 @@ export async function generateRequestPDF(
       request,
       requester: request.requester,
       approvalLetterRequest: request.approval_letter_request,
-      approvals: request.approvals || [],
+      approvals,
       signatures,
     }) as React.ReactElement<DocumentProps>;
   } else if (request.finance_approval_cover_request) {
     // Onay Kapağı Finans PDF'i
     pdfDocument = React.createElement(FinanceApprovalCoverPDFTemplate, {
-      request,
-      requester: request.requester,
       financeRequest: request.finance_approval_cover_request,
-      approvals: request.approvals || [],
+      approvals,
       signatures,
     }) as React.ReactElement<DocumentProps>;
   } else if (request.accounting_approval_cover_request) {
     // Onay Kapağı Muhasebe PDF'i
     pdfDocument = React.createElement(AccountingApprovalCoverPDFTemplate, {
-      request,
-      requester: request.requester,
       accountingRequest: request.accounting_approval_cover_request,
-      approvals: request.approvals || [],
+      approvals,
       signatures,
     }) as React.ReactElement<DocumentProps>;
   } else if (request.mukayese_request) {
@@ -243,7 +261,7 @@ export async function generateRequestPDF(
       request,
       requester: request.requester,
       mukayeseRequest: request.mukayese_request,
-      approvals: request.approvals || [],
+      approvals,
       signatures,
     }) as React.ReactElement<DocumentProps>;
   } else if (request.expense_request) {
@@ -252,7 +270,7 @@ export async function generateRequestPDF(
       request,
       requester: request.requester,
       expenseRequest: request.expense_request,
-      approvals: request.approvals || [],
+      approvals,
       signatures,
     }) as React.ReactElement<DocumentProps>;
   } else if (request.salary_advance_request) {
@@ -261,7 +279,7 @@ export async function generateRequestPDF(
       request,
       requester: request.requester,
       salaryAdvanceRequest: request.salary_advance_request,
-      approvals: request.approvals || [],
+      approvals,
       signatures,
     }) as React.ReactElement<DocumentProps>;
   } else {
@@ -270,7 +288,7 @@ export async function generateRequestPDF(
       request,
       requester: request.requester,
       leaveRequest: request.leave_request,
-      approvals: request.approvals || [],
+      approvals,
       workflowName: request.workflow_definition?.name || 'Talep',
       signatures,
     }) as React.ReactElement<DocumentProps>;

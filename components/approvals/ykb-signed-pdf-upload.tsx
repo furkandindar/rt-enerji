@@ -41,7 +41,7 @@ export function YkbSignedPdfUpload({
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `mukayese_${requestId}.pdf`;
+      a.download = `signed_${requestId}.pdf`;
       document.body.appendChild(a);
       a.click();
       URL.revokeObjectURL(url);
@@ -67,7 +67,7 @@ export function YkbSignedPdfUpload({
       formData.append("pdf_file", file);
       formData.append("request_id", requestId);
 
-      const response = await fetch("/api/comparison-form/upload-signed-pdf", {
+      const response = await fetch("/api/workflow-completion/upload-signed-pdf", {
         method: "POST",
         body: formData,
       });
@@ -100,10 +100,10 @@ export function YkbSignedPdfUpload({
     <div className="space-y-4 border-t pt-4">
       <div className="space-y-1">
         <Label className="text-sm font-medium">
-          İmzalı Mukayese Formu (PDF) <span className="text-red-500">*</span>
+          İmzalı Form (PDF) <span className="text-red-500">*</span>
         </Label>
         <p className="text-xs text-muted-foreground">
-          YKB tarafından fiziksel olarak imzalanmış mukayese formunun taranmış halini yükleyin.
+          Yetkili tarafından fiziksel olarak imzalanmış formun taranmış halini yükleyin.
           Yüklenen dosya talebin nihai PDF&apos;i olarak kaydedilecektir.
         </p>
       </div>
@@ -111,7 +111,7 @@ export function YkbSignedPdfUpload({
       {/* Mevcut otomatik üretilmiş PDF — asistan basıp imzalatır */}
       <div className="rounded-md border bg-muted/30 p-3 space-y-2">
         <p className="text-xs text-muted-foreground">
-          Aşağıdaki otomatik üretilmiş PDF&apos;i indirip yazdırın, YKB&apos;ye imzalatın ve
+          Aşağıdaki otomatik üretilmiş PDF&apos;i indirip yazdırın, yetkiliye imzalatın ve
           taranmış halini yükleyin.
         </p>
         <div className="flex gap-2">
@@ -211,7 +211,7 @@ export function YkbSignedPdfUpload({
           onOpenChange={setShowPreview}
           previewUrl={`/api/requests/${requestId}/pdf/preview`}
           downloadUrl={`/api/requests/${requestId}/pdf`}
-          fileName={`mukayese_${requestId}.pdf`}
+          fileName={`signed_${requestId}.pdf`}
         />
       )}
     </div>

@@ -441,12 +441,19 @@ export async function PATCH(
       // Onaylandı - sonraki adıma geç veya tamamla
       const { data: allSteps } = await supabase
         .from("workflow_steps")
-        .select("phase")
+        .select("phase, form_section_key")
         .eq("workflow_definition_id", requestData.workflow_definition_id);
 
       // COMPLETION fazında adım var mı? (V4)
       const hasCompletionPhase = allSteps?.some(
         (s: { phase: string }) => s.phase === 'COMPLETION'
+      ) || false;
+
+      // COMPLETION fazında manuel imzalı PDF yükleme adımı var mı?
+      // Varsa final PDF regen'i atlanır; aksi halde asistanın yüklediği taramayı eziyor olurduk.
+      const hasSignedPdfCompletionStep = allSteps?.some(
+        (s: { phase: string; form_section_key: string | null }) =>
+          s.phase === 'COMPLETION' && s.form_section_key === 'ykb_signed_pdf'
       ) || false;
 
       // Tüm approval kayıtlarını al (sequence_order ile sıralı)
@@ -773,9 +780,10 @@ export async function PATCH(
           .eq("id", requestData.id);
 
         // Final PDF oluştur (gerçekleşen tarihler dolu, üzerine yazar)
-        // COMPARISON_FORM: YKB Asistanı'nın yüklediği imzalı tarama zaten pdf_path'e
-        // yazıldı; burada otomatik PDF üretirsek o taramayı eziyor olurduk → atla.
-        if (workflowCode !== 'COMPARISON_FORM') {
+        // COMPLETION fazında ykb_signed_pdf adımı varsa: asistanın yüklediği imzalı
+        // tarama zaten pdf_path'e yazıldı; burada otomatik PDF üretirsek o taramayı
+        // eziyor olurduk → atla.
+        if (!hasSignedPdfCompletionStep) {
           try {
             console.log('Generating final PDF for completed request:', requestData.id);
             const pdfBuffer = await generateRequestPDF({

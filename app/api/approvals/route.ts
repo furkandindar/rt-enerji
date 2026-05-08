@@ -84,7 +84,9 @@ export async function GET() {
             workflow_step:workflow_steps(
               step_order,
               name,
-              approver_type
+              approver_type,
+              phase,
+              form_section_key
             ),
             approver:employees!request_approvals_approver_employee_id_fkey(
               id,

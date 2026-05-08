@@ -2,6 +2,7 @@ import React from 'react';
 import { Document, Page, Text, View, StyleSheet, Font, Image } from '@react-pdf/renderer';
 import { format } from 'date-fns';
 import { SignatureFont } from '@/lib/signature/types';
+import type { PdfApproval, PdfRequester, SignatureInfo } from './types';
 import path from 'path';
 
 const getLogoPath = () => path.join(process.cwd(), 'public', 'logo.png');
@@ -120,17 +121,37 @@ const styles = StyleSheet.create({
   pageFooterText: { fontSize: 6, color: colors.grey },
 });
 
-interface SignatureInfo { text: string; font: SignatureFont; }
+interface MukayeseRequest {
+  items?: ItemRow[] | null;
+  suppliers?: SupplierCol[] | null;
+  prices?: PriceCell[] | null;
+  kdv_rate?: number | string | null;
+  form_currency?: string | null;
+  notes?: string | null;
+  form_date?: string | null;
+  fx_eur_try?: number | string | null;
+  fx_usd_try?: number | string | null;
+  fx_eur_usd?: number | string | null;
+  project_title?: string | null;
+  preparer_full_name?: string | null;
+  company?: string | null;
+  subject?: string | null;
+  request_content?: string | null;
+  request_amount_text?: string | null;
+  request_reason?: string | null;
+}
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
+interface ComparisonFormRequest {
+  request_no?: string | null;
+}
+
 interface ComparisonFormPDFTemplateProps {
-  request: any;
-  requester: any;
-  mukayeseRequest: any; // includes items[], suppliers[], prices[] (joined)
-  approvals: any[];
+  request: ComparisonFormRequest;
+  requester: PdfRequester;
+  mukayeseRequest: MukayeseRequest;
+  approvals: PdfApproval[];
   signatures?: Record<string, SignatureInfo>;
 }
-/* eslint-enable @typescript-eslint/no-explicit-any */
 
 export const ComparisonFormPDFTemplate: React.FC<ComparisonFormPDFTemplateProps> = (props) => {
   return <ComparisonFormDocument {...props} />;
@@ -358,10 +379,8 @@ interface TopHeaderProps {
   supplierTotalW: number;
   supplierAreaW: number;
   wComment: number;
-  /* eslint-disable @typescript-eslint/no-explicit-any */
-  mukayeseRequest: any;
-  request: any;
-  /* eslint-enable @typescript-eslint/no-explicit-any */
+  mukayeseRequest: MukayeseRequest;
+  request: ComparisonFormRequest;
 }
 
 const TopHeaderBlock: React.FC<TopHeaderProps> = ({
@@ -632,11 +651,9 @@ const SupplierFooterRows: React.FC<SupplierFooterRowsProps> = ({
 // ============================================================================
 
 interface RequestInfoProps {
-  /* eslint-disable @typescript-eslint/no-explicit-any */
-  mukayeseRequest: any;
-  requester: any;
-  request: any;
-  /* eslint-enable @typescript-eslint/no-explicit-any */
+  mukayeseRequest: MukayeseRequest;
+  requester: PdfRequester;
+  request: ComparisonFormRequest;
   totalRowW: number;
 }
 
@@ -682,9 +699,7 @@ const RequestInfoSection: React.FC<RequestInfoProps> = ({
 // ============================================================================
 
 interface SignatureSectionProps {
-  /* eslint-disable @typescript-eslint/no-explicit-any */
-  approvals: any[];
-  /* eslint-enable @typescript-eslint/no-explicit-any */
+  approvals: PdfApproval[];
   signatures: Record<string, SignatureInfo>;
   totalRowW: number;
 }

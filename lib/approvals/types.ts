@@ -27,6 +27,8 @@ export interface WorkflowStep {
   step_order: number;
   name: string;
   approver_type?: 'REQUESTER' | 'UNIT_HEAD' | 'STATIC_POSITION' | 'DYNAMIC_USER_LIST';
+  phase?: 'APPROVAL' | 'COMPLETION';
+  form_section_key?: string | null;
 }
 
 export interface Approval {
@@ -38,6 +40,17 @@ export interface Approval {
   sequence_order: number;
   workflow_step: WorkflowStep;
   approver: Approver;
+}
+
+// COMPLETION/ykb_signed_pdf adımında PDF'i yükleyen kişi (asistan) sadece teknik
+// vekildir; sürecin son onayı şirket sahibi RAMAZAN TAŞ'a aittir. UI'da bu adım
+// için onaylayan adı olarak RAMAZAN TAŞ gösterilmelidir.
+export function getApproverDisplayName(approval: Pick<Approval, 'workflow_step' | 'approver'>): string {
+  const step = approval.workflow_step;
+  if (step?.phase === 'COMPLETION' && step?.form_section_key === 'ykb_signed_pdf') {
+    return 'RAMAZAN TAŞ';
+  }
+  return `${approval.approver.first_name} ${approval.approver.last_name}`;
 }
 
 export interface SalaryAdvanceRequest {

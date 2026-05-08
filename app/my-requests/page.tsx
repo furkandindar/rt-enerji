@@ -48,6 +48,7 @@ import {
   financeFundingSourceLabels,
   accountingCapacityTypeLabels,
 } from "@/lib/approvals/constants";
+import { getApproverDisplayName } from "@/lib/approvals/types";
 import { PdfViewerDialog } from "@/components/pdf-viewer-dialog";
 import { ComparisonFormDetails } from "@/components/approvals/comparison-form-details";
 import { ApprovalStatusBadge, RequestStatusBadge } from "@/components/approvals/status-badge";
@@ -94,6 +95,8 @@ interface WorkflowStep {
   step_order: number;
   name: string;
   approver_type?: 'REQUESTER' | 'UNIT_HEAD' | 'STATIC_POSITION' | 'DYNAMIC_USER_LIST';
+  phase?: 'APPROVAL' | 'COMPLETION';
+  form_section_key?: string | null;
 }
 
 interface Approval {
@@ -1699,7 +1702,7 @@ export default function MyRequestsPage() {
                                       {approval.workflow_step.step_order}
                                     </TableCell>
                                     <TableCell>
-                                      {approval.approver.first_name} {approval.approver.last_name}
+                                      {getApproverDisplayName(approval)}
                                     </TableCell>
                                     <TableCell>
                                       <ApprovalStatusBadge status={approval.status} />

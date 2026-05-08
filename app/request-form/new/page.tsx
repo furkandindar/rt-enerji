@@ -51,6 +51,13 @@ interface SignatureInfo {
   signatureFont: SignatureFont | null;
 }
 
+interface Company {
+  id: string;
+  code: string;
+  name: string;
+  is_active: boolean;
+}
+
 export default function NewRequestFormPage() {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -61,6 +68,8 @@ export default function NewRequestFormPage() {
   });
   const [loadingSignature, setLoadingSignature] = useState(true);
   const [loadingUser, setLoadingUser] = useState(true);
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [companiesLoading, setCompaniesLoading] = useState(true);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [attachmentConfigId, setAttachmentConfigId] = useState<string | null>(null);
   const [attachmentLabel, setAttachmentLabel] = useState<string>("Ek Dosya");
@@ -122,6 +131,28 @@ export default function NewRequestFormPage() {
 
     loadUserData();
   // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Şirket listesini çek (sadece aktif olanlar)
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/companies");
+        if (!res.ok) return;
+        const body = (await res.json()) as Company[];
+        if (cancelled) return;
+        const active = body.filter((c) => c.is_active);
+        setCompanies(active);
+      } catch (error) {
+        console.error("Error loading companies:", error);
+      } finally {
+        if (!cancelled) setCompaniesLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // Attachment config yükle
@@ -297,9 +328,32 @@ export default function NewRequestFormPage() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Şirket</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Şirket adı girin" {...field} />
-                    </FormControl>
+                    <Select
+                      onValueChange={field.onChange}
+                      value={field.value}
+                      disabled={companiesLoading || companies.length === 0}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue
+                            placeholder={
+                              companiesLoading
+                                ? "Yükleniyor..."
+                                : companies.length === 0
+                                  ? "Tanımlı şirket yok"
+                                  : "Şirket seçin"
+                            }
+                          />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {companies.map((c) => (
+                          <SelectItem key={c.id} value={c.name}>
+                            {c.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                     <FormMessage />
                   </FormItem>
                 )}

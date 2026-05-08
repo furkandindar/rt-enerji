@@ -2,6 +2,7 @@ import React from 'react';
 import { Document, Page, Text, View, StyleSheet, Font, Image } from '@react-pdf/renderer';
 import { format } from 'date-fns';
 import { SignatureFont } from '@/lib/signature/types';
+import type { PdfApproval, PdfRequest, PdfRequester, SignatureInfo } from './types';
 import path from 'path';
 
 const getLogoPath = () => {
@@ -73,13 +74,27 @@ const styles = StyleSheet.create({
   signatureStatus: { fontSize: 7, color: '#666' },
 });
 
-interface SignatureInfo { text: string; font: SignatureFont; }
+interface TravelAssignmentRequest {
+  company: { name: string | null } | null;
+  destination_city: string | null;
+  destination_institution: string | null;
+  assignment_subject: string | null;
+  estimated_departure_at: string | null;
+  estimated_return_at: string | null;
+  actual_departure_at: string | null;
+  actual_return_at: string | null;
+  transportation_type: string | null;
+  transportation_cost: number | null;
+  accommodation_needed: boolean | null;
+  accommodation_cost: number | null;
+  advance_requested: number | null;
+}
 
 interface TravelAssignmentPDFTemplateProps {
-  request: any;
-  requester: any;
-  travelAssignmentRequest: any;
-  approvals: any[];
+  request: PdfRequest;
+  requester: PdfRequester;
+  travelAssignmentRequest: TravelAssignmentRequest;
+  approvals: PdfApproval[];
   signatures?: Record<string, SignatureInfo>;
 }
 
@@ -110,7 +125,7 @@ export const TravelAssignmentPDFTemplate: React.FC<TravelAssignmentPDFTemplatePr
 
   const getRequesterPosition = () => {
     if (!requester?.employee_positions) return '-';
-    const primaryPosition = requester.employee_positions.find((ep: any) => ep.is_primary && !ep.end_date);
+    const primaryPosition = requester.employee_positions.find((ep) => ep.is_primary && !ep.end_date);
     return primaryPosition?.position?.title || '-';
   };
 
@@ -122,9 +137,7 @@ export const TravelAssignmentPDFTemplate: React.FC<TravelAssignmentPDFTemplatePr
       .filter((a) => a.workflow_step.step_order > 1)
       .sort((a, b) => a.workflow_step.step_order - b.workflow_step.step_order);
     sortedApprovals.forEach((approval) => {
-      const positionTitle = approval.workflow_step.static_position
-        ? approval.workflow_step.static_position.title
-        : approval.workflow_step.name;
+      const positionTitle = approval.workflow_step.name || approval.workflow_step.static_position?.title || '';
       columns.push({
         title: positionTitle,
         name: `${approval.approver.first_name} ${approval.approver.last_name}`,
@@ -192,7 +205,7 @@ export const TravelAssignmentPDFTemplate: React.FC<TravelAssignmentPDFTemplatePr
           </View>
           <View style={styles.halfRow}>
             <View style={styles.halfLabelCell}><Text style={styles.labelText}>Ulaşım Aracı</Text></View>
-            <View style={styles.halfValueCell}><Text style={styles.valueText}>{transportationLabels[tr?.transportation_type] || '-'}</Text></View>
+            <View style={styles.halfValueCell}><Text style={styles.valueText}>{(tr?.transportation_type && transportationLabels[tr.transportation_type]) || '-'}</Text></View>
             <View style={styles.halfLabelCell}><Text style={styles.labelText}>Ulaşım Bedeli</Text></View>
             <View style={styles.halfValueCellLast}><Text style={styles.valueText}>{tr?.transportation_cost?.toLocaleString('tr-TR') || '0'} TL</Text></View>
           </View>

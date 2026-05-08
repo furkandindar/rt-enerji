@@ -2,6 +2,7 @@ import React from 'react';
 import { Document, Page, Text, View, StyleSheet, Font, Image } from '@react-pdf/renderer';
 import { format } from 'date-fns';
 import { SignatureFont } from '@/lib/signature/types';
+import type { PdfApproval, PdfRequest, PdfRequester, SignatureInfo } from './types';
 import path from 'path';
 
 // Logo path - Server-side render için mutlak yol gerekli
@@ -80,13 +81,17 @@ const styles = StyleSheet.create({
   signatureStatus: { fontSize: 7, color: '#666' },
 });
 
-interface SignatureInfo { text: string; font: SignatureFont; }
+interface SalaryAdvanceRequest {
+  amount: number | null;
+  payment_method: string | null;
+  salary_deduction_consent: boolean | null;
+}
 
 interface SalaryAdvancePDFTemplateProps {
-  request: any;
-  requester: any;
-  salaryAdvanceRequest: any;
-  approvals: any[];
+  request: PdfRequest;
+  requester: PdfRequester;
+  salaryAdvanceRequest: SalaryAdvanceRequest;
+  approvals: PdfApproval[];
   signatures?: Record<string, SignatureInfo>;
 }
 
@@ -110,7 +115,7 @@ export const SalaryAdvancePDFTemplate: React.FC<SalaryAdvancePDFTemplateProps> =
 
   const getRequesterPosition = () => {
     if (!requester?.employee_positions) return '-';
-    const primaryPosition = requester.employee_positions.find((ep: any) => ep.is_primary && !ep.end_date);
+    const primaryPosition = requester.employee_positions.find((ep) => ep.is_primary && !ep.end_date);
     return primaryPosition?.position?.title || '-';
   };
 
@@ -120,7 +125,7 @@ export const SalaryAdvancePDFTemplate: React.FC<SalaryAdvancePDFTemplateProps> =
     const columns: { title: string; name: string; employeeId: string; note: string; status?: string }[] = [{ title: 'Talep Eden', name: `${requester.first_name} ${requester.last_name}`, employeeId: requester.id, note: '' }];
     const sortedApprovals = approvals.filter((a) => a.workflow_step.step_order > 1).sort((a, b) => a.workflow_step.step_order - b.workflow_step.step_order);
     sortedApprovals.forEach((approval) => {
-      const positionTitle = approval.workflow_step.static_position ? approval.workflow_step.static_position.title : approval.workflow_step.name;
+      const positionTitle = approval.workflow_step.name || approval.workflow_step.static_position?.title || '';
       columns.push({ title: positionTitle, name: `${approval.approver.first_name} ${approval.approver.last_name}`, employeeId: approval.approver.id, note: approval.comment || '', status: approval.status });
     });
     return columns;
@@ -150,7 +155,7 @@ export const SalaryAdvancePDFTemplate: React.FC<SalaryAdvancePDFTemplateProps> =
           </View>
           <View style={styles.rightColumn}>
             <View style={styles.rightTopRow}><View style={styles.rightLabelCell}><Text style={styles.labelText}>Avans Miktarı:</Text></View><View style={styles.rightValueCell}><Text style={styles.valueText}>{salaryAdvanceRequest?.amount?.toLocaleString('tr-TR')} TL</Text></View></View>
-            <View style={styles.rightTopRow}><View style={styles.rightLabelCell}><Text style={styles.labelText}>Ödeme Şekli:</Text></View><View style={styles.rightValueCell}><Text style={styles.valueText}>{paymentMethodLabels[salaryAdvanceRequest?.payment_method] || '-'}</Text></View></View>
+            <View style={styles.rightTopRow}><View style={styles.rightLabelCell}><Text style={styles.labelText}>Ödeme Şekli:</Text></View><View style={styles.rightValueCell}><Text style={styles.valueText}>{(salaryAdvanceRequest?.payment_method ? paymentMethodLabels[salaryAdvanceRequest.payment_method] : '') || '-'}</Text></View></View>
             <View style={styles.infoBox}>
               <Text style={styles.infoBold}>Maaş Kesinti Muvafakatı:</Text>
               <Text style={styles.infoText}>{salaryAdvanceRequest?.salary_deduction_consent ? 'Maaş kesintisine ilişkin muvafakatname ilgili personelden ıslak imza ile teslim alınmıştır.' : '✗ Onaylanmadı'}</Text>

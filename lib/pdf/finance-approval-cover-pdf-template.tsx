@@ -2,6 +2,7 @@ import React from 'react';
 import { Document, Page, Text, View, StyleSheet, Font, Image } from '@react-pdf/renderer';
 import { format } from 'date-fns';
 import { SignatureFont } from '@/lib/signature/types';
+import type { PdfApproval, SignatureInfo } from './types';
 import path from 'path';
 
 const getLogoPath = () => path.join(process.cwd(), 'public', 'logo.png');
@@ -120,17 +121,34 @@ const styles = StyleSheet.create({
   footerText: { fontSize: 6, color: colors.grey, textAlign: 'center' },
 });
 
-interface SignatureInfo { text: string; font: SignatureFont; }
+interface FinanceItem {
+  id?: string | null;
+  row_order?: number | null;
+  item_date: string;
+  company_name: string | null;
+  payee_name: string | null;
+  item_subject: string | null;
+  invoice_amount: number | string | null;
+  payable_amount: number | string | null;
+}
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
+interface FinanceRequest {
+  subject: string | null;
+  request_date: string;
+  document_no: string | null;
+  items?: FinanceItem[] | null;
+  account_available?: boolean | null;
+  cash_flow_recorded?: boolean | null;
+  expense_area?: 'ANA_SAHA' | 'ELEKTRIKSEL_KAPASITE_ARTISI' | 'YEKA' | string | null;
+  funding_source?: 'KREDI' | 'OZ_KAYNAK' | 'NAKIT_FAZLASI' | 'DIGER' | string | null;
+  has_rt_enerji_proforma?: boolean | null;
+}
+
 interface FinanceApprovalCoverPDFTemplateProps {
-  request: any;
-  requester: any;
-  financeRequest: any;
-  approvals: any[];
+  financeRequest: FinanceRequest;
+  approvals: PdfApproval[];
   signatures?: Record<string, SignatureInfo>;
 }
-/* eslint-enable @typescript-eslint/no-explicit-any */
 
 const formatAmount = (v: number | null | undefined): string => {
   if (v === null || v === undefined) return '-';
@@ -159,12 +177,12 @@ export const FinanceApprovalCoverPDFTemplate: React.FC<FinanceApprovalCoverPDFTe
   const totalPayable = items.reduce((sum, it) => sum + Number(it.payable_amount || 0), 0);
 
   // Approval gruplaması: step_order'a göre
-  /* eslint-disable @typescript-eslint/no-explicit-any */
-  const dynamicApprovals = approvals.filter((a: any) => a.workflow_step?.approver_type === 'DYNAMIC_USER_LIST');
+  const isYkbSignedPdf = (a: PdfApproval) =>
+    a.workflow_step?.phase === 'COMPLETION' && a.workflow_step?.form_section_key === 'ykb_signed_pdf';
+  const dynamicApprovals = approvals.filter((a) => a.workflow_step?.approver_type === 'DYNAMIC_USER_LIST');
   const staticApprovals = approvals
-    .filter((a: any) => a.workflow_step?.approver_type === 'STATIC_POSITION')
-    .sort((a: any, b: any) => (a.workflow_step?.step_order ?? 0) - (b.workflow_step?.step_order ?? 0));
-  /* eslint-enable @typescript-eslint/no-explicit-any */
+    .filter((a) => a.workflow_step?.approver_type === 'STATIC_POSITION' && !isYkbSignedPdf(a))
+    .sort((a, b) => (a.workflow_step?.step_order ?? 0) - (b.workflow_step?.step_order ?? 0));
   const finansMuduru = staticApprovals[0];
   const genelMudur = staticApprovals[staticApprovals.length - 1];
 
@@ -297,7 +315,7 @@ export const FinanceApprovalCoverPDFTemplate: React.FC<FinanceApprovalCoverPDFTe
           <View style={styles.staticApproverRight} wrap={false}>
             <Text style={styles.staticTitleRight}>Onaylı dayanak belge kontrol edilmiştir.</Text>
             <Text style={styles.staticSubtitleRight}>
-              {finansMuduru.workflow_step?.static_position?.title || finansMuduru.workflow_step?.name || 'İlgili Birim Yetkilisi / Müdürü'}
+              {finansMuduru.workflow_step?.name || finansMuduru.workflow_step?.static_position?.title || 'İlgili Birim Yetkilisi / Müdürü'}
             </Text>
             {renderSignature(finansMuduru.approver?.id, finansMuduru.status)}
             <Text style={styles.staticNameRight}>

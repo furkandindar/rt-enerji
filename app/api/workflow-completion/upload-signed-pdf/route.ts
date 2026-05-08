@@ -3,10 +3,11 @@ import { NextResponse } from "next/server";
 
 const MAX_PDF_BYTES = 25 * 1024 * 1024; // 25MB
 
-// POST /api/comparison-form/upload-signed-pdf
-// YKB Asistanı'nın imzalı taranmış mukayese formunu yüklediği endpoint.
-// Frontend bu yola dosyayı yollayıp dönen pdf_path'i sonra
-// /api/approvals/[id] PATCH çağrısında ykb_signed_pdf_path olarak gönderir.
+// POST /api/workflow-completion/upload-signed-pdf
+// Workflow'un COMPLETION fazındaki ykb_signed_pdf adımı için imzalı taranmış
+// PDF'in yüklendiği generic endpoint. Frontend bu yola dosyayı yollayıp dönen
+// pdf_path'i sonra /api/approvals/[id] PATCH çağrısında ykb_signed_pdf_path
+// olarak gönderir.
 export async function POST(request: Request) {
   try {
     const supabase = await createClient();
@@ -43,14 +44,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Dosya boyutu 25 MB sınırını aşıyor" }, { status: 400 });
     }
 
-    // Talebin COMPARISON_FORM olduğunu ve AWAITING_COMPLETION durumunda olduğunu doğrula
+    // Talebin AWAITING_COMPLETION durumunda olduğunu doğrula
     const { data: targetRequest, error: reqError } = await supabase
       .from("requests")
-      .select(`
-        id,
-        status,
-        workflow_definition:workflow_definitions(code)
-      `)
+      .select("id, status")
       .eq("id", requestId)
       .single();
 
@@ -58,18 +55,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Talep bulunamadı" }, { status: 404 });
     }
 
-    const wfCode = Array.isArray(targetRequest.workflow_definition)
-      ? targetRequest.workflow_definition[0]?.code
-      : (targetRequest.workflow_definition as { code: string } | null)?.code;
-
-    if (wfCode !== "COMPARISON_FORM") {
-      return NextResponse.json({ error: "Bu endpoint sadece mukayese formu için kullanılabilir" }, { status: 400 });
-    }
     if (targetRequest.status !== "AWAITING_COMPLETION") {
       return NextResponse.json({ error: "Talep tamamlama bekleme aşamasında değil" }, { status: 400 });
     }
 
-    // Kullanıcının COMPLETION fazındaki PENDING onaycı olduğunu doğrula
+    // Kullanıcının COMPLETION fazındaki ykb_signed_pdf PENDING onaycı olduğunu doğrula
     const { data: completionApproval } = await supabase
       .from("request_approvals")
       .select(`
@@ -102,7 +92,7 @@ export async function POST(request: Request) {
     const now = new Date();
     const year = now.getFullYear();
     const month = String(now.getMonth() + 1).padStart(2, "0");
-    const fileName = `mukayese_${Date.now()}_signed.pdf`;
+    const fileName = `signed_${Date.now()}.pdf`;
     const pdfPath = `${year}/${month}/${fileName}`;
     const pdfBuffer = Buffer.from(await pdfFile.arrayBuffer());
 
@@ -114,13 +104,13 @@ export async function POST(request: Request) {
       });
 
     if (uploadError) {
-      console.error("Error uploading signed mukayese PDF:", uploadError);
+      console.error("Error uploading signed completion PDF:", uploadError);
       return NextResponse.json({ error: "PDF yükleme başarısız" }, { status: 500 });
     }
 
     return NextResponse.json({ pdf_path: pdfPath }, { status: 201 });
   } catch (error) {
-    console.error("Unexpected error in upload-signed-pdf:", error);
+    console.error("Unexpected error in workflow-completion/upload-signed-pdf:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

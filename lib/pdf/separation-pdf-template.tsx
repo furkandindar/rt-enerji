@@ -2,6 +2,7 @@ import React from 'react';
 import { Document, Page, Text, View, StyleSheet, Font, Image, Svg, Path, Line } from '@react-pdf/renderer';
 import { format } from 'date-fns';
 import { SignatureFont } from '@/lib/signature/types';
+import type { PdfApproval, PdfRequest, PdfRequester, SignatureInfo } from './types';
 import path from 'path';
 
 const getLogoPath = () => path.join(process.cwd(), 'public', 'logo.png');
@@ -94,9 +95,7 @@ const DashIcon = () => (
 );
 
 const statusIconMap: Record<string, React.FC> = { DONE: CheckIcon, NOT_DONE: CrossIcon, NA: DashIcon };
-const getStatusIcon = (status: string | null) => { if (!status) return null; const Icon = statusIconMap[status]; return Icon ? <Icon /> : null; };
-
-interface SignatureInfo { text: string; font: SignatureFont; }
+const getStatusIcon = (status: string | number | null | undefined) => { if (!status || typeof status !== 'string') return null; const Icon = statusIconMap[status]; return Icon ? <Icon /> : null; };
 
 interface ChecklistItem { label: string; statusKey: string; notesKey: string; sectionKey: string; }
 
@@ -127,16 +126,35 @@ const checklistItems: ChecklistItem[] = [
   { label: '2/6/12. Aylar Değerlendirme Formlarının Takvimden Silinmesi', statusKey: 'evaluation_calendar_removal_status', notesKey: 'evaluation_calendar_removal_notes', sectionKey: 'section_8' },
 ];
 
+interface SeparationRequest {
+  employee_name?: string | null;
+  employee_title?: string | null;
+  department?: string | null;
+  location?: string | null;
+  job_description?: string | null;
+  reporting_manager?: string | null;
+  separation_date?: string | null;
+  separation_reason?: string | null;
+  employment_period?: string | null;
+  annual_leave_days?: number | null;
+  annual_leave_amount?: number | null;
+  severance_days?: number | null;
+  severance_amount?: number | null;
+  notice_weeks?: number | null;
+  notice_amount?: number | null;
+  [key: string]: string | number | null | undefined;
+}
+
 interface SeparationPDFTemplateProps {
-  request: any;
-  requester: any;
-  separationRequest: any;
-  approvals: any[];
+  request: PdfRequest;
+  requester: PdfRequester;
+  separationRequest: SeparationRequest;
+  approvals: PdfApproval[];
   signatures?: Record<string, SignatureInfo>;
 }
 
 export const SeparationPDFTemplate: React.FC<SeparationPDFTemplateProps> = ({
-  request: _request, requester, separationRequest: sr, approvals, signatures = {},
+  requester, separationRequest: sr, approvals, signatures = {},
 }) => {
   const renderSignature = (employeeId: string, small = false, status?: string) => {
     if (status === 'REJECTED') {
@@ -151,7 +169,7 @@ export const SeparationPDFTemplate: React.FC<SeparationPDFTemplateProps> = ({
   const sectionToStatus: Record<string, string> = {};
   sectionToEmployeeId['section_1'] = requester.id;
   sectionToEmployeeId['section_3'] = requester.id;
-  approvals.forEach((a: any) => {
+  approvals.forEach((a) => {
     if (a.workflow_step?.form_section_key) {
       sectionToEmployeeId[a.workflow_step.form_section_key] = a.approver.id;
       sectionToStatus[a.workflow_step.form_section_key] = a.status;
@@ -159,13 +177,13 @@ export const SeparationPDFTemplate: React.FC<SeparationPDFTemplateProps> = ({
   });
 
   const sortedApprovals = approvals
-    .filter((a: any) => a.workflow_step?.step_order > 1)
-    .sort((a: any, b: any) => a.workflow_step.step_order - b.workflow_step.step_order);
+    .filter((a) => a.workflow_step?.step_order > 1)
+    .sort((a, b) => a.workflow_step.step_order - b.workflow_step.step_order);
 
   const lastApproval = sortedApprovals.length > 0 ? sortedApprovals[sortedApprovals.length - 1] : null;
   const secondToLastApproval = sortedApprovals.length > 1 ? sortedApprovals[sortedApprovals.length - 2] : null;
 
-  const formatCurrency = (val: number | null) => val != null ? `${Number(val).toLocaleString('tr-TR', { minimumFractionDigits: 2 })} TL` : '-';
+  const formatCurrency = (val: number | null | undefined) => val != null ? `${Number(val).toLocaleString('tr-TR', { minimumFractionDigits: 2 })} TL` : '-';
 
   return (
     <Document>
@@ -251,7 +269,7 @@ export const SeparationPDFTemplate: React.FC<SeparationPDFTemplateProps> = ({
             <Text style={styles.approvalTitle}>FORM İÇERİĞİ KONTROLÜ</Text>
             {secondToLastApproval ? (
               <>
-                <Text style={styles.approvalSubtitle}>{secondToLastApproval.workflow_step.static_position?.title?.toUpperCase() || secondToLastApproval.workflow_step.name.toUpperCase()}</Text>
+                <Text style={styles.approvalSubtitle}>{(secondToLastApproval.workflow_step.name || secondToLastApproval.workflow_step.static_position?.title || '').toUpperCase()}</Text>
                 <Text style={styles.approvalName}>{secondToLastApproval.approver.first_name} {secondToLastApproval.approver.last_name}</Text>
                 {secondToLastApproval.decided_at ? <Text style={styles.approvalName}>{format(new Date(secondToLastApproval.decided_at), 'dd/MM/yyyy')}</Text> : null}
                 {renderSignature(secondToLastApproval.approver.id, false, secondToLastApproval.status)}
@@ -262,7 +280,7 @@ export const SeparationPDFTemplate: React.FC<SeparationPDFTemplateProps> = ({
             <Text style={styles.approvalTitle}>ONAY</Text>
             {lastApproval ? (
               <>
-                <Text style={styles.approvalSubtitle}>{lastApproval.workflow_step.static_position?.title?.toUpperCase() || lastApproval.workflow_step.name.toUpperCase()}</Text>
+                <Text style={styles.approvalSubtitle}>{(lastApproval.workflow_step.name || lastApproval.workflow_step.static_position?.title || '').toUpperCase()}</Text>
                 <Text style={styles.approvalName}>{lastApproval.approver.first_name} {lastApproval.approver.last_name}</Text>
                 {renderSignature(lastApproval.approver.id, false, lastApproval.status)}
               </>

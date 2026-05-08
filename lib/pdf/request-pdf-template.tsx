@@ -2,6 +2,7 @@ import React from 'react';
 import { Document, Page, Text, View, StyleSheet, Font, Image } from '@react-pdf/renderer';
 import { format } from 'date-fns';
 import { SignatureFont } from '@/lib/signature/types';
+import type { PdfApproval, PdfRequest, PdfRequester, SignatureInfo } from './types';
 import path from 'path';
 
 // Logo path - Server-side render için mutlak yol gerekli
@@ -292,17 +293,22 @@ const leaveTypeLabels: Record<string, string> = {
   SHORT_LEAVE: 'Kısa Süreli İzin',
 };
 
-// Font-based signature info
-interface SignatureInfo {
-  text: string;
-  font: SignatureFont;
+interface LeaveRequest {
+  leave_type: string | null;
+  start_datetime: string;
+  end_datetime: string;
+  total_days: number | null;
+  remaining_days: number | null;
+  reason: string | null;
+  address_during_leave: string | null;
+  hr_note: string | null;
 }
 
 interface RequestPDFTemplateProps {
-  request: any;
-  requester: any;
-  leaveRequest: any;
-  approvals: any[];
+  request: PdfRequest;
+  requester: PdfRequester;
+  leaveRequest: LeaveRequest;
+  approvals: PdfApproval[];
   workflowName?: string;
   signatures?: Record<string, SignatureInfo>; // employeeId -> signature info
 }
@@ -333,7 +339,7 @@ export const RequestPDFTemplate: React.FC<RequestPDFTemplateProps> = ({
   const getRequesterPosition = () => {
     if (!requester?.employee_positions) return '-';
     const primaryPosition = requester.employee_positions.find(
-      (ep: any) => ep.is_primary && !ep.end_date
+      (ep) => ep.is_primary && !ep.end_date
     );
     return primaryPosition?.position?.title || '-';
   };
@@ -358,9 +364,10 @@ export const RequestPDFTemplate: React.FC<RequestPDFTemplateProps> = ({
       .sort((a, b) => a.workflow_step.step_order - b.workflow_step.step_order);
 
     sortedApprovals.forEach((approval) => {
-      const positionTitle = approval.workflow_step.static_position
-        ? approval.workflow_step.static_position.title
-        : 'Talep Eden Amiri';
+      const positionTitle =
+        approval.workflow_step.name ||
+        approval.workflow_step.static_position?.title ||
+        'Talep Eden Amiri';
       columns.push({
         title: positionTitle,
         name: `${approval.approver.first_name} ${approval.approver.last_name}`,
@@ -474,7 +481,7 @@ export const RequestPDFTemplate: React.FC<RequestPDFTemplateProps> = ({
             <View style={styles.rightTopRow}>
               <View style={styles.rightLabelCell}><Text style={styles.labelText}>İzin Türü:</Text></View>
               <View style={styles.rightValueCell}>
-                <Text style={styles.valueText}>{leaveTypeLabels[leaveRequest?.leave_type] || leaveRequest?.leave_type || 'Yıllık İzin'}</Text>
+                <Text style={styles.valueText}>{(leaveRequest?.leave_type ? leaveTypeLabels[leaveRequest.leave_type] : '') || leaveRequest?.leave_type || 'Yıllık İzin'}</Text>
               </View>
             </View>
             {/* İzin Talep Tarihi */}

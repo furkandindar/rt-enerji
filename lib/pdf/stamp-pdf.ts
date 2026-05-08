@@ -1,4 +1,4 @@
-import { PDFDocument, rgb } from 'pdf-lib';
+import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 import fontkit from '@pdf-lib/fontkit';
 import { createServiceRoleClient } from '@/lib/supabase/service-role';
 import { StampPosition } from '@/lib/workflow/types';
@@ -135,7 +135,7 @@ export async function stampPDF(options: StampPDFOptions): Promise<Buffer> {
       sigFont = await pdfDoc.embedFont(fontArrayBuffer);
     } catch (err) {
       console.warn('İmza fontu yüklenemedi, standart font kullanılacak:', err);
-      sigFont = await pdfDoc.embedFont('Helvetica' as any);
+      sigFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
     }
   }
 

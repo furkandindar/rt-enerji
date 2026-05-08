@@ -2,6 +2,7 @@ import React from 'react';
 import { Document, Page, Text, View, StyleSheet, Font, Image } from '@react-pdf/renderer';
 import { format } from 'date-fns';
 import { SignatureFont } from '@/lib/signature/types';
+import type { PdfApproval, PdfRequest, PdfRequester, SignatureInfo } from './types';
 import path from 'path';
 
 const getLogoPath = () => {
@@ -70,18 +71,27 @@ const styles = StyleSheet.create({
   footerText: { marginBottom: 2 },
 });
 
-interface SignatureInfo { text: string; font: SignatureFont; }
+interface RequestFormRequest {
+  requester_name: string | null;
+  company: string | null;
+  request_date: string | null;
+  request_type: string | null;
+  subject: string | null;
+  reason: string | null;
+  content: string | null;
+  quantity: number | string | null;
+  amount: number | string | null;
+}
 
 interface RequestFormPDFTemplateProps {
-  request: any;
-  requester: any;
-  requestFormRequest: any;
-  approvals: any[];
+  request: PdfRequest;
+  requester: PdfRequester;
+  requestFormRequest: RequestFormRequest;
+  approvals: PdfApproval[];
   signatures?: Record<string, SignatureInfo>;
 }
 
 export const RequestFormPDFTemplate: React.FC<RequestFormPDFTemplateProps> = ({
-  request,
   requester,
   requestFormRequest: rf,
   approvals,
@@ -102,7 +112,7 @@ export const RequestFormPDFTemplate: React.FC<RequestFormPDFTemplateProps> = ({
     ];
     const sortedApprovals = approvals.filter((a) => a.workflow_step.step_order > 1).sort((a, b) => a.workflow_step.step_order - b.workflow_step.step_order);
     sortedApprovals.forEach((approval) => {
-      const positionTitle = approval.workflow_step.static_position ? approval.workflow_step.static_position.title : approval.workflow_step.name;
+      const positionTitle = approval.workflow_step.name || approval.workflow_step.static_position?.title || '';
       columns.push({ title: positionTitle, name: `${approval.approver.first_name} ${approval.approver.last_name}`, employeeId: approval.approver.id, note: approval.comment || '', status: approval.status });
     });
     return columns;
@@ -129,7 +139,7 @@ export const RequestFormPDFTemplate: React.FC<RequestFormPDFTemplateProps> = ({
             <View style={styles.halfLabelCell}><Text style={styles.labelText}>Tarih</Text></View>
             <View style={styles.halfValueCell}><Text style={styles.valueText}>{rf?.request_date ? format(new Date(rf.request_date), 'dd/MM/yyyy') : '-'}</Text></View>
             <View style={styles.halfLabelCell}><Text style={styles.labelText}>Talep Türü</Text></View>
-            <View style={{ width: '25%', padding: 6, justifyContent: 'center' }}><Text style={styles.valueText}>{requestTypeLabels[rf?.request_type] || rf?.request_type || '-'}</Text></View>
+            <View style={{ width: '25%', padding: 6, justifyContent: 'center' }}><Text style={styles.valueText}>{(rf?.request_type ? requestTypeLabels[rf.request_type] : '') || rf?.request_type || '-'}</Text></View>
           </View>
           <View style={styles.tableRow}><View style={styles.labelCell}><Text style={styles.labelText}>Konu</Text></View><View style={styles.valueCell}><Text style={styles.valueText}>{rf?.subject || '-'}</Text></View></View>
           <View style={styles.tableRow}><View style={styles.labelCell}><Text style={styles.labelText}>Talep İçeriği</Text></View><View style={styles.contentCell}><Text style={styles.valueText}>{rf?.content || '-'}</Text></View></View>

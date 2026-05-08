@@ -2,6 +2,7 @@ import React from 'react';
 import { Document, Page, Text, View, StyleSheet, Font, Image } from '@react-pdf/renderer';
 import { format } from 'date-fns';
 import { SignatureFont } from '@/lib/signature/types';
+import type { PdfApproval, PdfRequest, PdfRequester, SignatureInfo } from './types';
 import path from 'path';
 
 const getLogoPath = () => path.join(process.cwd(), 'public', 'logo-w-text.png');
@@ -81,14 +82,27 @@ const styles = StyleSheet.create({
   finalApprovalName: { fontSize: 11, fontWeight: 700 },
 });
 
-interface SignatureInfo { text: string; font: SignatureFont; }
+interface ApprovalLetterRequest {
+  letter_date: string;
+  company: string | null;
+  project: string | null;
+  subject: string | null;
+  content: string | null;
+  has_payment_table: boolean | null;
+  comparison_approval_date: string | null;
+  agreement_amount: string | null;
+  has_contract: boolean | null;
+  paid_amounts: string[] | null;
+  remaining_payment: string | null;
+  requested_payment_amount: string | null;
+  remaining_after_payment: string | null;
+}
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 interface ApprovalLetterPDFTemplateProps {
-  request: any;
-  requester: any;
-  approvalLetterRequest: any;
-  approvals: any[];
+  request: PdfRequest;
+  requester: PdfRequester;
+  approvalLetterRequest: ApprovalLetterRequest;
+  approvals: PdfApproval[];
   signatures?: Record<string, SignatureInfo>;
 }
 
@@ -115,11 +129,10 @@ export const ApprovalLetterPDFTemplate: React.FC<ApprovalLetterPDFTemplateProps>
     ];
     const sortedApprovals = approvals
       .filter((a) => a.workflow_step.step_order > 1)
+      .filter((a) => !(a.workflow_step.phase === 'COMPLETION' && a.workflow_step.form_section_key === 'ykb_signed_pdf'))
       .sort((a, b) => a.workflow_step.step_order - b.workflow_step.step_order);
     sortedApprovals.forEach((approval) => {
-      const positionTitle = approval.workflow_step.static_position
-        ? approval.workflow_step.static_position.title
-        : approval.workflow_step.name;
+      const positionTitle = approval.workflow_step.name || approval.workflow_step.static_position?.title || '';
       columns.push({
         title: positionTitle,
         name: `${approval.approver.first_name} ${approval.approver.last_name}`,

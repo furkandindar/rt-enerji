@@ -2,6 +2,7 @@ import React from 'react';
 import { Document, Page, Text, View, StyleSheet, Font, Image } from '@react-pdf/renderer';
 import { format } from 'date-fns';
 import { SignatureFont } from '@/lib/signature/types';
+import type { PdfApproval, SignatureInfo } from './types';
 import path from 'path';
 
 const getLogoPath = () => path.join(process.cwd(), 'public', 'logo.png');
@@ -127,17 +128,37 @@ const styles = StyleSheet.create({
   footerText: { fontSize: 6, color: colors.grey, textAlign: 'center' },
 });
 
-interface SignatureInfo { text: string; font: SignatureFont; }
+interface AccountingItem {
+  id?: string | null;
+  row_order?: number | null;
+  item_date: string;
+  company_name: string | null;
+  payee_name: string | null;
+  item_subject: string | null;
+  capacity_type: string | null;
+  invoice_amount: number | string | null;
+  payable_amount: number | string | null;
+}
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
+interface AccountingRequest {
+  subject: string | null;
+  request_date: string;
+  document_no: string | null;
+  items?: AccountingItem[] | null;
+  demirbas_registered?: boolean | null;
+  has_dispatch_note?: boolean | null;
+  has_delivery_info?: boolean | null;
+  has_invoice_record?: boolean | null;
+  has_accounting_prog_entry?: boolean | null;
+  has_arvento_record?: boolean | null;
+  paid_from_credit?: boolean | null;
+}
+
 interface AccountingApprovalCoverPDFTemplateProps {
-  request: any;
-  requester: any;
-  accountingRequest: any;
-  approvals: any[];
+  accountingRequest: AccountingRequest;
+  approvals: PdfApproval[];
   signatures?: Record<string, SignatureInfo>;
 }
-/* eslint-enable @typescript-eslint/no-explicit-any */
 
 const formatAmount = (v: number | null | undefined): string => {
   if (v === null || v === undefined) return '-';
@@ -165,12 +186,12 @@ export const AccountingApprovalCoverPDFTemplate: React.FC<AccountingApprovalCove
   const items = [...(accountingRequest.items || [])].sort((a, b) => (a.row_order ?? 0) - (b.row_order ?? 0));
   const totalPayable = items.reduce((sum, it) => sum + Number(it.payable_amount || 0), 0);
 
-  /* eslint-disable @typescript-eslint/no-explicit-any */
-  const dynamicApprovals = approvals.filter((a: any) => a.workflow_step?.approver_type === 'DYNAMIC_USER_LIST');
+  const isYkbSignedPdf = (a: PdfApproval) =>
+    a.workflow_step?.phase === 'COMPLETION' && a.workflow_step?.form_section_key === 'ykb_signed_pdf';
+  const dynamicApprovals = approvals.filter((a) => a.workflow_step?.approver_type === 'DYNAMIC_USER_LIST');
   const staticApprovals = approvals
-    .filter((a: any) => a.workflow_step?.approver_type === 'STATIC_POSITION')
-    .sort((a: any, b: any) => (a.workflow_step?.step_order ?? 0) - (b.workflow_step?.step_order ?? 0));
-  /* eslint-enable @typescript-eslint/no-explicit-any */
+    .filter((a) => a.workflow_step?.approver_type === 'STATIC_POSITION' && !isYkbSignedPdf(a))
+    .sort((a, b) => (a.workflow_step?.step_order ?? 0) - (b.workflow_step?.step_order ?? 0));
   const muhasebeMuduru = staticApprovals[0];
   const genelMudur = staticApprovals[staticApprovals.length - 1];
 
@@ -214,7 +235,7 @@ export const AccountingApprovalCoverPDFTemplate: React.FC<AccountingApprovalCove
               <View style={[styles.paymentCell, styles.colCompany]}><Text style={styles.paymentText}>{it.company_name}</Text></View>
               <View style={[styles.paymentCell, styles.colPayee]}><Text style={styles.paymentText}>{it.payee_name}</Text></View>
               <View style={[styles.paymentCell, styles.colSubject]}><Text style={styles.paymentText}>{it.item_subject}</Text></View>
-              <View style={[styles.paymentCell, styles.colCap, { alignItems: 'center' }]}><Text style={styles.paymentText}>{capacityShortLabel[it.capacity_type] || it.capacity_type}</Text></View>
+              <View style={[styles.paymentCell, styles.colCap, { alignItems: 'center' }]}><Text style={styles.paymentText}>{(it.capacity_type ? capacityShortLabel[it.capacity_type] : '') || it.capacity_type || ''}</Text></View>
               <View style={[styles.paymentCell, styles.colInvoice, { alignItems: 'flex-end' }]}><Text style={styles.paymentText}>{formatAmount(Number(it.invoice_amount))}</Text></View>
               <View style={[styles.paymentCellLast, styles.colPayable, { alignItems: 'flex-end' }]}><Text style={styles.paymentText}>{formatAmount(Number(it.payable_amount))}</Text></View>
             </View>
@@ -320,7 +341,7 @@ export const AccountingApprovalCoverPDFTemplate: React.FC<AccountingApprovalCove
           <View style={styles.staticApproverRight} wrap={false}>
             <Text style={styles.staticTitleRight}>Onaylı dayanak belge kontrol edilmiştir.</Text>
             <Text style={styles.staticSubtitleRight}>
-              {muhasebeMuduru.workflow_step?.static_position?.title || muhasebeMuduru.workflow_step?.name || 'İlgili Birim Yetkilisi / Müdürü'}
+              {muhasebeMuduru.workflow_step?.name || muhasebeMuduru.workflow_step?.static_position?.title || 'İlgili Birim Yetkilisi / Müdürü'}
             </Text>
             {renderSignature(muhasebeMuduru.approver?.id, muhasebeMuduru.status)}
             <Text style={styles.staticNameRight}>

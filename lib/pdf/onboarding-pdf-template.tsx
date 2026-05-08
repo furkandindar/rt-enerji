@@ -2,6 +2,7 @@ import React from 'react';
 import { Document, Page, Text, View, StyleSheet, Font, Image, Svg, Path, Line } from '@react-pdf/renderer';
 import { format } from 'date-fns';
 import { SignatureFont } from '@/lib/signature/types';
+import type { PdfApproval, PdfRequest, PdfRequester, SignatureInfo } from './types';
 import path from 'path';
 
 const getLogoPath = () => path.join(process.cwd(), 'public', 'logo.png');
@@ -98,8 +99,6 @@ const getStatusIcon = (status: string | null) => {
   return Icon ? <Icon /> : null;
 };
 
-interface SignatureInfo { text: string; font: SignatureFont; }
-
 interface ChecklistItem {
   label: string;
   statusKey: string;
@@ -138,16 +137,28 @@ const checklistItems: ChecklistItem[] = [
   { label: "İşe Giriş Evraklarının Bulut'a Yüklenmesi (İK/Belgeler)", statusKey: 'documents_upload_status', notesKey: 'documents_upload_notes', sectionKey: 'section_3' },
 ];
 
+interface OnboardingRequest {
+  employee_name?: string | null;
+  employee_title?: string | null;
+  department?: string | null;
+  location?: string | null;
+  reporting_manager?: string | null;
+  start_date?: string | null;
+  employment_period?: string | null;
+  job_description?: string | null;
+  [key: string]: string | null | undefined;
+}
+
 interface OnboardingPDFTemplateProps {
-  request: any;
-  requester: any;
-  onboardingRequest: any;
-  approvals: any[];
+  request: PdfRequest;
+  requester: PdfRequester;
+  onboardingRequest: OnboardingRequest;
+  approvals: PdfApproval[];
   signatures?: Record<string, SignatureInfo>;
 }
 
 export const OnboardingPDFTemplate: React.FC<OnboardingPDFTemplateProps> = ({
-  request: _request, requester, onboardingRequest, approvals, signatures = {},
+  requester, onboardingRequest, approvals, signatures = {},
 }) => {
   const renderSignature = (employeeId: string, small = false, status?: string) => {
     if (status === 'REJECTED') {
@@ -165,7 +176,7 @@ export const OnboardingPDFTemplate: React.FC<OnboardingPDFTemplateProps> = ({
   sectionToEmployeeId['section_1'] = requester.id;
   sectionToEmployeeId['section_3'] = requester.id;
   // Other sections are filled by the corresponding approver
-  approvals.forEach((a: any) => {
+  approvals.forEach((a) => {
     if (a.workflow_step.form_section_key) {
       sectionToEmployeeId[a.workflow_step.form_section_key] = a.approver.id;
       sectionToStatus[a.workflow_step.form_section_key] = a.status;
@@ -174,8 +185,8 @@ export const OnboardingPDFTemplate: React.FC<OnboardingPDFTemplateProps> = ({
 
   // Sort approvals by step_order for footer
   const sortedApprovals = approvals
-    .filter((a: any) => a.workflow_step.step_order > 1)
-    .sort((a: any, b: any) => a.workflow_step.step_order - b.workflow_step.step_order);
+    .filter((a) => a.workflow_step.step_order > 1)
+    .sort((a, b) => a.workflow_step.step_order - b.workflow_step.step_order);
 
   // Second-to-last and last approver for footer
   const lastApproval = sortedApprovals.length > 0 ? sortedApprovals[sortedApprovals.length - 1] : null;
@@ -227,7 +238,7 @@ export const OnboardingPDFTemplate: React.FC<OnboardingPDFTemplateProps> = ({
               <View key={index} style={rowStyle}>
                 <View style={{ ...styles.tableCell, width: 22 }}><Text style={styles.tableCellCenter}>{index + 1}</Text></View>
                 <View style={{ ...styles.tableCell, width: 230 }}><Text style={styles.tableCellText}>{item.label}</Text></View>
-                <View style={{ ...styles.tableCell, width: 45, alignItems: 'center' }}>{getStatusIcon(onboardingRequest[item.statusKey])}</View>
+                <View style={{ ...styles.tableCell, width: 45, alignItems: 'center' }}>{getStatusIcon(onboardingRequest[item.statusKey] ?? null)}</View>
                 <View style={{ ...styles.tableCell, width: 80, alignItems: 'center' }}>{sectionEmployeeId ? renderSignature(sectionEmployeeId, true, sectionToStatus[item.sectionKey]) : null}</View>
                 <View style={{ ...styles.tableCellLast, flex: 1 }}><Text style={styles.tableCellText}>{onboardingRequest[item.notesKey] || ''}</Text></View>
               </View>
@@ -246,7 +257,7 @@ export const OnboardingPDFTemplate: React.FC<OnboardingPDFTemplateProps> = ({
             <Text style={styles.approvalTitle}>FORM İÇERİĞİ KONTROLÜ</Text>
             {secondToLastApproval ? (
               <>
-                <Text style={styles.approvalSubtitle}>{secondToLastApproval.workflow_step.static_position?.title?.toUpperCase() || secondToLastApproval.workflow_step.name.toUpperCase()}</Text>
+                <Text style={styles.approvalSubtitle}>{(secondToLastApproval.workflow_step.name || secondToLastApproval.workflow_step.static_position?.title || '').toUpperCase()}</Text>
                 <Text style={styles.approvalName}>{secondToLastApproval.approver.first_name} {secondToLastApproval.approver.last_name}</Text>
                 {secondToLastApproval.decided_at ? <Text style={styles.approvalName}>{format(new Date(secondToLastApproval.decided_at), 'dd/MM/yyyy')}</Text> : null}
                 {renderSignature(secondToLastApproval.approver.id, false, secondToLastApproval.status)}
@@ -258,7 +269,7 @@ export const OnboardingPDFTemplate: React.FC<OnboardingPDFTemplateProps> = ({
             <Text style={styles.approvalTitle}>ONAY</Text>
             {lastApproval ? (
               <>
-                <Text style={styles.approvalSubtitle}>{lastApproval.workflow_step.static_position?.title?.toUpperCase() || lastApproval.workflow_step.name.toUpperCase()}</Text>
+                <Text style={styles.approvalSubtitle}>{(lastApproval.workflow_step.name || lastApproval.workflow_step.static_position?.title || '').toUpperCase()}</Text>
                 <Text style={styles.approvalName}>{lastApproval.approver.first_name} {lastApproval.approver.last_name}</Text>
                 {renderSignature(lastApproval.approver.id, false, lastApproval.status)}
               </>

@@ -2,6 +2,7 @@ import React from 'react';
 import { Document, Page, Text, View, StyleSheet, Font, Image } from '@react-pdf/renderer';
 import { format } from 'date-fns';
 import { SignatureFont } from '@/lib/signature/types';
+import type { PdfApproval, PdfRequest, PdfRequester, SignatureInfo } from './types';
 import path from 'path';
 
 const getLogoPath = () => path.join(process.cwd(), 'public', 'logo-w-text.png');
@@ -80,14 +81,32 @@ const reasonCategoryLabels: Record<string, string> = {
   REPORTING: 'Raporlama', ENERGY_PRODUCTION: 'Enerji Üretimi'
 };
 
-interface SignatureInfo { text: string; font: SignatureFont; }
 interface OvertimeEntry { id: string; full_name: string; role_title: string; overtime_hours: number; overtime_pay: number; }
+interface OvertimeRequest {
+  overtime_type?: string | null;
+  month?: number | string | null;
+  year?: number | string | null;
+  reason_category?: string | null;
+  reason_detail?: string | null;
+  hr_note?: string | null;
+  work_location?: string | null;
+  total_hours?: number | null;
+  total_pay?: number | null;
+  work_start_date?: string | null;
+  work_end_date?: string | null;
+  previous_shift_start?: string | null;
+  previous_shift_end?: string | null;
+  next_shift_start?: string | null;
+  next_shift_end?: string | null;
+  work_reason?: string | null;
+  entries?: OvertimeEntry[] | null;
+}
 interface OvertimePDFTemplateProps {
-  request: any;
-  requester: any;
-  overtimeRequest: any;
+  request: PdfRequest;
+  requester: PdfRequester;
+  overtimeRequest: OvertimeRequest;
   entries?: OvertimeEntry[];
-  approvals: any[];
+  approvals: PdfApproval[];
   signatures?: Record<string, SignatureInfo>;
 }
 
@@ -97,9 +116,9 @@ const MONTH_NAMES: Record<string, string> = {
 };
 
 interface StaffShortageProps {
-  request: any;
-  requester: any;
-  overtimeRequest: any;
+  request: PdfRequest;
+  requester: PdfRequester;
+  overtimeRequest: OvertimeRequest;
   entries: OvertimeEntry[];
   approvalColumns: { title: string; name: string; employeeId: string; note: string; status?: string }[];
   signatures: Record<string, SignatureInfo>;
@@ -130,7 +149,7 @@ const StaffShortagePDF: React.FC<StaffShortageProps> = ({
       <Text style={[staffStyles.subjectText, { marginBottom: 12 }]}>Personel Eksikliği, Raporlama, 7/24 Enerji Üretimi</Text>
       {/* <Text style={[staffStyles.subjectText, { marginBottom: 12 }]}>{reasonCategoryLabels[overtimeRequest.reason_category] || overtimeRequest.reason_category}</Text> */}
       <Text style={staffStyles.bodyText}>
-        {reasonCategoryLabels[overtimeRequest.reason_category] || overtimeRequest.reason_category}{' nedeniyle oluşan '}{overtimeRequest.year}{' yılı '}{monthName}{' ayına ilişkin FAZLA MESAİ çalışmalarının ödenmesini onayınıza sunarım.\n'}{requestDate}
+        {reasonCategoryLabels[overtimeRequest.reason_category ?? ''] || overtimeRequest.reason_category}{' nedeniyle oluşan '}{overtimeRequest.year}{' yılı '}{monthName}{' ayına ilişkin FAZLA MESAİ çalışmalarının ödenmesini onayınıza sunarım.\n'}{requestDate}
       </Text>
       <View style={staffStyles.rightBlock}>
         <Text style={staffStyles.rightLabel}>İnsan Kaynakları</Text>
@@ -194,9 +213,9 @@ const StaffShortagePDF: React.FC<StaffShortageProps> = ({
 };
 
 interface EmergencyProps {
-  request: any;
-  requester: any;
-  overtimeRequest: any;
+  request: PdfRequest;
+  requester: PdfRequester;
+  overtimeRequest: OvertimeRequest;
   approvalColumns: { title: string; name: string; employeeId: string; note: string; status?: string }[];
   signatures: Record<string, SignatureInfo>;
 }
@@ -213,7 +232,7 @@ const EmergencyPDF: React.FC<EmergencyProps> = ({
 
   const monthName = MONTH_NAMES[String(overtimeRequest.month)] || String(overtimeRequest.month);
   const requestDate = format(new Date(request.created_at), 'dd/MM/yyyy');
-  const fmtDate = (val: string | null) => val ? format(new Date(val), 'dd/MM/yyyy HH:mm') : '-';
+  const fmtDate = (val: string | null | undefined) => val ? format(new Date(val), 'dd/MM/yyyy HH:mm') : '-';
 
   return (
     <Page size="A4" style={staffStyles.page}>
@@ -223,7 +242,7 @@ const EmergencyPDF: React.FC<EmergencyProps> = ({
       <Text style={staffStyles.subjectText}>Konu: Fazla Mesai Çalışmaları</Text>
       <Text style={[staffStyles.subjectText, { marginBottom: 12 }]}>{overtimeRequest.work_location || 'Merkez, Şube ve İşletmeler'}</Text>
       <Text style={staffStyles.bodyText}>
-        {reasonCategoryLabels[overtimeRequest.reason_category] || overtimeRequest.reason_category}{' nedeniyle gerçekleştirilen '}{overtimeRequest.year}{' yılı '}{monthName}{' ayına ilişkin FAZLA MESAİ çalışmasının ödenmesini onayınıza sunarım.\n'}{requestDate}
+        {reasonCategoryLabels[overtimeRequest.reason_category ?? ''] || overtimeRequest.reason_category}{' nedeniyle gerçekleştirilen '}{overtimeRequest.year}{' yılı '}{monthName}{' ayına ilişkin FAZLA MESAİ çalışmasının ödenmesini onayınıza sunarım.\n'}{requestDate}
       </Text>
       <View style={staffStyles.rightBlock}>
         <Text style={staffStyles.rightLabel}>İnsan Kaynakları</Text>
@@ -292,7 +311,7 @@ export const OvertimePDFTemplate: React.FC<OvertimePDFTemplateProps> = ({
     const columns: { title: string; name: string; employeeId: string; note: string; status?: string }[] = [{ title: 'İnsan Kaynakları', name: `${requester.first_name} ${requester.last_name}`, employeeId: requester.id, note: '' }];
     const sortedApprovals = approvals.filter((a) => a.workflow_step.step_order > 1).sort((a, b) => a.workflow_step.step_order - b.workflow_step.step_order);
     sortedApprovals.forEach((approval) => {
-      const positionTitle = approval.workflow_step.static_position ? approval.workflow_step.static_position.title : approval.workflow_step.name;
+      const positionTitle = approval.workflow_step.name || approval.workflow_step.static_position?.title || '';
       columns.push({ title: positionTitle, name: `${approval.approver.first_name} ${approval.approver.last_name}`, employeeId: approval.approver.id, note: approval.comment || '', status: approval.status });
     });
     return columns;

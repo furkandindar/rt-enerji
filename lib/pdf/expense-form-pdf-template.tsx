@@ -2,6 +2,7 @@ import React from 'react';
 import { Document, Page, Text, View, StyleSheet, Font, Image } from '@react-pdf/renderer';
 import { format } from 'date-fns';
 import { SignatureFont } from '@/lib/signature/types';
+import type { PdfApproval, PdfRequest, PdfRequester, SignatureInfo } from './types';
 import path from 'path';
 
 const getLogoPath = () => path.join(process.cwd(), 'public', 'logo.png');
@@ -112,24 +113,42 @@ const styles = StyleSheet.create({
   footerText: { fontSize: 6, color: colors.grey, textAlign: 'center' },
 });
 
-interface SignatureInfo { text: string; font: SignatureFont; }
+interface ExpenseItem {
+  id?: string | null;
+  row_order?: number | null;
+  item_date: string;
+  document_no?: string | null;
+  description?: string | null;
+  amount?: number | string | null;
+}
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
+interface ExpenseRequest {
+  request_date: string;
+  project_name?: string | null;
+  project_code?: string | null;
+  work_or_destination?: string | null;
+  is_travel?: boolean | null;
+  travel_person_count?: number | null;
+  travel_date?: string | null;
+  travel_duration?: string | null;
+  advance_amount?: number | null;
+  items?: ExpenseItem[] | null;
+}
+
 interface ExpenseFormPDFTemplateProps {
-  request: any;
-  requester: any;
-  expenseRequest: any;
-  approvals: any[];
+  request: PdfRequest;
+  requester: PdfRequester;
+  expenseRequest: ExpenseRequest;
+  approvals: PdfApproval[];
   signatures?: Record<string, SignatureInfo>;
 }
-/* eslint-enable @typescript-eslint/no-explicit-any */
 
 const formatAmount = (v: number | null | undefined): string => {
   if (v === null || v === undefined) return '-';
   return new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v);
 };
 
-const getRequesterPosition = (requester: { employee_positions?: Array<{ is_primary: boolean; end_date: string | null; position?: { title: string } }> } | undefined): string => {
+const getRequesterPosition = (requester: PdfRequester | undefined): string => {
   if (!requester?.employee_positions) return '-';
   const primary = requester.employee_positions.find((ep) => ep.is_primary && !ep.end_date);
   return primary?.position?.title || '-';
@@ -172,7 +191,7 @@ export const ExpenseFormPDFTemplate: React.FC<ExpenseFormPDFTemplateProps> = ({
     .filter((a) => a.workflow_step?.step_order > 1)
     .sort((a, b) => (a.workflow_step?.step_order ?? 0) - (b.workflow_step?.step_order ?? 0));
   sortedApprovals.forEach((a) => {
-    const title = a.workflow_step?.static_position?.title || a.workflow_step?.name || '-';
+    const title = a.workflow_step?.name || a.workflow_step?.static_position?.title || '-';
     approvalColumns.push({
       title,
       name: `${a.approver?.first_name ?? ''} ${a.approver?.last_name ?? ''}`.trim(),
