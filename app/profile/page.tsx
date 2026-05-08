@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { SignatureManager } from "./_components/signature-manager";
+import { ThemeSwitcher } from "@/components/theme-switcher";
 import { SignatureFont } from "@/lib/signature/types";
 
 export default async function ProfilePage() {
@@ -100,6 +101,17 @@ export default async function ProfilePage() {
           currentSignatureText={employee.signature_text}
           currentSignatureFont={employee.signature_font}
         />
+      </div>
+
+      {/* Tema Tercihi */}
+      <div className="rounded-lg border bg-card p-6">
+        <h2 className="text-lg font-semibold mb-4">Tema</h2>
+        <div className="flex items-center justify-between gap-4">
+          <p className="text-sm text-muted-foreground">
+            Arayüz temasını seçin (Açık, Koyu veya Sistem).
+          </p>
+          <ThemeSwitcher />
+        </div>
       </div>
     </div>
   );
