@@ -22,7 +22,8 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { type Approval, getApproverDisplayName } from "@/lib/approvals/types";
+import type { Approval } from "@/lib/approvals/types";
+import { getApproverDisplayName } from "@/lib/approvals/types";
 import { ApprovalStatusBadge } from "./status-badge";
 
 interface ApprovalHistoryAccordionProps {
