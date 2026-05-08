@@ -1780,18 +1780,21 @@ export default function MyRequestsPage() {
               )}
 
               {/* Anlık Önizleme - Süreç devam ediyorsa (PENDING / AWAITING_COMPLETION) */}
-              {(selectedRequest.status === "PENDING" || selectedRequest.status === "AWAITING_COMPLETION") && (
-                <div className="border-t pt-4 mt-6">
-                  <Button
-                    variant="outline"
-                    className="w-full"
-                    onClick={() => setShowLivePreview(true)}
-                  >
-                    <Eye className="mr-2 h-4 w-4" />
-                    Anlık Önizleme (Mevcut Hal)
-                  </Button>
-                </div>
-              )}
+              {/* STAMP_APPROVAL'da gösterilmiyor: bu süreç için live preview yanlış template
+                  render ediyor; orijinali yukarıdaki stamp_request bölümünden ayrıca açılabilir. */}
+              {!selectedRequest.stamp_request &&
+                (selectedRequest.status === "PENDING" || selectedRequest.status === "AWAITING_COMPLETION") && (
+                  <div className="border-t pt-4 mt-6">
+                    <Button
+                      variant="outline"
+                      className="w-full"
+                      onClick={() => setShowLivePreview(true)}
+                    >
+                      <Eye className="mr-2 h-4 w-4" />
+                      Anlık Önizleme (Mevcut Hal)
+                    </Button>
+                  </div>
+                )}
             </div>
           )}
         </SheetContent>

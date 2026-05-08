@@ -350,18 +350,22 @@ export function ApprovalDetailSheet({
             )}
 
             {/* Anlık Önizleme - Süreç devam ediyorsa (PENDING / AWAITING_COMPLETION) */}
-            {["PENDING", "AWAITING_COMPLETION"].includes(selectedApproval.request.status) && (
-              <div className="border-t pt-4 mt-6">
-                <Button
-                  variant="outline"
-                  className="w-full"
-                  onClick={() => setShowLivePreview(true)}
-                >
-                  <Eye className="mr-2 h-4 w-4" />
-                  Anlık Önizleme (Mevcut Hal)
-                </Button>
-              </div>
-            )}
+            {/* STAMP_APPROVAL'da gösterilmiyor: bu süreç için live preview yanlış template
+                render ediyor; orijinali StampRequestDetails içindeki "Orijinal PDF'i Görüntüle"
+                butonu zaten gösteriyor. */}
+            {!isStampApproval &&
+              ["PENDING", "AWAITING_COMPLETION"].includes(selectedApproval.request.status) && (
+                <div className="border-t pt-4 mt-6">
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => setShowLivePreview(true)}
+                  >
+                    <Eye className="mr-2 h-4 w-4" />
+                    Anlık Önizleme (Mevcut Hal)
+                  </Button>
+                </div>
+              )}
           </div>
         )}
       </SheetContent>
