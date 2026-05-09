@@ -1,6 +1,6 @@
 # Workflow Onaycı Haritası
 
-Kaynak: Supabase `ghrfpfapklbswydmyutb` projesindeki `workflow_definitions`, `workflow_steps`, `positions`, `employee_positions`, `employees` tabloları. Oluşturulma tarihi: 2026-05-03. Tüm listelenen workflow tanımları aktiftir.
+Kaynak: Supabase `ghrfpfapklbswydmyutb` projesindeki `workflow_definitions`, `workflow_steps`, `positions`, `employee_positions`, `employees` tabloları. Oluşturulma tarihi: 2026-05-09. Tüm listelenen workflow tanımları aktiftir.
 
 ## Notlar
 - `REQUESTER`: Talebi/formu oluşturan kullanıcı.
@@ -17,13 +17,13 @@ Kaynak: Supabase `ghrfpfapklbswydmyutb` projesindeki `workflow_definitions`, `wo
 | İşten Çıkış Takip Formu | `EMPLOYEE_SEPARATION` | 9 | İK → Genel Müdür → İK → GMY → Muhasebe → İdari İşler → Finans Uzmanı → Finans Müdürü → Genel Müdür |
 | Kaşeli Belge Onayı | `STAMP_APPROVAL` | 2 | Talep Eden → Genel Müdür |
 | Kısa Süreli İzin Talebi | `SHORT_LEAVE` | 4 | Talep Eden → Bölüm Müdürü → Personel Müdürlüğü → Genel Koordinatör |
-| Maaş Avans Talebi | `SALARY_ADVANCE` | 6 | Talep Eden → Personel Müdürlüğü → Muhasebe → Finans → Genel Koordinatör → Genel Müdür |
+| Maaş Avans Talebi | `SALARY_ADVANCE` | 6 | Talep Eden → Personel Müdürlüğü → Muhasebe → Finans → Genel Koordinatör → Yönetim Kurulu Başkanı |
 | Mukayese Formu | `COMPARISON_FORM` | 4 | Talep Eden → Birim Müdürü → Genel Koordinatör → Yönetim Kurulu Başkanı |
-| Olur Yazısı | `APPROVAL_LETTER` | 4 | Talep Eden → Birim Amiri → Hukuk Müşaviri → Genel Koordinatör |
-| Onay Kapağı Finans | `FINANCE_APPROVAL_COVER` | 4 | Talep Eden → İlgili Kişiler → Finans Müdürü → Genel Müdür |
-| Onay Kapağı Muhasebe | `ACCOUNTING_APPROVAL_COVER` | 4 | Talep Eden → İlgili Kişiler → Muhasebe Müdürü → Genel Müdür |
+| Olur Yazısı | `APPROVAL_LETTER` | 5 | Talep Eden → Birim Amiri → Hukuk Müşaviri → Genel Koordinatör → Yönetim Kurulu Başkanı |
+| Onay Kapağı Finans | `FINANCE_APPROVAL_COVER` | 5 | Talep Eden → İlgili Kişiler → Finans Müdürü → Genel Müdür → Yönetim Kurulu Başkanı |
+| Onay Kapağı Muhasebe | `ACCOUNTING_APPROVAL_COVER` | 5 | Talep Eden → İlgili Kişiler → Muhasebe Müdürü → Genel Müdür → Yönetim Kurulu Başkanı |
 | Şehir İçi/Dışı Görev Formu | `TRAVEL_ASSIGNMENT` | 6 | Talep Eden → Birim Amiri → İdari İşler → Muhasebe → Genel Koordinatör → Asistan |
-| Talep Formu | `REQUEST_FORM` | 3 | Talep Eden → Bölüm Müdürü → Genel Müdür |
+| Talep Formu | `REQUEST_FORM` | 4 | Talep Eden → Bölüm Müdürü → Genel Müdür → Yönetim Kurulu Başkanı |
 | Yıllık İzin Talebi | `ANNUAL_LEAVE` | 5 | Talep Eden → Bölüm Müdürü → Personel Müdürlüğü → Muhasebe → Genel Koordinatör |
 
 ## Workflow Detayları
@@ -87,8 +87,8 @@ Kaynak: Supabase `ghrfpfapklbswydmyutb` projesindeki `workflow_definitions`, `wo
 | 2 | Personel Müdürlüğü | `STATIC_POSITION` | İnsan Kaynakları Şefi (`IK200`) | İnan Kaynakları Şefi Kullanici |
 | 3 | Muhasebe Müdürlüğü | `STATIC_POSITION` | Muhasebe Müdürü (`M100`) | Muhasebe Müdürü Kullanici |
 | 4 | Finans Müdürlüğü | `STATIC_POSITION` | Finans Müdürü (`F100`) | Finans Müdürü Kullanici |
-| 5 | Genel Koordinatör | `STATIC_POSITION` | Genel Müdür Yardımcısı (`GMY100`) | Genel Müdür Yardımcısı Kullanici |
-| 6 | Genel Müdür | `STATIC_POSITION` | Genel Müdür/CEO (`GM100`) | Bekir Korkmaz |
+| 5 | Genel Koordinatör | `STATIC_POSITION` | Genel Müdür/CEO (`GM100`) | Bekir Korkmaz |
+| 6 | Yönetim Kurulu Başkanı | `STATIC_POSITION` | Genel Müdür Yardımcısı (`GMY100`) | Genel Müdür Yardımcısı Kullanici |
 
 ### Mukayese Formu (`COMPARISON_FORM`)
 | Sıra | Adım | Tip | Pozisyon / Onaycı | Aktif kişi |
@@ -103,8 +103,9 @@ Kaynak: Supabase `ghrfpfapklbswydmyutb` projesindeki `workflow_definitions`, `wo
 |---:|---|---|---|---|
 | 1 | Talep Eden | `REQUESTER` | Talep/form oluşturan kullanıcı | Dinamik |
 | 2 | Birim Amiri | `UNIT_HEAD` | Talep sahibinin birim amiri | Dinamik |
-| 3 | Hukuk Müşaviri | `STATIC_POSITION` | Genel Müdür Yardımcısı (`GMY100`) | Genel Müdür Yardımcısı Kullanici |
+| 3 | Hukuk Müșaviri | `STATIC_POSITION` | Genel Müdür Yardımcısı (`GMY100`) | Genel Müdür Yardımcısı Kullanici |
 | 4 | Genel Koordinatör | `STATIC_POSITION` | Genel Müdür/CEO (`GM100`) | Bekir Korkmaz |
+| 5 | Yönetim Kurulu Başkanı | `STATIC_POSITION` | İdari İşler Müdürü (`IDR100`) | İdari İşler Müdürü Kullanici |
 
 ### Onay Kapağı Finans (`FINANCE_APPROVAL_COVER`)
 | Sıra | Adım | Tip | Pozisyon / Onaycı | Aktif kişi |
@@ -113,6 +114,7 @@ Kaynak: Supabase `ghrfpfapklbswydmyutb` projesindeki `workflow_definitions`, `wo
 | 2 | İlgili Kişiler | `DYNAMIC_USER_LIST` | Talep sırasında seçilen kullanıcılar | Dinamik |
 | 3 | Finans Müdürü | `STATIC_POSITION` | Finans Müdürü (`F100`) | Finans Müdürü Kullanici |
 | 4 | Genel Müdür | `STATIC_POSITION` | Genel Müdür/CEO (`GM100`) | Bekir Korkmaz |
+| 5 | Yönetim Kurulu Başkanı | `STATIC_POSITION` | Finans Müdürü (`F100`) | Finans Müdürü Kullanici |
 
 ### Onay Kapağı Muhasebe (`ACCOUNTING_APPROVAL_COVER`)
 | Sıra | Adım | Tip | Pozisyon / Onaycı | Aktif kişi |
@@ -121,6 +123,7 @@ Kaynak: Supabase `ghrfpfapklbswydmyutb` projesindeki `workflow_definitions`, `wo
 | 2 | İlgili Kişiler | `DYNAMIC_USER_LIST` | Talep sırasında seçilen kullanıcılar | Dinamik |
 | 3 | Muhasebe Müdürü | `STATIC_POSITION` | Muhasebe Müdürü (`M100`) | Muhasebe Müdürü Kullanici |
 | 4 | Genel Müdür | `STATIC_POSITION` | Genel Müdür/CEO (`GM100`) | Bekir Korkmaz |
+| 5 | Yönetim Kurulu Başkanı | `STATIC_POSITION` | Muhasebe Müdürü (`M100`) | Muhasebe Müdürü Kullanici |
 
 ### Şehir İçi/Dışı Görev Formu (`TRAVEL_ASSIGNMENT`)
 | Sıra | Adım | Tip | Pozisyon / Onaycı | Aktif kişi |
@@ -138,6 +141,7 @@ Kaynak: Supabase `ghrfpfapklbswydmyutb` projesindeki `workflow_definitions`, `wo
 | 1 | Talep Eden | `REQUESTER` | Talep/form oluşturan kullanıcı | Dinamik |
 | 2 | Bölüm Müdürü | `UNIT_HEAD` | Talep sahibinin birim amiri | Dinamik |
 | 3 | Genel Müdür | `STATIC_POSITION` | Genel Müdür/CEO (`GM100`) | Bekir Korkmaz |
+| 4 | Yönetim Kurulu Başkanı | `STATIC_POSITION` | Genel Müdür Yardımcısı (`GMY100`) | Genel Müdür Yardımcısı Kullanici |
 
 ### Yıllık İzin Talebi (`ANNUAL_LEAVE`)
 | Sıra | Adım | Tip | Pozisyon / Onaycı | Aktif kişi |
