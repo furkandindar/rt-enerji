@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useCallback, useState } from "react";
+import { useEffect, useCallback, useState } from "react";
 import ReactFlow, {
   Background,
   Controls,
@@ -14,11 +14,14 @@ import ReactFlow, {
   Edge,
   ConnectionLineType,
   ReactFlowProvider,
+  BaseEdge,
+  EdgeProps,
 } from "reactflow";
 import { toPng } from "html-to-image";
 import ExcelJS from "exceljs";
 import { PDFDocument } from "pdf-lib";
-import dagre from "dagre";
+import ELK from "elkjs/lib/elk.bundled.js";
+import type { ElkExtendedEdge } from "elkjs/lib/elk-api";
 import "reactflow/dist/style.css";
 import { UnitNode } from "./unit-node";
 import { Button } from "@/components/ui/button";
@@ -56,47 +59,162 @@ const nodeTypes = {
   unit: UnitNode,
 };
 
-const nodeWidth = 260;
-const nodeHeight = 180;
+type EdgePoint = { x: number; y: number };
 
-// Dagre layout algorithm
-function getLayoutedElements(nodes: Node[], edges: Edge[]) {
-  const dagreGraph = new dagre.graphlib.Graph();
-  dagreGraph.setDefaultEdgeLabel(() => ({}));
-  dagreGraph.setGraph({ rankdir: "TB", nodesep: 80, ranksep: 100 });
+function TreeEdge({
+  id,
+  data,
+  style,
+  markerEnd,
+  sourceX,
+  sourceY,
+  targetX,
+  targetY,
+}: EdgeProps) {
+  const points = (data as { points?: EdgePoint[] } | undefined)?.points;
 
-  nodes.forEach((node) => {
-    dagreGraph.setNode(node.id, { width: nodeWidth, height: nodeHeight });
+  // Use React Flow's actual handle positions for endpoints (always match the
+  // handle dots in the DOM regardless of size estimation drift). Use ELK's
+  // interior bend Y as the shared trunk level — sibling edges from the same
+  // parent get the same trunk Y from ELK and visually merge into one trunk.
+  const interiorBends = points && points.length >= 2 ? points.slice(1, -1) : [];
+  const trunkY = interiorBends[0]?.y ?? (sourceY + targetY) / 2;
+  const path = `M ${sourceX},${sourceY} L ${sourceX},${trunkY} L ${targetX},${trunkY} L ${targetX},${targetY}`;
+
+  return <BaseEdge id={id} path={path} style={style} markerEnd={markerEnd} />;
+}
+
+const edgeTypes = {
+  tree: TreeEdge,
+};
+
+const NODE_WIDTH = 260;
+const FALLBACK_HEIGHT = 180;
+
+const elk = new ELK();
+
+const elkOptions = {
+  "elk.algorithm": "layered",
+  "elk.direction": "DOWN",
+  "elk.layered.spacing.nodeNodeBetweenLayers": "100",
+  "elk.spacing.nodeNode": "60",
+  "elk.layered.nodePlacement.strategy": "BRANDES_KOEPF",
+  "elk.layered.nodePlacement.bk.fixedAlignment": "BALANCED",
+  "elk.layered.crossingMinimization.strategy": "LAYER_SWEEP",
+  "elk.edgeRouting": "ORTHOGONAL",
+  "elk.padding": "[top=20,left=20,bottom=20,right=20]",
+};
+
+const nodeLayoutOptions = {
+  "elk.portConstraints": "FIXED_POS",
+};
+
+function estimateNodeHeight(positions: Position[]): number {
+  // Mirrors UnitNode markup: header row + headPosition block + otherPositions + per-employee rows + paddings
+  const HEADER = 64;
+  const PADDING = 24;
+  const HEAD_POSITION = 56;
+  const OTHER_POSITION_BASE = 32;
+  const EMPLOYEE_ROW = 18;
+
+  const head = positions.find((p) => p.is_unit_head);
+  const others = positions.filter((p) => !p.is_unit_head);
+  const headEmps = head?.employees.length ?? (head ? 1 : 0); // empty head still renders one "Boş" row
+  const otherEmps = others.reduce((sum, p) => sum + p.employees.length, 0);
+
+  return (
+    HEADER +
+    PADDING +
+    (head ? HEAD_POSITION + headEmps * EMPLOYEE_ROW : 0) +
+    others.length * OTHER_POSITION_BASE +
+    otherEmps * EMPLOYEE_ROW
+  );
+}
+
+async function getLayoutedElements(
+  nodes: Node[],
+  edges: Edge[],
+  heights: Map<string, number>
+) {
+  const graph = {
+    id: "root",
+    layoutOptions: elkOptions,
+    children: nodes.map((n) => {
+      const h = heights.get(n.id) ?? FALLBACK_HEIGHT;
+      return {
+        id: n.id,
+        width: NODE_WIDTH,
+        height: h,
+        layoutOptions: nodeLayoutOptions,
+        ports: [
+          {
+            id: `${n.id}__north`,
+            x: NODE_WIDTH / 2,
+            y: 0,
+            width: 0,
+            height: 0,
+            layoutOptions: { "elk.port.side": "NORTH" },
+          },
+          {
+            id: `${n.id}__south`,
+            x: NODE_WIDTH / 2,
+            y: h,
+            width: 0,
+            height: 0,
+            layoutOptions: { "elk.port.side": "SOUTH" },
+          },
+        ],
+      };
+    }),
+    edges: edges.map((e) => ({
+      id: e.id,
+      sources: [`${e.source}__south`],
+      targets: [`${e.target}__north`],
+    })),
+  };
+
+  const layout = await elk.layout(graph);
+
+  const positionMap = new Map<string, { x: number; y: number }>();
+  layout.children?.forEach((c) => {
+    positionMap.set(c.id, { x: c.x ?? 0, y: c.y ?? 0 });
   });
 
-  edges.forEach((edge) => {
-    dagreGraph.setEdge(edge.source, edge.target);
+  const edgeRouting = new Map<string, EdgePoint[]>();
+  (layout.edges as ElkExtendedEdge[] | undefined)?.forEach((e) => {
+    const section = e.sections?.[0];
+    if (!section) return;
+    const pts: EdgePoint[] = [
+      { x: section.startPoint.x, y: section.startPoint.y },
+      ...(section.bendPoints?.map((p) => ({ x: p.x, y: p.y })) ?? []),
+      { x: section.endPoint.x, y: section.endPoint.y },
+    ];
+    edgeRouting.set(e.id, pts);
   });
 
-  dagre.layout(dagreGraph);
+  const layoutedNodes = nodes.map((node) => ({
+    ...node,
+    position: positionMap.get(node.id) ?? { x: 0, y: 0 },
+  }));
 
-  const layoutedNodes = nodes.map((node) => {
-    const nodeWithPosition = dagreGraph.node(node.id);
-    return {
-      ...node,
-      position: {
-        x: nodeWithPosition.x - nodeWidth / 2,
-        y: nodeWithPosition.y - nodeHeight / 2,
-      },
-    };
-  });
+  const layoutedEdges = edges.map((edge) => ({
+    ...edge,
+    type: "tree",
+    data: { points: edgeRouting.get(edge.id) },
+  }));
 
-  return { nodes: layoutedNodes, edges };
+  return { nodes: layoutedNodes, edges: layoutedEdges };
 }
 
 function OrgChartFlowInner({ units }: OrgChartFlowProps) {
-  const { getNodes } = useReactFlow();
+  const { getNodes, fitView } = useReactFlow();
   const [isExportingPdf, setIsExportingPdf] = useState(false);
   const [isExportingExcel, setIsExportingExcel] = useState(false);
+  const [nodes, setNodes, onNodesChange] = useNodesState([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState([]);
 
-  // Convert units to nodes and edges
-  const { nodes: initialNodes, edges: initialEdges } = useMemo(() => {
-    const nodes: Node[] = units.map((unit) => ({
+  useEffect(() => {
+    const rawNodes: Node[] = units.map((unit) => ({
       id: unit.id,
       type: "unit",
       position: { x: 0, y: 0 },
@@ -108,22 +226,34 @@ function OrgChartFlowInner({ units }: OrgChartFlowProps) {
       },
     }));
 
-    const edges: Edge[] = units
+    const rawEdges: Edge[] = units
       .filter((unit) => unit.parent_id)
       .map((unit) => ({
         id: `${unit.parent_id}-${unit.id}`,
         source: unit.parent_id!,
         target: unit.id,
-        type: "smoothstep",
+        type: "tree",
         animated: false,
         style: { stroke: "hsl(var(--border))", strokeWidth: 2 },
       }));
 
-    return getLayoutedElements(nodes, edges);
-  }, [units]);
+    const heights = new Map(
+      units.map((u) => [u.id, estimateNodeHeight(u.positions)])
+    );
 
-  const [nodes, , onNodesChange] = useNodesState(initialNodes);
-  const [edges, , onEdgesChange] = useEdgesState(initialEdges);
+    let cancelled = false;
+    getLayoutedElements(rawNodes, rawEdges, heights).then((layouted) => {
+      if (cancelled) return;
+      setNodes(layouted.nodes);
+      setEdges(layouted.edges);
+      // Re-fit after layout settles
+      requestAnimationFrame(() => fitView({ padding: 0.2, duration: 0 }));
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [units, setNodes, setEdges, fitView]);
 
   // Capture full chart as image
   const captureFullChart = useCallback(async () => {
@@ -296,6 +426,14 @@ function OrgChartFlowInner({ units }: OrgChartFlowProps) {
     );
   }
 
+  if (nodes.length === 0) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
   return (
     <div className="relative w-full h-full">
       {/* Export Buttons */}
@@ -316,6 +454,7 @@ function OrgChartFlowInner({ units }: OrgChartFlowProps) {
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
         connectionLineType={ConnectionLineType.SmoothStep}
         fitView
         fitViewOptions={{ padding: 0.2 }}

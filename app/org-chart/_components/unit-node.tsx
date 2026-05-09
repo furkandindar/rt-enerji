@@ -31,7 +31,7 @@ function UnitNodeComponent({ data }: { data: UnitNodeData }) {
   const otherPositions = data.positions.filter((p) => !p.is_unit_head);
 
   return (
-    <div className="rounded-lg border bg-card shadow-md min-w-[220px] max-w-[280px]">
+    <div className="rounded-lg border bg-card shadow-md w-[260px]">
       {/* Top Handle */}
       <Handle
         type="target"
