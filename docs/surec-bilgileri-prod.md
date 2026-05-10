@@ -1,6 +1,6 @@
 # Süreç Bilgileri
 
-Sistemde tanımlı olan onay süreçleri ve her bir adımda görevli kişiler aşağıda listelenmiştir. Hazırlanma tarihi: 2026-05-09.
+Sistemde tanımlı olan onay süreçleri ve her bir adımda görevli kişiler aşağıda listelenmiştir.
 
 ## Açıklamalar
 - **Talep Eden:** Formu/talebi oluşturan kullanıcının kendisidir; süreç başlatıldığında otomatik atanır.
