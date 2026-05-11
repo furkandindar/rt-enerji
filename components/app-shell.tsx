@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import type { ReactNode } from "react";
+import { Suspense, type ReactNode } from "react";
 
 import { AppSidebar } from "@/components/app-sidebar";
 import { FxRatesHeader } from "@/components/fx-rates-header";
@@ -25,6 +25,54 @@ import {
 } from "@/components/ui/sidebar";
 import { Loading } from "./ui/loading";
 import { PrivacyConsentGuard } from "./privacy-consent-guard";
+
+// Breadcrumb segment'lerini Türkçe etiketlere eşler. Burada olmayan segment'ler
+// (örn. yeni route'lar) düşürülmüş "Title Case" haline gelir.
+const BREADCRUMB_LABELS: Record<string, string> = {
+  // Genel
+  new: "Yeni",
+  // Süreçler
+  approvals: "Bekleyen Onaylar",
+  history: "Onay Geçmişi",
+  "my-requests": "Taleplerim",
+  "leave-requests": "İzin Talebi",
+  "expense-form": "Harcama Formu",
+  "comparison-form": "Mukayese Formu",
+  "salary-advance": "Maaş Avans Talebi",
+  overtime: "Fazla Mesai",
+  separation: "Ayrılma",
+  "travel-assignment": "Şehir İçi/Dışı Görev Formu",
+  "request-form": "Talep Formu",
+  "stamp-approval": "Kaşeli Belge Onayı",
+  "accounting-approval-cover": "Onay Kapağı Muhasebe",
+  "finance-approval-cover": "Onay Kapağı Finans",
+  "approval-letter": "Olur Yazısı",
+  onboarding: "İşe Giriş",
+  // Organizasyon
+  employees: "Çalışanlar",
+  positions: "Pozisyonlar",
+  "position-assignments": "Pozisyon Atamaları",
+  "organizational-units": "Organizasyonel Birimler",
+  "org-chart": "Organizasyon Şeması",
+  // Diğer
+  notifications: "Bildirimler",
+  profile: "Profil",
+};
+
+const UUID_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function formatBreadcrumbSegment(segment: string): string {
+  // UUID gibi dinamik segment'leri "Detay" olarak göster
+  if (UUID_REGEX.test(segment)) return "Detay";
+  // Bilinen route'lar için Türkçe etiket
+  if (BREADCRUMB_LABELS[segment]) return BREADCRUMB_LABELS[segment];
+  // Fallback: tireleri boşluğa çevir + kelime başlarını büyüt
+  return segment
+    .split("-")
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+}
 
 interface AppShellProps {
   children: ReactNode;
@@ -89,8 +137,7 @@ function AppShellContent({ children }: { children: ReactNode }) {
                         const segmentPath =
                           "/" + arr.slice(0, index + 1).join("/");
 
-                        const label =
-                          segment.charAt(0).toUpperCase() + segment.slice(1);
+                        const label = formatBreadcrumbSegment(segment);
 
                         const isLast = index === arr.length - 1;
 
@@ -120,7 +167,9 @@ function AppShellContent({ children }: { children: ReactNode }) {
           </div>
         </header>
 
-        <div className="flex flex-1 flex-col gap-4 p-4 pt-0">{children}</div>
+        <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
+          <Suspense fallback={<Loading />}>{children}</Suspense>
+        </div>
       </SidebarInset>
     </SidebarProvider>
     </PrivacyConsentGuard>

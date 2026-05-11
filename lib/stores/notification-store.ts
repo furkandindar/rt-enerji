@@ -12,7 +12,13 @@ export interface Notification {
   user_id: string;
   title: string;
   message: string;
-  type: 'APPROVAL_REQUIRED' | 'REQUEST_APPROVED' | 'REQUEST_REJECTED' | 'REQUEST_CANCELLED';
+  type:
+    | 'APPROVAL_REQUIRED'
+    | 'REQUEST_APPROVED'
+    | 'REQUEST_REJECTED'
+    | 'REQUEST_CANCELLED'
+    | 'REQUEST_UPDATED'
+    | 'REVISION_REQUESTED';
   reference_id: string | null;
   is_read: boolean;
   created_at: string;

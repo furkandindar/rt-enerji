@@ -38,6 +38,7 @@ export interface Approval {
   decided_at: string | null;
   created_at: string;
   sequence_order: number;
+  revision_cycle?: number | null;
   workflow_step: WorkflowStep;
   approver: Approver;
 }
@@ -104,6 +105,7 @@ export interface PendingApproval {
     status: string;
     current_step: number;
     created_at: string;
+    updated_at?: string | null;
     pdf_path?: string | null;
     workflow_definition: {
       name: string;
@@ -322,6 +324,15 @@ export interface PendingApproval {
       }>;
     };
     approvals?: Approval[];
+    // Faz 1 etkinlik logu: tüm cycle'ların onay kayıtları (API tarafından eklenir).
+    all_approvals?: Approval[];
+    // Lifecycle son aksiyon snapshot'ı (V5).
+    submitted_at?: string | null;
+    completed_at?: string | null;
+    last_action?: string | null;
+    last_action_at?: string | null;
+    last_action_by?: string | null;
+    current_revision_cycle?: number | null;
   };
 }
 

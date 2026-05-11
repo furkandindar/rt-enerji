@@ -34,7 +34,12 @@ export function ApprovalHistoryAccordion({ approvals }: ApprovalHistoryAccordion
   if (!approvals || approvals.length === 0) return null;
 
   return (
-    <Accordion type="single" collapsible className="mt-4">
+    <Accordion
+      type="single"
+      collapsible
+      defaultValue="approval-history"
+      className="mt-4"
+    >
       <AccordionItem value="approval-history">
         <AccordionTrigger className="text-sm font-medium">
           Onay Geçmişi

@@ -17,6 +17,10 @@ const Toaster = ({ ...props }: ToasterProps) => {
     <Sonner
       theme={theme as ToasterProps["theme"]}
       className="toaster group"
+      // richColors: success/error/warning/info için Sonner'ın semantik renklerini
+      // (yeşil/kırmızı/sarı/mavi) uygular. toast(...) generic çağrıları default
+      // popover stilinde kalır.
+      richColors
       icons={{
         success: <CircleCheckIcon className="size-4" />,
         info: <InfoIcon className="size-4" />,

@@ -1,17 +1,49 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import type { WorkflowStepAttachmentConfig, RequestAttachment, PreviousStepAttachment } from "@/lib/workflow/types";
 import type { PendingApproval, ChecklistStatus, SignatureInfo } from "./types";
 import { onboardingSectionConfig, ONBOARDING_SECTION_KEYS, separationSectionConfig, SEPARATION_SECTION_KEYS } from "./constants";
 import { parseContentDispositionFilename } from "@/lib/pdf/file-naming";
+import { normalizePageSize } from "@/components/ui/pagination-controls";
 
-export function useApprovals() {
+// Hangi liste fetch'i yapılacağını belirler. Bekleyen ve geçmiş artık ayrı
+// sayfalarda olduğu için aynı anda iki liste yüklenmiyor:
+//   - 'pending' → /approvals (Bekleyen Onaylar) sayfası
+//   - 'history' → /approvals/history (Onay Geçmişi) sayfası
+//   - 'none'    → detail page (/approvals/[id]) gibi liste'siz yerler
+export type ApprovalsMode = 'pending' | 'history' | 'none';
+
+interface UseApprovalsOptions {
+  mode?: ApprovalsMode;
+}
+
+export function useApprovals(options: UseApprovalsOptions = {}) {
+  const { mode = 'none' } = options;
+  const pendingEnabled = mode === 'pending';
+  const historyEnabled = mode === 'history';
+
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
   const [pendingApprovals, setPendingApprovals] = useState<PendingApproval[]>([]);
   const [approvalHistory, setApprovalHistory] = useState<PendingApproval[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [pendingTotal, setPendingTotal] = useState(0);
+  const [historyTotal, setHistoryTotal] = useState(0);
+  // Filter dropdown'unu beslemek için tüm aktif workflow definitions
+  const [workflowDefinitions, setWorkflowDefinitions] = useState<
+    { id: string; code: string; name: string }[]
+  >([]);
+  // İlk fetch tamamlanma flag'leri — isLoading bu ikisinden derived edilir.
+  // Sadece enable edilmiş liste için "loaded false" başlangıcı; diğeri için
+  // initial true (fetch yok = beklenecek bir şey yok).
+  const [pendingLoaded, setPendingLoaded] = useState(!pendingEnabled);
+  const [historyLoaded, setHistoryLoaded] = useState(!historyEnabled);
+  const isLoading = !pendingLoaded || !historyLoaded;
   const [selectedApproval, setSelectedApproval] = useState<PendingApproval | null>(null);
   const [comment, setComment] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -56,9 +88,22 @@ export function useApprovals() {
   const [ykbSignedPdfPath, setYkbSignedPdfPath] = useState<string | null>(null);
   const [ykbSignedPdfFileName, setYkbSignedPdfFileName] = useState<string | null>(null);
 
-  // Pagination states
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(25);
+  // Pagination state — URL'den okunur (pending_page, pending_size, history_page, history_size)
+  const pendingPageSize = normalizePageSize(searchParams.get("pending_size"));
+  const historyPageSize = normalizePageSize(searchParams.get("history_size"));
+  const pendingPage = (() => {
+    const n = Number(searchParams.get("pending_page"));
+    return Number.isFinite(n) && n >= 1 ? Math.floor(n) : 1;
+  })();
+  const historyPage = (() => {
+    const n = Number(searchParams.get("history_page"));
+    return Number.isFinite(n) && n >= 1 ? Math.floor(n) : 1;
+  })();
+
+  // Filter state — URL'den okunur. "all" = filtre yok.
+  const pendingWorkflowFilter = searchParams.get("pending_workflow_code") || "all";
+  const historyWorkflowFilter = searchParams.get("history_workflow_code") || "all";
+  const historyDecisionFilter = searchParams.get("history_decision") || "all";
 
   const supabase = createClient();
 
@@ -123,16 +168,68 @@ export function useApprovals() {
 
   const canApprove = hasValidSignature && signatureAccepted && hrFormValid && salaryConsentFormValid && onboardingFormValid && separationFormValid && attachmentsValid && travelCompletionFormValid && ykbSignedPdfFormValid;
 
-  // Pagination
-  const totalPages = Math.ceil(approvalHistory.length / pageSize);
-  const startIndex = (currentPage - 1) * pageSize;
-  const paginatedHistory = approvalHistory.slice(startIndex, startIndex + pageSize);
+  // Pagination — server-side, total/total_pages API'den geliyor
+  const pendingTotalPages = Math.max(Math.ceil(pendingTotal / pendingPageSize), 1);
+  const historyTotalPages = Math.max(Math.ceil(historyTotal / historyPageSize), 1);
 
-  const handlePageChange = (page: number) => setCurrentPage(page);
-  const handlePageSizeChange = (value: string) => {
-    setPageSize(Number(value));
-    setCurrentPage(1);
-  };
+  const updateUrlParams = useCallback(
+    (updates: Record<string, string | null>) => {
+      const params = new URLSearchParams(searchParams.toString());
+      for (const [key, value] of Object.entries(updates)) {
+        if (value === null || value === "") {
+          params.delete(key);
+        } else {
+          params.set(key, value);
+        }
+      }
+      const query = params.toString();
+      router.replace(`${pathname}${query ? `?${query}` : ""}`, { scroll: false });
+    },
+    [pathname, router, searchParams]
+  );
+
+  const handlePendingPageChange = useCallback(
+    (page: number) => updateUrlParams({ pending_page: page > 1 ? page.toString() : null }),
+    [updateUrlParams]
+  );
+  const handlePendingPageSizeChange = useCallback(
+    (value: string) => updateUrlParams({ pending_size: value, pending_page: null }),
+    [updateUrlParams]
+  );
+  const handleHistoryPageChange = useCallback(
+    (page: number) => updateUrlParams({ history_page: page > 1 ? page.toString() : null }),
+    [updateUrlParams]
+  );
+  const handleHistoryPageSizeChange = useCallback(
+    (value: string) => updateUrlParams({ history_size: value, history_page: null }),
+    [updateUrlParams]
+  );
+
+  // Filter handler'ları — filtre değişince sayfayı 1'e reset
+  const handlePendingWorkflowFilterChange = useCallback(
+    (value: string) =>
+      updateUrlParams({
+        pending_workflow_code: value === "all" ? null : value,
+        pending_page: null,
+      }),
+    [updateUrlParams]
+  );
+  const handleHistoryWorkflowFilterChange = useCallback(
+    (value: string) =>
+      updateUrlParams({
+        history_workflow_code: value === "all" ? null : value,
+        history_page: null,
+      }),
+    [updateUrlParams]
+  );
+  const handleHistoryDecisionFilterChange = useCallback(
+    (value: string) =>
+      updateUrlParams({
+        history_decision: value === "all" ? null : value,
+        history_page: null,
+      }),
+    [updateUrlParams]
+  );
 
   // API functions
   const loadSignatureInfo = useCallback(async () => {
@@ -209,20 +306,94 @@ export function useApprovals() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const fetchApprovals = useCallback(async () => {
-    try {
-      const response = await fetch("/api/approvals");
-      if (response.ok) {
-        const data = await response.json();
-        setPendingApprovals(data.pending || []);
-        setApprovalHistory(data.history || []);
+  const fetchPending = useCallback(
+    async (
+      page: number,
+      size: number,
+      workflowCode: string,
+      signal?: AbortSignal
+    ) => {
+      try {
+        const params = new URLSearchParams({
+          page: page.toString(),
+          page_size: size.toString(),
+        });
+        if (workflowCode && workflowCode !== "all") {
+          params.set("workflow_code", workflowCode);
+        }
+        const response = await fetch(`/api/approvals/pending?${params.toString()}`, { signal });
+        if (response.ok) {
+          const data = await response.json();
+          setPendingApprovals(data.items || []);
+          setPendingTotal(typeof data.total === "number" ? data.total : 0);
+          if (Array.isArray(data.workflowDefinitions)) {
+            setWorkflowDefinitions(data.workflowDefinitions);
+          }
+        }
+      } catch (error) {
+        // AbortError: cleanup tarafından iptal edildi, sessizce geç
+        if (error instanceof DOMException && error.name === "AbortError") return;
+        console.error("Error fetching pending approvals:", error);
       }
-    } catch (error) {
-      console.error("Error fetching approvals:", error);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
+    },
+    []
+  );
+
+  const fetchHistory = useCallback(
+    async (
+      page: number,
+      size: number,
+      workflowCode: string,
+      decision: string,
+      signal?: AbortSignal
+    ) => {
+      try {
+        const params = new URLSearchParams({
+          page: page.toString(),
+          page_size: size.toString(),
+        });
+        if (workflowCode && workflowCode !== "all") {
+          params.set("workflow_code", workflowCode);
+        }
+        if (decision && decision !== "all") {
+          params.set("decision", decision);
+        }
+        const response = await fetch(`/api/approvals/history?${params.toString()}`, { signal });
+        if (response.ok) {
+          const data = await response.json();
+          setApprovalHistory(data.items || []);
+          setHistoryTotal(typeof data.total === "number" ? data.total : 0);
+          if (Array.isArray(data.workflowDefinitions)) {
+            setWorkflowDefinitions(data.workflowDefinitions);
+          }
+        }
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+        console.error("Error fetching approval history:", error);
+      }
+    },
+    []
+  );
+
+  // Karar verildikten sonra aktif liste'yi yenile. Detail page'de mode='none'
+  // olduğu için no-op; pending sayfasında pending'i, history sayfasında
+  // history'i yeniler.
+  const fetchApprovals = useCallback(async () => {
+    if (pendingEnabled) await fetchPending(pendingPage, pendingPageSize, pendingWorkflowFilter);
+    if (historyEnabled) await fetchHistory(historyPage, historyPageSize, historyWorkflowFilter, historyDecisionFilter);
+  }, [
+    pendingEnabled,
+    historyEnabled,
+    fetchPending,
+    fetchHistory,
+    pendingPage,
+    pendingPageSize,
+    pendingWorkflowFilter,
+    historyPage,
+    historyPageSize,
+    historyWorkflowFilter,
+    historyDecisionFilter,
+  ]);
 
   const handleDecision = async (decision: "APPROVED" | "REJECTED") => {
     if (!selectedApproval) return;
@@ -422,10 +593,50 @@ export function useApprovals() {
   };
 
   // Effects
+  // Signature info'yu her zaman yükle (detail page'de de gerekli).
   useEffect(() => {
-    fetchApprovals();
     loadSignatureInfo();
-  }, [fetchApprovals, loadSignatureInfo]);
+  }, [loadSignatureInfo]);
+
+  // Pending list — mount + page/size/filter değişimi. AbortController ile
+  // Strict Mode double-mount fetch'ini iptal ediyoruz; aynı şekilde page
+  // hızlıca değişirse önceki fetch iptal olur (race condition korumalı).
+  useEffect(() => {
+    if (!pendingEnabled) return;
+    const controller = new AbortController();
+    (async () => {
+      await fetchPending(pendingPage, pendingPageSize, pendingWorkflowFilter, controller.signal);
+      if (!controller.signal.aborted) setPendingLoaded(true);
+    })();
+    return () => controller.abort();
+  }, [pendingEnabled, pendingPage, pendingPageSize, pendingWorkflowFilter, fetchPending]);
+
+  // History list — mount + page/size/filter değişimi
+  useEffect(() => {
+    if (!historyEnabled) return;
+    const controller = new AbortController();
+    (async () => {
+      await fetchHistory(historyPage, historyPageSize, historyWorkflowFilter, historyDecisionFilter, controller.signal);
+      if (!controller.signal.aborted) setHistoryLoaded(true);
+    })();
+    return () => controller.abort();
+  }, [historyEnabled, historyPage, historyPageSize, historyWorkflowFilter, historyDecisionFilter, fetchHistory]);
+
+  // Page out-of-range guard: karar verilince ya da kayıt silinince mevcut
+  // sayfa son sayfayı geçtiyse URL'i son sayfaya çek (1'in altına düşmez).
+  useEffect(() => {
+    if (!pendingEnabled || isLoading) return;
+    if (pendingPage > pendingTotalPages) {
+      handlePendingPageChange(pendingTotalPages);
+    }
+  }, [pendingEnabled, isLoading, pendingPage, pendingTotalPages, handlePendingPageChange]);
+
+  useEffect(() => {
+    if (!historyEnabled || isLoading) return;
+    if (historyPage > historyTotalPages) {
+      handleHistoryPageChange(historyTotalPages);
+    }
+  }, [historyEnabled, isLoading, historyPage, historyTotalPages, handleHistoryPageChange]);
 
   useEffect(() => {
     setSignatureAccepted(false);
@@ -499,7 +710,6 @@ export function useApprovals() {
     // Data
     pendingApprovals,
     approvalHistory,
-    paginatedHistory,
     selectedApproval,
     isLoading,
     isSubmitting,
@@ -536,10 +746,21 @@ export function useApprovals() {
     hasValidSignature,
     hrFormValid,
 
-    // Pagination
-    currentPage,
-    pageSize,
-    totalPages,
+    // Pagination — server-side
+    pendingPage,
+    pendingPageSize,
+    pendingTotal,
+    pendingTotalPages,
+    historyPage,
+    historyPageSize,
+    historyTotal,
+    historyTotalPages,
+
+    // Filters
+    workflowDefinitions,
+    pendingWorkflowFilter,
+    historyWorkflowFilter,
+    historyDecisionFilter,
 
     // Setters
     setSelectedApproval,
@@ -561,7 +782,12 @@ export function useApprovals() {
     handleDecision,
     handleRequestRevision,
     handleDownloadPDF,
-    handlePageChange,
-    handlePageSizeChange,
+    handlePendingPageChange,
+    handlePendingPageSizeChange,
+    handleHistoryPageChange,
+    handleHistoryPageSizeChange,
+    handlePendingWorkflowFilterChange,
+    handleHistoryWorkflowFilterChange,
+    handleHistoryDecisionFilterChange,
   };
 }

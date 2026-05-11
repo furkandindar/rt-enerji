@@ -125,7 +125,7 @@ export const requestStatusLabels: Record<string, string> = {
   APPROVED: "Onaylandı",
   REJECTED: "Reddedildi",
   CANCELLED: "İptal Edildi",
-  AWAITING_COMPLETION: "Tamamlanma Bekleniyor",
+  AWAITING_COMPLETION: "RT Onayı",
   COMPLETED: "Tamamlandı",
   REVISION_REQUESTED: "Revize İstendi",
 };

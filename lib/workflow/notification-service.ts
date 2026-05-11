@@ -144,16 +144,46 @@ export async function notifyApprover(
     referenceId: requestId,
   });
 
-  // Email — zengin payload (helper hata verirse minimal payload ile fallback)
+  // Email — zengin payload (helper hata verirse minimal payload ile fallback).
+  // V5: Onaycının bu request'teki aktif PENDING approval id'sini bulup deep-link'e ekle.
+  const ctaPath = await buildApproverCtaPath(supabase, approverEmployeeId, requestId, 'PENDING');
   if (userInfo.email) {
     const payload = await enrichEmailPayload(
       supabase,
       requestId,
-      { to: userInfo.email, title, message, type, ctaPath: '/approvals' },
+      { to: userInfo.email, title, message, type, ctaPath },
       userInfo.fullName
     );
     await sendNotificationEmail(payload);
   }
+}
+
+/**
+ * Onaycı için deep-link CTA path üretir.
+ * Onaycının bu request'teki en güncel (aktif cycle) approval kaydını bulur ve
+ * /approvals/[approvalId]'ye yönlendiren path döner. Bulamazsa /approvals listesine düşer.
+ */
+async function buildApproverCtaPath(
+  supabase: SupabaseClient,
+  approverEmployeeId: string,
+  requestId: string,
+  status: 'PENDING' | 'APPROVED'
+): Promise<string> {
+  try {
+    const { data } = await supabase
+      .from('request_approvals')
+      .select('id')
+      .eq('request_id', requestId)
+      .eq('approver_employee_id', approverEmployeeId)
+      .eq('status', status)
+      .order('revision_cycle', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (data?.id) return `/approvals/${data.id}`;
+  } catch (err) {
+    console.error('[notification] buildApproverCtaPath failed:', err);
+  }
+  return '/approvals';
 }
 
 /**
@@ -187,7 +217,7 @@ export async function notifyRequestApproved(
     const payload = await enrichEmailPayload(
       supabase,
       requestId,
-      { to: userInfo.email, title, message, type, ctaPath: '/my-requests' },
+      { to: userInfo.email, title, message, type, ctaPath: `/my-requests/${requestId}` },
       userInfo.fullName,
       extras
     );
@@ -232,7 +262,7 @@ export async function notifyRequestRejected(
     const payload = await enrichEmailPayload(
       supabase,
       requestId,
-      { to: userInfo.email, title, message, type, ctaPath: '/my-requests' },
+      { to: userInfo.email, title, message, type, ctaPath: `/my-requests/${requestId}` },
       userInfo.fullName,
       mergedExtras
     );
@@ -287,11 +317,14 @@ export async function notifyRequestUpdated(
     referenceId: requestId,
   });
 
+  // V5: Bu kullanıcının request'teki en güncel APPROVED kaydına yönlendir
+  // (genelde önceki cycle'da onay vermiş olduğu kayıt). Bulamazsa /approvals listesi.
+  const ctaPath = await buildApproverCtaPath(supabase, recipientEmployeeId, requestId, 'APPROVED');
   if (userInfo.email) {
     const payload = await enrichEmailPayload(
       supabase,
       requestId,
-      { to: userInfo.email, title, message, type, ctaPath: '/approvals' },
+      { to: userInfo.email, title, message, type, ctaPath },
       userInfo.fullName
     );
     await sendNotificationEmail(payload);
@@ -335,7 +368,7 @@ export async function notifyRevisionRequested(
     const payload = await enrichEmailPayload(
       supabase,
       requestId,
-      { to: userInfo.email, title, message, type, ctaPath: '/my-requests' },
+      { to: userInfo.email, title, message, type, ctaPath: `/my-requests/${requestId}` },
       userInfo.fullName,
       extras
     );

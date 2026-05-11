@@ -12,6 +12,108 @@ import { buildAndUploadRequestPDF } from "@/lib/pdf/build-and-upload-request-pdf
 import { stampPDF, type StampPositionOverrides } from "@/lib/pdf/stamp-pdf";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { StampPosition } from "@/lib/workflow/types";
+import { getApprovalDetailSelect } from "@/lib/my-requests/server-selects";
+
+// Postgres "canceling statement due to statement timeout"
+const PG_STATEMENT_TIMEOUT = "57014";
+
+// GET /api/approvals/[id] - Tek bir approval kaydını PendingApproval shape'inde döndürür.
+// (top-level approval + nested request + tüm tip-spesifik detaylar).
+// RLS, yalnızca yetkili kullanıcıların erişmesini garanti eder.
+export async function GET(
+  _request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const supabase = await createClient();
+    const { id: approvalId } = await params;
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // İki adımlı (type-aware) sorgu: önce hafif fetch ile workflow code
+    // öğren, sonra sadece o tipin nested join'ini içeren full select.
+    // Eski monolitik 13 join'lik select Postgres'te statement timeout
+    // yiyebiliyordu (özellikle mukayese/expense gibi nested zincirlerde).
+
+    // Step 1: hafif fetch — sadece workflow code lazım
+    const { data: head, error: headError } = await supabase
+      .from("request_approvals")
+      .select(`request:requests(workflow_definition:workflow_definitions(code))`)
+      .eq("id", approvalId)
+      .maybeSingle();
+
+    if (headError) {
+      console.error("Error fetching approval head:", headError);
+      const isTimeout = headError.code === PG_STATEMENT_TIMEOUT;
+      return NextResponse.json(
+        { error: isTimeout ? "Sorgu zaman aşımına uğradı, lütfen tekrar deneyin." : "Failed to fetch approval" },
+        { status: isTimeout ? 504 : 500 }
+      );
+    }
+    if (!head) {
+      return NextResponse.json({ error: "Approval not found" }, { status: 404 });
+    }
+
+    const workflowCode =
+      (head as { request?: { workflow_definition?: { code?: string } | null } | null }).request
+        ?.workflow_definition?.code ?? null;
+
+    // Step 2: type-aware full select
+    const { data: approval, error } = await supabase
+      .from("request_approvals")
+      .select(getApprovalDetailSelect(workflowCode))
+      .eq("id", approvalId)
+      .single();
+
+    if (error) {
+      console.error("Error fetching approval:", error);
+      const isTimeout = error.code === PG_STATEMENT_TIMEOUT;
+      return NextResponse.json(
+        { error: isTimeout ? "Sorgu zaman aşımına uğradı, lütfen tekrar deneyin." : "Failed to fetch approval" },
+        { status: isTimeout ? 504 : 500 }
+      );
+    }
+    if (!approval) {
+      return NextResponse.json({ error: "Approval not found" }, { status: 404 });
+    }
+
+    // mukayese_prices flat array
+    const reqInApproval = (approval as {
+      request?: {
+        mukayese_request?: { items?: Array<{ prices?: unknown[] }>; prices?: unknown[] };
+        current_revision_cycle?: number;
+        approvals?: Array<{ revision_cycle?: number }>;
+        all_approvals?: Array<{ revision_cycle?: number }>;
+      };
+    }).request;
+    const m = reqInApproval?.mukayese_request;
+    if (m?.items) m.prices = m.items.flatMap((it) => it.prices ?? []);
+
+    // Faz 1 etkinlik logu: tüm cycle'ların onay kayıtlarını "all_approvals"
+    // alanında orijinal haliyle bırakıyoruz. Aktif cycle filtresinden önce kopya alındı.
+    if (reqInApproval && Array.isArray(reqInApproval.approvals)) {
+      reqInApproval.all_approvals = [...reqInApproval.approvals];
+    }
+
+    // V5: nested approvals'ı aktif cycle'a filtrele
+    if (reqInApproval) {
+      const activeCycle = reqInApproval.current_revision_cycle ?? 0;
+      if (Array.isArray(reqInApproval.approvals)) {
+        reqInApproval.approvals = reqInApproval.approvals.filter(
+          (a) => (a.revision_cycle ?? 0) === activeCycle
+        );
+      }
+    }
+
+    return NextResponse.json(approval);
+  } catch (error) {
+    console.error("Unexpected error in GET /api/approvals/[id]:", error);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
+}
 
 // PATCH /api/approvals/[id] - Onay/Red ver
 export async function PATCH(

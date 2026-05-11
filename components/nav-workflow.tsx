@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarPlus, FileCheck, ClipboardList, Banknote, Calculator, Clock, UserPlus, UserMinus, FileText, Stamp, MapPin, FilePenLine, Scale, ReceiptText, type LucideIcon } from "lucide-react";
+import { CalendarPlus, FileCheck, ClipboardList, Banknote, Calculator, Clock, UserPlus, UserMinus, FileText, Stamp, MapPin, FilePenLine, Scale, ReceiptText, History, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -22,6 +22,10 @@ interface NavItem {
   workflowCodes?: string[];
   // Departman grubu başlığı — aynı group değerine sahip itemlar bir arada gösterilir.
   group?: string;
+  // Özel "aktif mi?" kontrolü. Verilmezse default startsWith(url).
+  // /approvals (Bekleyen Onaylar) ve /approvals/history (Onay Geçmişi) gibi
+  // alt route'ların doğru ayrımı için gerekli.
+  isActiveMatch?: (pathname: string) => boolean;
 }
 
 // Her zaman görünen bireysel süreçler
@@ -47,8 +51,16 @@ const departmentItems: NavItem[] = [
 
 // Her zaman görünen takip ekranları
 const trackingItems: NavItem[] = [
-  { title: "Taleplerim",      url: "/my-requests", icon: ClipboardList },
-  { title: "Bekleyen Onaylar", url: "/approvals",   icon: FileCheck },
+  { title: "Taleplerim",       url: "/my-requests",       icon: ClipboardList },
+  {
+    title: "Bekleyen Onaylar",
+    url: "/approvals",
+    icon: FileCheck,
+    // /approvals ve /approvals/<uuid> için aktif; /approvals/history hariç.
+    isActiveMatch: (p) =>
+      p.startsWith("/approvals") && !p.startsWith("/approvals/history"),
+  },
+  { title: "Onay Geçmişi",     url: "/approvals/history", icon: History },
 ];
 
 function NavItems({ items, pathname }: { items: NavItem[]; pathname: string }) {
@@ -56,7 +68,7 @@ function NavItems({ items, pathname }: { items: NavItem[]; pathname: string }) {
     <>
       {items.map((item) => (
         <SidebarMenuItem key={item.title}>
-          <SidebarMenuButton asChild isActive={pathname.startsWith(item.url)}>
+          <SidebarMenuButton asChild isActive={item.isActiveMatch ? item.isActiveMatch(pathname) : pathname.startsWith(item.url)}>
             <Link href={item.url}>
               <item.icon />
               <span>{item.title}</span>

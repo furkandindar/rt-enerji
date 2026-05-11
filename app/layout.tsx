@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Ballet, Great_Vibes, Sacramento } from "next/font/google";
 import { ThemeProvider } from "next-themes";
+import { Suspense } from "react";
 import { Toaster } from "@/components/ui/sonner";
 import { AppShell } from "@/components/app-shell";
 import "./globals.css";
@@ -57,7 +58,9 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <AppShell>{children}</AppShell>
+          <Suspense fallback={null}>
+            <AppShell>{children}</AppShell>
+          </Suspense>
           <Toaster />
         </ThemeProvider>
       </body>

@@ -77,14 +77,32 @@ export function NotificationPopover() {
     }
   };
 
-  // Bildirime tıklandığında
-  const handleNotificationClick = async (notificationId: string, isRead: boolean) => {
-    // Okunmamışsa okundu işaretle
+  // Bildirime tıklandığında — V5: tip-bazlı yönlendirme
+  const handleNotificationClick = async (
+    notificationId: string,
+    isRead: boolean,
+    type: string,
+    referenceId: string | null
+  ) => {
     if (!isRead) {
       handleMarkAsRead(notificationId);
     }
-    // Popover'ı kapat ve approvals sayfasına git
     setOpen(false);
+
+    // Talep edene gidenler: request detayı
+    const requesterTypes = [
+      "REQUEST_APPROVED",
+      "REQUEST_REJECTED",
+      "REQUEST_CANCELLED",
+      "REVISION_REQUESTED",
+    ];
+    if (referenceId && requesterTypes.includes(type)) {
+      router.push(`/my-requests/${referenceId}`);
+      return;
+    }
+
+    // Onaycıya gidenler (APPROVAL_REQUIRED, REQUEST_UPDATED):
+    // reference_id request_id'dir; approval id'sini bilmiyoruz. Onay listesine git.
     router.push("/approvals");
   };
 
@@ -135,7 +153,14 @@ export function NotificationPopover() {
                   className={`flex gap-3 px-4 py-3 hover:bg-muted/50 cursor-pointer transition-colors ${
                     !notification.is_read ? "bg-muted/30" : ""
                   }`}
-                  onClick={() => handleNotificationClick(notification.id, notification.is_read)}
+                  onClick={() =>
+                    handleNotificationClick(
+                      notification.id,
+                      notification.is_read,
+                      notification.type,
+                      notification.reference_id
+                    )
+                  }
                 >
                   <div
                     className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${
