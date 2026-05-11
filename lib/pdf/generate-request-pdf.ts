@@ -88,6 +88,7 @@ export async function generateRequestPDF(
         decided_at,
         created_at,
         sequence_order,
+        revision_cycle,
         workflow_step:workflow_steps(
           step_order,
           name,
@@ -123,23 +124,28 @@ export async function generateRequestPDF(
   // başarısız olmasını ve "İmza" placeholder'ının kalmasını sağlıyoruz —
   // ıslak imza basılı PDF üzerinde alınacak.
   const FOUNDER_PSEUDO_ID = '__ykb_signed_pdf_founder__';
-  const approvals: PdfApproval[] = ((request.approvals || []) as PdfApproval[]).map((approval) => {
-    const step = approval.workflow_step;
-    if (step?.phase === 'COMPLETION' && step?.form_section_key === 'ykb_signed_pdf') {
-      return {
-        ...approval,
-        approver: {
-          ...approval.approver,
-          id: FOUNDER_PSEUDO_ID,
-          first_name: 'RAMAZAN',
-          last_name: 'TAŞ',
-          signature_text: null,
-          signature_font: null,
-        },
-      };
-    }
-    return approval;
-  });
+  // V5: PDF'te sadece aktif revize turunun approval'ları render edilmeli.
+  // Eski cycle kayıtları audit için DB'de duruyor ama PDF'te görünmemeli.
+  const activeCycle = ((request as { current_revision_cycle?: number }).current_revision_cycle) ?? 0;
+  const approvals: PdfApproval[] = ((request.approvals || []) as Array<PdfApproval & { revision_cycle?: number }>)
+    .filter((approval) => (approval.revision_cycle ?? 0) === activeCycle)
+    .map((approval) => {
+      const step = approval.workflow_step;
+      if (step?.phase === 'COMPLETION' && step?.form_section_key === 'ykb_signed_pdf') {
+        return {
+          ...approval,
+          approver: {
+            ...approval.approver,
+            id: FOUNDER_PSEUDO_ID,
+            first_name: 'RAMAZAN',
+            last_name: 'TAŞ',
+            signature_text: null,
+            signature_font: null,
+          },
+        };
+      }
+      return approval;
+    });
 
   // Font-based imzaları topla
   const signatures: Record<string, SignatureInfo> = {};

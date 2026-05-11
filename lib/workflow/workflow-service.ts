@@ -279,6 +279,8 @@ function shouldSkipStep(
  * @param formData - Opsiyonel. Koşullu adımlar için süreç-spesifik form verisi.
  * @param dynamicApprovers - Opsiyonel. DYNAMIC_USER_LIST adımları için workflow_step_id → sıralı employee_id listesi eşlemesi.
  *                           Liste boş/tanımsız olan DYNAMIC_USER_LIST adımları atlanır.
+ * @param cycle - V5: Bu chain'in hangi revize turuna ait olduğunu belirtir. İlk submit'te 0 (default),
+ *                resubmit'te artırılarak çağrılır. Eski cycle'ın kayıtları audit için silinmez.
  */
 export async function createApprovalChain(
   supabase: SupabaseClient,
@@ -286,7 +288,8 @@ export async function createApprovalChain(
   workflowDefinitionId: string,
   requesterEmployeeId: string,
   formData?: Record<string, unknown>,
-  dynamicApprovers?: CreateRequestDynamicApprovers
+  dynamicApprovers?: CreateRequestDynamicApprovers,
+  cycle: number = 0
 ): Promise<void> {
 
   // 1. Workflow adımlarını al
@@ -329,6 +332,7 @@ export async function createApprovalChain(
           decided_at: null,
           sequence_order: sequenceCounter,
           action_type: step.action_type,
+          revision_cycle: cycle,
         });
       }
       continue;
@@ -361,6 +365,7 @@ export async function createApprovalChain(
       decided_at: autoApproveThisStep ? new Date().toISOString() : null,
       sequence_order: sequenceCounter,
       action_type: step.action_type, // Forward-approve kontrolü için
+      revision_cycle: cycle,
     });
   }
 
@@ -382,7 +387,11 @@ export async function createApprovalChain(
   }
 
   // 4. action_type alanını çıkar (DB'de yok), sonra tüm approval kayıtlarını ekle
-  const approvalsForInsert = approvals.map(({ action_type: _, ...rest }) => rest);
+  const approvalsForInsert = approvals.map((a) => {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { action_type, ...rest } = a;
+    return rest;
+  });
 
   const { error: insertError } = await supabase
     .from('request_approvals')

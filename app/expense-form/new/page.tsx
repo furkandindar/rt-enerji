@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useForm, useFieldArray, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -85,9 +85,13 @@ const formatTRY = (value: number) =>
 
 export default function NewExpenseFormPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const editId = searchParams.get("edit");
+  const isEditMode = !!editId;
   const supabase = createClient();
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [loadingEditData, setLoadingEditData] = useState<boolean>(isEditMode);
   const [signatureAccepted, setSignatureAccepted] = useState(false);
   const [signatureInfo, setSignatureInfo] = useState<SignatureInfo>({
     signatureText: null,
@@ -146,6 +150,92 @@ export default function NewExpenseFormPage() {
   const advanceNumber = Number(watchedAdvance) || 0;
   const balance = advanceNumber - totalExpenses;
 
+
+  // V5: Edit mode — ?edit=<id> ile gelirse mevcut talebi yükle
+  useEffect(() => {
+    if (!editId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/my-requests`);
+        if (!res.ok) {
+          toast.error("Talep bulunamadı");
+          return;
+        }
+        const body = await res.json();
+        const found = (body.requests as Array<{ id: string; expense_request?: Record<string, unknown> }>)?.find(
+          (r) => r.id === editId
+        );
+        if (!found || !found.expense_request) {
+          toast.error("Talep bulunamadı");
+          return;
+        }
+        const f = found.expense_request as {
+          request_date?: string;
+          project_name?: string;
+          project_code?: string;
+          is_travel?: boolean;
+          work_or_destination?: string;
+          travel_person_count?: number | null;
+          travel_date?: string | null;
+          travel_duration?: string | null;
+          advance_amount?: number | null;
+          items?: Array<{
+            row_order?: number;
+            item_date?: string;
+            document_no?: string | null;
+            description?: string;
+            amount?: number;
+          }>;
+        };
+        if (cancelled) return;
+        const sortedItems = (f.items ?? [])
+          .slice()
+          .sort((a, b) => (a.row_order ?? 0) - (b.row_order ?? 0))
+          .map((it) => ({
+            item_date: it.item_date ?? new Date().toISOString().split("T")[0],
+            document_no: it.document_no ?? "",
+            description: it.description ?? "",
+            amount: it.amount !== undefined && it.amount !== null ? String(it.amount) : "0",
+          }));
+        form.reset({
+          request_date: f.request_date ?? new Date().toISOString().split("T")[0],
+          project_name: f.project_name ?? "",
+          project_code: f.project_code ?? "",
+          is_travel: f.is_travel ? "yes" : "no",
+          work_or_destination: f.work_or_destination ?? "",
+          travel_person_count:
+            f.travel_person_count !== null && f.travel_person_count !== undefined
+              ? String(f.travel_person_count)
+              : "",
+          travel_date: f.travel_date ?? "",
+          travel_duration: f.travel_duration ?? "",
+          advance_amount:
+            f.advance_amount !== null && f.advance_amount !== undefined ? String(f.advance_amount) : "",
+          items:
+            sortedItems.length > 0
+              ? sortedItems
+              : [
+                  {
+                    item_date: new Date().toISOString().split("T")[0],
+                    document_no: "",
+                    description: "",
+                    amount: "0",
+                  },
+                ],
+        });
+      } catch (err) {
+        console.error("Edit data load error:", err);
+        toast.error("Talep yüklenirken hata oluştu");
+      } finally {
+        if (!cancelled) setLoadingEditData(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editId]);
 
   // Kullanıcı bilgileri + imza yükle
   useEffect(() => {
@@ -281,11 +371,13 @@ export default function NewExpenseFormPage() {
   };
 
   const hasValidSignature = Boolean(signatureInfo.signatureText && signatureInfo.signatureFont);
-  const canSubmit = hasValidSignature && signatureAccepted && !isSubmitting;
+  const canSubmit = isEditMode
+    ? !isSubmitting
+    : hasValidSignature && signatureAccepted && !isSubmitting;
 
 
   const onSubmit = async (data: ExpenseFormValues) => {
-    if (!signatureAccepted) {
+    if (!isEditMode && !signatureAccepted) {
       toast.error("Devam etmek için imzanızı onaylayın");
       return;
     }
@@ -318,40 +410,57 @@ export default function NewExpenseFormPage() {
         })),
       };
 
-      const response = await fetch("/api/expense-form", {
-        method: "POST",
+      const url = isEditMode ? `/api/expense-form/${editId}` : "/api/expense-form";
+      const method = isEditMode ? "PATCH" : "POST";
+
+      const response = await fetch(url, {
+        method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
 
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.error || "Talep oluşturulamadı");
+        throw new Error(error.error || (isEditMode ? "Talep güncellenemedi" : "Talep oluşturulamadı"));
       }
 
-      const result = await response.json();
-      const requestId: string = result.id;
+      if (isEditMode) {
+        // V5: Edit sonrası otomatik resubmit → talep onay akışına geri girer
+        const resubmitRes = await fetch(`/api/requests/${editId}/resubmit`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({}),
+        });
+        if (!resubmitRes.ok) {
+          const err = await resubmitRes.json().catch(() => ({}));
+          throw new Error(err.error || "Talep güncellendi ama yeniden gönderilemedi");
+        }
+        toast.success("Talep güncellendi ve onaya gönderildi");
+      } else {
+        const result = await response.json();
+        const requestId: string = result.id;
 
-      if (requestId && pendingFiles.length > 0) {
-        for (const file of pendingFiles) {
-          const formData = new FormData();
-          formData.append("file", file);
-          formData.append("request_id", requestId);
-          if (attachmentConfigId) {
-            formData.append("step_attachment_config_id", attachmentConfigId);
-          }
-          const uploadRes = await fetch("/api/attachments/upload", {
-            method: "POST",
-            body: formData,
-          });
-          if (!uploadRes.ok) {
-            console.error("Dosya yüklenemedi:", file.name);
-            toast.warning(`${file.name} yüklenemedi, talep yine de oluşturuldu`);
+        if (requestId && pendingFiles.length > 0) {
+          for (const file of pendingFiles) {
+            const formData = new FormData();
+            formData.append("file", file);
+            formData.append("request_id", requestId);
+            if (attachmentConfigId) {
+              formData.append("step_attachment_config_id", attachmentConfigId);
+            }
+            const uploadRes = await fetch("/api/attachments/upload", {
+              method: "POST",
+              body: formData,
+            });
+            if (!uploadRes.ok) {
+              console.error("Dosya yüklenemedi:", file.name);
+              toast.warning(`${file.name} yüklenemedi, talep yine de oluşturuldu`);
+            }
           }
         }
+        toast.success("Harcama formu talebi başarıyla oluşturuldu");
       }
 
-      toast.success("Harcama formu talebi başarıyla oluşturuldu");
       router.push("/my-requests");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Bir hata oluştu");
@@ -360,7 +469,7 @@ export default function NewExpenseFormPage() {
     }
   };
 
-  if (loadingUser) {
+  if (loadingUser || loadingEditData) {
     return (
       <div className="flex items-center justify-center p-12">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -373,8 +482,12 @@ export default function NewExpenseFormPage() {
   return (
     <div className="flex flex-col gap-4 p-4 sm:p-6">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Yeni Harcama Formu</h1>
-        <p className="text-muted-foreground">Harcamaları kalem kalem doldurun ve onaya gönderin</p>
+        <h1 className="text-2xl font-bold tracking-tight">
+          {isEditMode ? "Talebi Güncelle" : "Yeni Harcama Formu"}
+        </h1>
+        <p className="text-muted-foreground">
+          {isEditMode ? "Talep bilgilerini güncelleyin" : "Harcamaları kalem kalem doldurun ve onaya gönderin"}
+        </p>
       </div>
 
       <Card className="max-w-5xl">
@@ -739,7 +852,7 @@ export default function NewExpenseFormPage() {
                 </Button>
                 <Button type="submit" disabled={!canSubmit}>
                   {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  İmzala ve Talebi Gönder
+                  {isEditMode ? "Talebi Güncelle ve Gönder" : "İmzala ve Talebi Gönder"}
                 </Button>
               </div>
             </form>

@@ -5,10 +5,24 @@
 // ============================================================================
 
 export type ApproverType = 'REQUESTER' | 'UNIT_HEAD' | 'STATIC_POSITION' | 'DYNAMIC_USER_LIST';
-export type RequestStatus = 'DRAFT' | 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED' | 'AWAITING_COMPLETION' | 'COMPLETED';
-export type ApprovalStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
+export type RequestStatus =
+  | 'DRAFT'
+  | 'PENDING'
+  | 'APPROVED'
+  | 'REJECTED'
+  | 'CANCELLED'
+  | 'AWAITING_COMPLETION'
+  | 'COMPLETED'
+  | 'REVISION_REQUESTED';
+export type ApprovalStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'REVISION_REQUESTED';
 export type LeaveType = 'ANNUAL_LEAVE' | 'SHORT_LEAVE';
-export type NotificationType = 'APPROVAL_REQUIRED' | 'REQUEST_APPROVED' | 'REQUEST_REJECTED' | 'REQUEST_CANCELLED';
+export type NotificationType =
+  | 'APPROVAL_REQUIRED'
+  | 'REQUEST_APPROVED'
+  | 'REQUEST_REJECTED'
+  | 'REQUEST_CANCELLED'
+  | 'REQUEST_UPDATED'
+  | 'REVISION_REQUESTED';
 
 // V3: Yeni action type
 export type ActionType = 'FILL_AND_SIGN' | 'SIGN_ONLY';
@@ -70,6 +84,11 @@ export interface Request {
   completed_at: string | null;
   created_at: string;
   updated_at: string;
+  // V5: revision cycle ve audit alanları
+  current_revision_cycle: number;
+  last_action: string | null;
+  last_action_at: string | null;
+  last_action_by: string | null;
 }
 
 export interface RequestApproval {
@@ -82,6 +101,8 @@ export interface RequestApproval {
   decided_at: string | null;
   sequence_order: number; // Onay zincirindeki mutlak sıra (DYNAMIC_USER_LIST'te aynı step'e birden fazla satır olabilir)
   created_at: string;
+  // V5: bu kayıt hangi revize turuna ait
+  revision_cycle: number;
 }
 
 export interface LeaveRequest {

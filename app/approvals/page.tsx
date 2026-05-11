@@ -60,6 +60,7 @@ export default function ApprovalsPage() {
     setActualReturn,
     setUploadedAttachments,
     handleDecision,
+    handleRequestRevision,
     handleDownloadPDF,
     handlePageChange,
     handlePageSizeChange,
@@ -163,6 +164,7 @@ export default function ApprovalsPage() {
         canApprove={canApprove}
         isSubmitting={isSubmitting}
         handleDecision={handleDecision}
+        handleRequestRevision={handleRequestRevision}
         handleDownloadPDF={handleDownloadPDF}
       />
     </div>

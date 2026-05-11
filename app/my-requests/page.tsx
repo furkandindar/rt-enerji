@@ -52,6 +52,11 @@ import { getApproverDisplayName } from "@/lib/approvals/types";
 import { PdfViewerDialog } from "@/components/pdf-viewer-dialog";
 import { ComparisonFormDetails } from "@/components/approvals/comparison-form-details";
 import { ApprovalStatusBadge, RequestStatusBadge } from "@/components/approvals/status-badge";
+import { RequestLifecycleActions } from "@/components/my-requests/request-lifecycle-actions";
+import type {
+  RequestStatus as RequestLifecycleActionsStatus,
+  ApprovalStatus as RequestLifecycleActionsApprovalStatus,
+} from "@/lib/workflow/types";
 import { parseContentDispositionFilename } from "@/lib/pdf/file-naming";
 import { RichTextDisplay } from "@/components/ui/rich-text-display";
 
@@ -417,6 +422,7 @@ export default function MyRequestsPage() {
 
   useEffect(() => {
     fetchRequests();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workflowFilter, statusFilter]);
 
   const fetchRequests = async () => {
@@ -613,7 +619,9 @@ export default function MyRequestsPage() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Tüm Durumlar</SelectItem>
+            <SelectItem value="DRAFT">Taslak</SelectItem>
             <SelectItem value="PENDING">Beklemede</SelectItem>
+            <SelectItem value="REVISION_REQUESTED">Revize İstendi</SelectItem>
             <SelectItem value="APPROVED">Onaylandı</SelectItem>
             <SelectItem value="AWAITING_COMPLETION">Tamamlanma Bekleniyor</SelectItem>
             <SelectItem value="COMPLETED">Tamamlandı</SelectItem>
@@ -736,6 +744,25 @@ export default function MyRequestsPage() {
                   <RequestStatusBadge status={selectedRequest.status} />
                 </div>
               </div>
+
+              {/* V5: Yaşam döngüsü aksiyonları (Geri Çek / Düzenle / Yeniden Gönder / İptal) */}
+              <RequestLifecycleActions
+                request={{
+                  id: selectedRequest.id,
+                  status: selectedRequest.status as RequestLifecycleActionsStatus,
+                  workflow_definition: selectedRequest.workflow_definition
+                    ? { code: selectedRequest.workflow_definition.code }
+                    : null,
+                  approvals: (selectedRequest.approvals ?? []).map((a) => ({
+                    status: a.status as RequestLifecycleActionsApprovalStatus,
+                    approver_type: a.workflow_step?.approver_type,
+                  })),
+                }}
+                onChange={() => {
+                  setIsDetailOpen(false);
+                  fetchRequests();
+                }}
+              />
 
               {/* Leave Request specific fields */}
               {selectedRequest.leave_request && (

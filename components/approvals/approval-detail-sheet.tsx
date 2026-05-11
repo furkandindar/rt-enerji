@@ -81,6 +81,7 @@ interface ApprovalDetailSheetProps {
   canApprove: boolean;
   isSubmitting: boolean;
   handleDecision: (decision: "APPROVED" | "REJECTED") => void;
+  handleRequestRevision: () => void;
   handleDownloadPDF: (requestId: string) => void;
 }
 
@@ -130,6 +131,7 @@ export function ApprovalDetailSheet({
   canApprove,
   isSubmitting,
   handleDecision,
+  handleRequestRevision,
   handleDownloadPDF,
 }: ApprovalDetailSheetProps) {
   const [showPdfPreview, setShowPdfPreview] = useState(false);
@@ -305,6 +307,7 @@ export function ApprovalDetailSheet({
                 canApprove={canApprove}
                 isSubmitting={isSubmitting}
                 handleDecision={handleDecision}
+                handleRequestRevision={handleRequestRevision}
               />
             )}
 

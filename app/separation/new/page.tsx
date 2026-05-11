@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -66,7 +66,11 @@ interface SignatureInfo {
 
 export default function NewSeparationPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const editId = searchParams.get("edit");
+  const isEditMode = !!editId;
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [loadingEditData, setLoadingEditData] = useState<boolean>(isEditMode);
   const [signatureAccepted, setSignatureAccepted] = useState(false);
   const [signatureInfo, setSignatureInfo] = useState<SignatureInfo>({
     signatureText: null,
@@ -100,6 +104,7 @@ export default function NewSeparationPage() {
   }, [supabase]);
 
   const form = useForm<SeparationFormValues>({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     resolver: zodResolver(separationSchema) as any,
     defaultValues: {
       employee_name: "", employee_title: "", department: "", location: "",
@@ -110,25 +115,110 @@ export default function NewSeparationPage() {
     },
   });
 
+  // V5: Edit mode — ?edit=<id> ile gelirse mevcut talebi yükle
+  useEffect(() => {
+    if (!editId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/my-requests`);
+        if (!res.ok) {
+          toast.error("Talep bulunamadı");
+          return;
+        }
+        const body = await res.json();
+        const found = (body.requests as Array<{ id: string; separation_request?: Record<string, unknown> }>)?.find(
+          (r) => r.id === editId
+        );
+        if (!found || !found.separation_request) {
+          toast.error("Talep bulunamadı");
+          return;
+        }
+        const f = found.separation_request as {
+          employee_name?: string;
+          employee_title?: string;
+          department?: string;
+          location?: string;
+          job_description?: string;
+          reporting_manager?: string;
+          separation_date?: string;
+          separation_reason?: string;
+          employment_period?: string;
+          annual_leave_days?: number;
+          annual_leave_amount?: number;
+          severance_days?: number;
+          severance_amount?: number;
+          notice_weeks?: number;
+          notice_amount?: number;
+        };
+        if (cancelled) return;
+        form.reset({
+          employee_name: f.employee_name ?? "",
+          employee_title: f.employee_title ?? "",
+          department: f.department ?? "",
+          location: f.location ?? "",
+          job_description: f.job_description ?? "",
+          reporting_manager: f.reporting_manager ?? "",
+          separation_date: f.separation_date ? new Date(f.separation_date) : undefined,
+          separation_reason: f.separation_reason ?? "",
+          employment_period: f.employment_period ?? "",
+          annual_leave_days: f.annual_leave_days ?? 0,
+          annual_leave_amount: f.annual_leave_amount ?? 0,
+          severance_days: f.severance_days ?? 0,
+          severance_amount: f.severance_amount ?? 0,
+          notice_weeks: f.notice_weeks ?? 0,
+          notice_amount: f.notice_amount ?? 0,
+        } as SeparationFormValues);
+      } catch (err) {
+        console.error("Edit data load error:", err);
+        toast.error("Talep yüklenirken hata oluştu");
+      } finally {
+        if (!cancelled) setLoadingEditData(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editId]);
+
   const hasValidSignature = Boolean(signatureInfo.signatureText && signatureInfo.signatureFont);
   const canSubmit = hasValidSignature && signatureAccepted;
 
   const onSubmit = async (data: SeparationFormValues) => {
     setIsSubmitting(true);
     try {
-      const response = await fetch("/api/separation", {
-        method: "POST",
+      const payload = {
+        ...data,
+        separation_date: format(data.separation_date, "yyyy-MM-dd"),
+      };
+      const url = isEditMode ? `/api/separation/${editId}` : "/api/separation";
+      const method = isEditMode ? "PATCH" : "POST";
+
+      const response = await fetch(url, {
+        method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...data,
-          separation_date: format(data.separation_date, "yyyy-MM-dd"),
-        }),
+        body: JSON.stringify(payload),
       });
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.error || "Talep oluşturulamadı");
+        throw new Error(error.error || (isEditMode ? "Talep güncellenemedi" : "Talep oluşturulamadı"));
       }
-      toast.success("İşten çıkış takip formu başarıyla oluşturuldu");
+      if (isEditMode) {
+        // V5: Edit sonrası otomatik resubmit → talep onay akışına geri girer
+        const resubmitRes = await fetch(`/api/requests/${editId}/resubmit`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({}),
+        });
+        if (!resubmitRes.ok) {
+          const err = await resubmitRes.json().catch(() => ({}));
+          throw new Error(err.error || "Talep güncellendi ama yeniden gönderilemedi");
+        }
+        toast.success("Talep güncellendi ve onaya gönderildi");
+      } else {
+        toast.success("İşten çıkış takip formu başarıyla oluşturuldu");
+      }
       router.push("/my-requests");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Bir hata oluştu");
@@ -137,11 +227,23 @@ export default function NewSeparationPage() {
     }
   };
 
+  if (loadingEditData) {
+    return (
+      <div className="flex items-center justify-center p-12">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-4 p-4 sm:p-6">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">İşten Çıkış Takip Formu</h1>
-        <p className="text-muted-foreground">Ayrılan personel için işten çıkış takip formu oluşturun</p>
+        <h1 className="text-2xl font-bold tracking-tight">
+          {isEditMode ? "Talebi Güncelle" : "İşten Çıkış Takip Formu"}
+        </h1>
+        <p className="text-muted-foreground">
+          {isEditMode ? "Talep bilgilerini güncelleyin" : "Ayrılan personel için işten çıkış takip formu oluşturun"}
+        </p>
       </div>
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 max-w-2xl">
@@ -244,9 +346,9 @@ export default function NewSeparationPage() {
 
           <div className="flex gap-4">
             <Button type="button" variant="outline" onClick={() => router.back()}>İptal</Button>
-            <Button type="submit" disabled={isSubmitting || !canSubmit}>
+            <Button type="submit" disabled={isSubmitting || (!isEditMode && !canSubmit)}>
               {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              İmzala ve Formu Gönder
+              {isEditMode ? "Talebi Güncelle ve Gönder" : "İmzala ve Formu Gönder"}
             </Button>
           </div>
         </form>

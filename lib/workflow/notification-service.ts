@@ -256,3 +256,90 @@ export async function getUnreadNotificationCount(
   return count || 0;
 }
 
+/**
+ * V5: Talep güncellendiğinde, daha önce onaylamış onaycılara
+ * "talep güncellendi" bildirimi gönderir.
+ *
+ * Resubmit sonrası eski cycle'da APPROVED veren onaycılara distinct olarak çağrılır
+ * (talep edenin kendisi hariç).
+ */
+export async function notifyRequestUpdated(
+  supabase: SupabaseClient,
+  recipientEmployeeId: string,
+  requestId: string,
+  workflowName: string,
+  updaterName: string,
+  subject?: string
+): Promise<void> {
+  const userInfo = await getUserInfoByEmployeeId(supabase, recipientEmployeeId);
+  if (!userInfo) return;
+
+  const title = 'Talep Güncellendi';
+  const subjectLine = subject ? `\nKonu: ${subject}` : '';
+  const message = `Önceden onayladığınız ${workflowName} talebi ${updaterName} tarafından güncellendi ve onay zinciri yeniden başlatıldı.${subjectLine}`;
+  const type: NotificationType = 'REQUEST_UPDATED';
+
+  await createNotification(supabase, {
+    userId: userInfo.id,
+    title,
+    message,
+    type,
+    referenceId: requestId,
+  });
+
+  if (userInfo.email) {
+    const payload = await enrichEmailPayload(
+      supabase,
+      requestId,
+      { to: userInfo.email, title, message, type, ctaPath: '/approvals' },
+      userInfo.fullName
+    );
+    await sendNotificationEmail(payload);
+  }
+}
+
+/**
+ * V5: Onaycı "revize iste" dediğinde talep edene
+ * "düzeltmen gereken bir talep var" bildirimi gönderir.
+ */
+export async function notifyRevisionRequested(
+  supabase: SupabaseClient,
+  requesterEmployeeId: string,
+  requestId: string,
+  workflowName: string,
+  requestedByName: string,
+  comment: string,
+  subject?: string
+): Promise<void> {
+  const userInfo = await getUserInfoByEmployeeId(supabase, requesterEmployeeId);
+  if (!userInfo) return;
+
+  const title = 'Revize İstendi';
+  const subjectLine = subject ? `\nKonu: ${subject}` : '';
+  const message = `${workflowName} talebiniz için ${requestedByName} revize istedi. "${comment}"${subjectLine}`;
+  const type: NotificationType = 'REVISION_REQUESTED';
+
+  await createNotification(supabase, {
+    userId: userInfo.id,
+    title,
+    message,
+    type,
+    referenceId: requestId,
+  });
+
+  if (userInfo.email) {
+    const extras: DecisionExtras = {
+      decidedByName: requestedByName,
+      decisionComment: comment,
+    };
+    const payload = await enrichEmailPayload(
+      supabase,
+      requestId,
+      { to: userInfo.email, title, message, type, ctaPath: '/my-requests' },
+      userInfo.fullName,
+      extras
+    );
+    await sendNotificationEmail(payload);
+  }
+}
+

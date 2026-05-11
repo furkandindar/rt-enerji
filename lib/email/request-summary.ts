@@ -72,7 +72,7 @@ export async function buildRequestEmailContext(
   const { data: req } = await supabase
     .from('requests')
     .select(`
-      id, submitted_at, current_step,
+      id, submitted_at, current_step, current_revision_cycle,
       workflow_definition:workflow_definitions(id, code, name),
       requester:employees!requests_requester_employee_id_fkey(
         first_name, last_name,
@@ -114,6 +114,8 @@ export async function buildRequestEmailContext(
   const requesterPosition = primaryPosition?.position?.title || null;
 
   // 2) Onay zinciri (adım sayıları, sıradaki onaycı)
+  // V5: Sadece aktif cycle — eski cycle audit için tutuluyor.
+  const activeCycle = (req as { current_revision_cycle?: number }).current_revision_cycle ?? 0;
   const { data: approvals } = await supabase
     .from('request_approvals')
     .select(`
@@ -121,6 +123,7 @@ export async function buildRequestEmailContext(
       approver:employees!request_approvals_approver_employee_id_fkey(first_name, last_name)
     `)
     .eq('request_id', requestId)
+    .eq('revision_cycle', activeCycle)
     .order('sequence_order', { ascending: true });
 
   const totalSteps = approvals?.length || 0;

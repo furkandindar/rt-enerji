@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -99,7 +99,6 @@ import {
 import {
   Form,
   FormControl,
-  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -160,7 +159,11 @@ interface WorkflowOption {
 
 export default function NewLeaveRequestPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const editId = searchParams.get("edit");
+  const isEditMode = !!editId;
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [loadingEditData, setLoadingEditData] = useState<boolean>(isEditMode);
   const [signatureAccepted, setSignatureAccepted] = useState(false);
   const [signatureInfo, setSignatureInfo] = useState<SignatureInfo>({
     signatureText: null,
@@ -243,6 +246,63 @@ export default function NewLeaveRequestPage() {
     },
   });
 
+  // V5: Edit mode — ?edit=<id> ile gelirse mevcut talebi yükle
+  useEffect(() => {
+    if (!editId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/my-requests`);
+        if (!res.ok) {
+          toast.error("Talep bulunamadı");
+          return;
+        }
+        const body = await res.json();
+        const found = (body.requests as Array<{ id: string; leave_request?: Record<string, unknown>; workflow_definition?: { code?: string } }>)?.find(
+          (r) => r.id === editId
+        );
+        if (!found || !found.leave_request) {
+          toast.error("Talep bulunamadı");
+          return;
+        }
+        const f = found.leave_request as {
+          leave_type?: "ANNUAL_LEAVE" | "SHORT_LEAVE";
+          start_datetime?: string;
+          end_datetime?: string;
+          address_during_leave?: string | null;
+          reason?: string | null;
+          overtime_amount?: number | null;
+        };
+        const wfCode = (found.workflow_definition?.code as "ANNUAL_LEAVE" | "SHORT_LEAVE" | undefined) ?? f.leave_type ?? "ANNUAL_LEAVE";
+        if (cancelled) return;
+        const startDt = f.start_datetime ? new Date(f.start_datetime) : undefined;
+        const endDt = f.end_datetime ? new Date(f.end_datetime) : undefined;
+        const fmtTime = (d: Date) =>
+          `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+        form.reset({
+          workflow_code: wfCode,
+          leave_type: f.leave_type ?? wfCode,
+          start_date: startDt,
+          start_time: startDt ? fmtTime(startDt) : "09:00",
+          end_date: endDt,
+          end_time: endDt ? fmtTime(endDt) : "17:00",
+          address_during_leave: f.address_during_leave ?? "",
+          reason: f.reason ?? "",
+          overtime_amount: f.overtime_amount ?? undefined,
+        });
+      } catch (err) {
+        console.error("Edit data load error:", err);
+        toast.error("Talep yüklenirken hata oluştu");
+      } finally {
+        if (!cancelled) setLoadingEditData(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editId]);
+
   // İmza var ve kabul edildi mi?
   const hasValidSignature = Boolean(signatureInfo.signatureText && signatureInfo.signatureFont);
   const canSubmit = hasValidSignature && signatureAccepted;
@@ -276,27 +336,49 @@ export default function NewLeaveRequestPage() {
       const startDatetime = combineDateAndTime(data.start_date, data.start_time);
       const endDatetime = combineDateAndTime(data.end_date, data.end_time);
 
-      const response = await fetch("/api/leave-requests", {
-        method: "POST",
+      const payload: Record<string, unknown> = {
+        leave_type: data.leave_type,
+        start_datetime: startDatetime.toISOString(),
+        end_datetime: endDatetime.toISOString(),
+        total_days: totalDays,
+        address_during_leave: data.address_during_leave,
+        reason: data.reason,
+      };
+      if (!isEditMode) {
+        // workflow_code yalnızca create'te kullanılır; PATCH endpoint beklemiyor.
+        payload.workflow_code = data.workflow_code;
+      }
+
+      const url = isEditMode ? `/api/leave-requests/${editId}` : "/api/leave-requests";
+      const method = isEditMode ? "PATCH" : "POST";
+
+      const response = await fetch(url, {
+        method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          workflow_code: data.workflow_code,
-          leave_type: data.leave_type,
-          start_datetime: startDatetime.toISOString(),
-          end_datetime: endDatetime.toISOString(),
-          total_days: totalDays,
-          address_during_leave: data.address_during_leave,
-          reason: data.reason,
-        }),
+        body: JSON.stringify(payload),
       });
 
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.error || "Talep oluşturulamadı");
+        throw new Error(error.error || (isEditMode ? "Talep güncellenemedi" : "Talep oluşturulamadı"));
       }
 
-      toast.success("İzin talebi başarıyla oluşturuldu");
-      router.push("/leave-requests");
+      if (isEditMode) {
+        // V5: Edit sonrası otomatik resubmit → talep onay akışına geri girer
+        const resubmitRes = await fetch(`/api/requests/${editId}/resubmit`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({}),
+        });
+        if (!resubmitRes.ok) {
+          const err = await resubmitRes.json().catch(() => ({}));
+          throw new Error(err.error || "Talep güncellendi ama yeniden gönderilemedi");
+        }
+        toast.success("Talep güncellendi ve onaya gönderildi");
+      } else {
+        toast.success("İzin talebi başarıyla oluşturuldu");
+      }
+      router.push("/my-requests");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Bir hata oluştu");
     } finally {
@@ -309,11 +391,23 @@ export default function NewLeaveRequestPage() {
     form.setValue("workflow_code", value);
   };
 
+  if (loadingEditData) {
+    return (
+      <div className="flex items-center justify-center p-12">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-4 p-4 sm:p-6">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Yeni İzin Talebi</h1>
-        <p className="text-muted-foreground">İzin talebi oluşturun</p>
+        <h1 className="text-2xl font-bold tracking-tight">
+          {isEditMode ? "Talebi Güncelle" : "Yeni İzin Talebi"}
+        </h1>
+        <p className="text-muted-foreground">
+          {isEditMode ? "Talep bilgilerini güncelleyin" : "İzin talebi oluşturun"}
+        </p>
       </div>
 
       <Card className="max-w-2xl">
@@ -582,11 +676,11 @@ export default function NewLeaveRequestPage() {
                 >
                   İptal
                 </Button>
-                <Button type="submit" disabled={isSubmitting || !canSubmit}>
+                <Button type="submit" disabled={isSubmitting || (!isEditMode && !canSubmit)}>
                   {isSubmitting && (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   )}
-                  İmzala ve Talebi Gönder
+                  {isEditMode ? "Talebi Güncelle ve Gönder" : "İmzala ve Talebi Gönder"}
                 </Button>
               </div>
             </form>

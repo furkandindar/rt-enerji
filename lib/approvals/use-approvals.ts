@@ -361,6 +361,38 @@ export function useApprovals() {
     }
   };
 
+  // V5: Onaycı "revize iste" diyor — comment zorunlu, request_approvals → REVISION_REQUESTED
+  const handleRequestRevision = async () => {
+    if (!selectedApproval) return;
+    if (!comment.trim()) {
+      toast.error("Revize için yorum zorunludur");
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const response = await fetch(`/api/approvals/${selectedApproval.id}/request-revision`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ comment }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Revize istenemedi");
+      }
+
+      toast.success("Revize istendi");
+      setSelectedApproval(null);
+      setComment("");
+      fetchApprovals();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Bir hata oluştu");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const handleDownloadPDF = async (requestId: string) => {
     try {
       toast.loading("PDF indiriliyor...");
@@ -527,6 +559,7 @@ export function useApprovals() {
 
     // Handlers
     handleDecision,
+    handleRequestRevision,
     handleDownloadPDF,
     handlePageChange,
     handlePageSizeChange,

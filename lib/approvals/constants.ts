@@ -109,12 +109,14 @@ export const approvalStatusLabels: Record<string, string> = {
   PENDING: "Bekliyor",
   APPROVED: "Onayladı",
   REJECTED: "Reddetti",
+  REVISION_REQUESTED: "Revize İstedi",
 };
 
 export const approvalStatusColors: Record<string, string> = {
   PENDING: "bg-yellow-500",
   APPROVED: "bg-green-500",
   REJECTED: "bg-red-500",
+  REVISION_REQUESTED: "bg-orange-500",
 };
 
 export const requestStatusLabels: Record<string, string> = {
@@ -125,6 +127,7 @@ export const requestStatusLabels: Record<string, string> = {
   CANCELLED: "İptal Edildi",
   AWAITING_COMPLETION: "Tamamlanma Bekleniyor",
   COMPLETED: "Tamamlandı",
+  REVISION_REQUESTED: "Revize İstendi",
 };
 
 export const requestStatusColors: Record<string, string> = {
@@ -135,6 +138,7 @@ export const requestStatusColors: Record<string, string> = {
   CANCELLED: "bg-gray-400",
   AWAITING_COMPLETION: "bg-blue-500",
   COMPLETED: "bg-green-700",
+  REVISION_REQUESTED: "bg-orange-500",
 };
 
 export const ONBOARDING_SECTION_KEYS = ['section_2', 'section_3', 'section_4', 'section_5', 'section_6'] as const;

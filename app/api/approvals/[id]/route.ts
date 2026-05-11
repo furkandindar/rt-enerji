@@ -94,9 +94,15 @@ export async function PATCH(
       return NextResponse.json({ error: "Already processed" }, { status: 400 });
     }
 
-    // Sırası mı? (sequence_order — DYNAMIC_USER_LIST ile uyumlu)
+    // V5: Aktif revize turuna ait mi? Eski cycle'ın PENDING kayıtları audit için duruyor,
+    // onlara işlem yapılamaz.
     const requestData = approval.request;
     const stepData = approval.workflow_step;
+    if ((approval.revision_cycle ?? 0) !== (requestData.current_revision_cycle ?? 0)) {
+      return NextResponse.json({ error: "Approval belongs to an outdated revision cycle" }, { status: 409 });
+    }
+
+    // Sırası mı? (sequence_order — DYNAMIC_USER_LIST ile uyumlu)
     if (requestData.current_step !== approval.sequence_order) {
       return NextResponse.json({ error: "Not your turn to approve" }, { status: 400 });
     }
@@ -457,6 +463,7 @@ export async function PATCH(
       ) || false;
 
       // Tüm approval kayıtlarını al (sequence_order ile sıralı)
+      // V5: Sadece aktif cycle — eski cycle audit için tutuluyor, otomatik onay verilemez.
       const { data: allApprovals } = await supabase
         .from("request_approvals")
         .select(`
@@ -467,6 +474,7 @@ export async function PATCH(
           workflow_step:workflow_steps(step_order, phase, action_type)
         `)
         .eq("request_id", requestData.id)
+        .eq("revision_cycle", requestData.current_revision_cycle ?? 0)
         .order("sequence_order", { ascending: true });
 
       const totalApprovalCount = allApprovals?.length || 0;

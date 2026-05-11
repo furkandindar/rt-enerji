@@ -1485,6 +1485,7 @@ export type Database = {
           decided_at: string | null
           id: string
           request_id: string
+          revision_cycle: number
           sequence_order: number
           status: Database["public"]["Enums"]["approval_status"]
           workflow_step_id: string
@@ -1496,6 +1497,7 @@ export type Database = {
           decided_at?: string | null
           id?: string
           request_id: string
+          revision_cycle?: number
           sequence_order: number
           status?: Database["public"]["Enums"]["approval_status"]
           workflow_step_id: string
@@ -1507,6 +1509,7 @@ export type Database = {
           decided_at?: string | null
           id?: string
           request_id?: string
+          revision_cycle?: number
           sequence_order?: number
           status?: Database["public"]["Enums"]["approval_status"]
           workflow_step_id?: string
@@ -1653,8 +1656,12 @@ export type Database = {
         Row: {
           completed_at: string | null
           created_at: string
+          current_revision_cycle: number
           current_step: number
           id: string
+          last_action: string | null
+          last_action_at: string | null
+          last_action_by: string | null
           parent_request_id: string | null
           pdf_path: string | null
           request_no: string
@@ -1667,11 +1674,15 @@ export type Database = {
         Insert: {
           completed_at?: string | null
           created_at?: string
+          current_revision_cycle?: number
           current_step?: number
           id?: string
+          last_action?: string | null
+          last_action_at?: string | null
+          last_action_by?: string | null
           parent_request_id?: string | null
           pdf_path?: string | null
-          request_no?: string
+          request_no: string
           requester_employee_id: string
           status?: Database["public"]["Enums"]["request_status"]
           submitted_at?: string | null
@@ -1681,8 +1692,12 @@ export type Database = {
         Update: {
           completed_at?: string | null
           created_at?: string
+          current_revision_cycle?: number
           current_step?: number
           id?: string
+          last_action?: string | null
+          last_action_at?: string | null
+          last_action_by?: string | null
           parent_request_id?: string | null
           pdf_path?: string | null
           request_no?: string
@@ -1693,6 +1708,13 @@ export type Database = {
           workflow_definition_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "requests_last_action_by_fkey"
+            columns: ["last_action_by"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "requests_parent_request_id_fkey"
             columns: ["parent_request_id"]
@@ -2424,10 +2446,15 @@ export type Database = {
         Args: { p_request_id: string }
         Returns: boolean
       }
+      next_request_no: { Args: { p_year: number }; Returns: string }
     }
     Enums: {
       accounting_capacity_type: "KAPASITE" | "ANASAHA" | "YEKA"
-      approval_status: "PENDING" | "APPROVED" | "REJECTED"
+      approval_status:
+        | "PENDING"
+        | "APPROVED"
+        | "REJECTED"
+        | "REVISION_REQUESTED"
       approver_type:
         | "REQUESTER"
         | "UNIT_HEAD"
@@ -2445,6 +2472,8 @@ export type Database = {
         | "REQUEST_APPROVED"
         | "REQUEST_REJECTED"
         | "REQUEST_CANCELLED"
+        | "REQUEST_UPDATED"
+        | "REVISION_REQUESTED"
       overtime_reason_category:
         | "SHIFT_OUTSIDE"
         | "NON_CONTINUOUS"
@@ -2463,6 +2492,7 @@ export type Database = {
         | "CANCELLED"
         | "AWAITING_COMPLETION"
         | "COMPLETED"
+        | "REVISION_REQUESTED"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -2591,7 +2621,12 @@ export const Constants = {
   public: {
     Enums: {
       accounting_capacity_type: ["KAPASITE", "ANASAHA", "YEKA"],
-      approval_status: ["PENDING", "APPROVED", "REJECTED"],
+      approval_status: [
+        "PENDING",
+        "APPROVED",
+        "REJECTED",
+        "REVISION_REQUESTED",
+      ],
       approver_type: [
         "REQUESTER",
         "UNIT_HEAD",
@@ -2610,6 +2645,8 @@ export const Constants = {
         "REQUEST_APPROVED",
         "REQUEST_REJECTED",
         "REQUEST_CANCELLED",
+        "REQUEST_UPDATED",
+        "REVISION_REQUESTED",
       ],
       overtime_reason_category: [
         "SHIFT_OUTSIDE",
@@ -2630,6 +2667,7 @@ export const Constants = {
         "CANCELLED",
         "AWAITING_COMPLETION",
         "COMPLETED",
+        "REVISION_REQUESTED",
       ],
     },
   },

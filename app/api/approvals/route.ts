@@ -81,6 +81,7 @@ export async function GET() {
             decided_at,
             created_at,
             sequence_order,
+            revision_cycle,
             workflow_step:workflow_steps(
               step_order,
               name,
@@ -106,23 +107,65 @@ export async function GET() {
 
     // mukayese_prices, mukayese_items altında nested gelir; consumer'lar için
     // top-level mukayese_request.prices flat array'ine düzleştir.
+    // Aynı geçişte V5: nested approvals'ı aktif cycle'a filtrele.
     for (const a of allApprovals || []) {
-      const m = (a as { request?: { mukayese_request?: { items?: Array<{ prices?: unknown[] }>; prices?: unknown[] } } }).request?.mukayese_request;
+      const req = (a as { request?: { mukayese_request?: { items?: Array<{ prices?: unknown[] }>; prices?: unknown[] }; current_revision_cycle?: number; approvals?: Array<{ revision_cycle?: number }> } }).request;
+      const m = req?.mukayese_request;
       if (m?.items) m.prices = m.items.flatMap((it) => it.prices ?? []);
+
+      const activeCycle = req?.current_revision_cycle ?? 0;
+      if (req && Array.isArray(req.approvals)) {
+        req.approvals = req.approvals.filter((x) => (x.revision_cycle ?? 0) === activeCycle);
+      }
     }
 
-    // Bekleyen onayları filtrele (PENDING ve sırası gelen)
+    // Bekleyen onayları filtrele:
+    // PENDING + sırası gelen + AKTİF CYCLE (eski cycle'ın PENDING'i zaten REVISION_REQUESTED veya
+    // yeni cycle PENDING'i ile değişmiş olur, yine de güvenlik için filter)
     const pendingApprovals = allApprovals?.filter(approval => {
-      const request = approval.request;
+      const request = approval.request as { current_step?: number; current_revision_cycle?: number } | null;
       return approval.status === "PENDING" &&
              request &&
-             request.current_step === approval.sequence_order;
+             request.current_step === approval.sequence_order &&
+             (approval.revision_cycle ?? 0) === (request.current_revision_cycle ?? 0);
     }) || [];
 
-    // Onay geçmişini filtrele (APPROVED veya REJECTED)
-    const approvalHistory = allApprovals?.filter(approval => {
-      return approval.status === "APPROVED" || approval.status === "REJECTED";
-    }) || [];
+    // Onay geçmişi: APPROVED, REJECTED veya REVISION_REQUESTED (V5: revize iste de history sayılır)
+    //
+    // V5 filter kuralları:
+    // 1. REQUESTER tipindeki auto-APPROVED kayıtlar gerçek onay kararı değil
+    //    (createApprovalChain insert anında talep gönderme imzası olarak işaretliyor).
+    // 2. Forward auto-approve dedup: aynı kullanıcı aynı talepte birden fazla adımda
+    //    onaycı olabilir (örn. 2. adım UNIT_HEAD + 4. adım STATIC_POSITION). Onaycı
+    //    gerçek kararını verdiğinde aynı kişiye ait ilerideki SIGN_ONLY adımlar
+    //    otomatik APPROVED'a çekilir (app/api/approvals/[id]/route.ts forward
+    //    auto-approve mantığı). Bu auto-APPROVED kayıtlar fiilen verilen bir karar
+    //    değil; history'de gösterirsek aynı talep N kez listelenir.
+    //    Çözüm: (request_id, revision_cycle) için en küçük sequence_order'lı kaydı
+    //    tutuyoruz — bu fiilen tıklanan karardır.
+    const filteredHistory = (allApprovals ?? []).filter(approval => {
+      if (!["APPROVED", "REJECTED", "REVISION_REQUESTED"].includes(approval.status)) {
+        return false;
+      }
+      const stepType = Array.isArray(approval.workflow_step)
+        ? approval.workflow_step[0]?.approver_type
+        : (approval.workflow_step as { approver_type?: string } | null)?.approver_type;
+      return stepType !== "REQUESTER";
+    });
+
+    type HistoryRow = (typeof filteredHistory)[number];
+    const dedupMap = new Map<string, HistoryRow>();
+    for (const a of filteredHistory) {
+      const requestId = (a as { request_id: string }).request_id;
+      const cycle = (a as { revision_cycle?: number }).revision_cycle ?? 0;
+      const seq = (a as { sequence_order: number }).sequence_order;
+      const key = `${requestId}:${cycle}`;
+      const existing = dedupMap.get(key);
+      if (!existing || seq < (existing as { sequence_order: number }).sequence_order) {
+        dedupMap.set(key, a);
+      }
+    }
+    const approvalHistory = Array.from(dedupMap.values());
 
     return NextResponse.json({
       pending: pendingApprovals,

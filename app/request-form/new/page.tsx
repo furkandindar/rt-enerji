@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -60,7 +60,11 @@ interface Company {
 
 export default function NewRequestFormPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const editId = searchParams.get("edit");
+  const isEditMode = !!editId;
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [loadingEditData, setLoadingEditData] = useState<boolean>(isEditMode);
   const [signatureAccepted, setSignatureAccepted] = useState(false);
   const [signatureInfo, setSignatureInfo] = useState<SignatureInfo>({
     signatureText: null,
@@ -155,6 +159,61 @@ export default function NewRequestFormPage() {
     };
   }, []);
 
+  // V5: Edit mode — ?edit=<id> ile gelirse mevcut talebi yükle
+  useEffect(() => {
+    if (!editId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/my-requests?workflow_code=REQUEST_FORM`);
+        if (!res.ok) {
+          toast.error("Talep bulunamadı");
+          return;
+        }
+        const body = await res.json();
+        const found = (body.requests as Array<{ id: string; request_form_request?: Record<string, unknown> }>)?.find(
+          (r) => r.id === editId
+        );
+        if (!found || !found.request_form_request) {
+          toast.error("Talep bulunamadı");
+          return;
+        }
+        const f = found.request_form_request as {
+          requester_name?: string;
+          company?: string;
+          request_date?: string;
+          subject?: string;
+          content?: string;
+          quantity?: string | null;
+          amount?: number | null;
+          reason?: string | null;
+          request_type?: "MUTFAK" | "KIRTASIYE" | "DIGER";
+        };
+        if (cancelled) return;
+        form.reset({
+          requester_name: f.requester_name ?? "",
+          company: f.company ?? "",
+          request_date: f.request_date ?? new Date().toISOString().split("T")[0],
+          subject: f.subject ?? "",
+          content: f.content ?? "",
+          quantity: f.quantity ?? "",
+          amount: f.amount ?? undefined,
+          reason: f.reason ?? "",
+          request_type: f.request_type,
+        });
+      } catch (err) {
+        console.error("Edit data load error:", err);
+        toast.error("Talep yüklenirken hata oluştu");
+      } finally {
+        if (!cancelled) setLoadingEditData(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editId]);
+
   // Attachment config yükle
   useEffect(() => {
     const loadAttachmentConfig = async () => {
@@ -225,51 +284,69 @@ export default function NewRequestFormPage() {
   const onSubmit = async (data: RequestFormValues) => {
     setIsSubmitting(true);
     try {
-      const response = await fetch("/api/request-form", {
-        method: "POST",
+      const payload = {
+        requester_name: data.requester_name,
+        company: data.company,
+        request_date: data.request_date,
+        subject: data.subject,
+        content: data.content,
+        quantity: data.quantity || undefined,
+        amount: data.amount || undefined,
+        reason: data.reason || undefined,
+        request_type: data.request_type,
+      };
+
+      const url = isEditMode ? `/api/request-form/${editId}` : "/api/request-form";
+      const method = isEditMode ? "PATCH" : "POST";
+
+      const response = await fetch(url, {
+        method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          requester_name: data.requester_name,
-          company: data.company,
-          request_date: data.request_date,
-          subject: data.subject,
-          content: data.content,
-          quantity: data.quantity || undefined,
-          amount: data.amount || undefined,
-          reason: data.reason || undefined,
-          request_type: data.request_type,
-        }),
+        body: JSON.stringify(payload),
       });
 
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.error || "Talep oluşturulamadı");
+        throw new Error(error.error || (isEditMode ? "Talep güncellenemedi" : "Talep oluşturulamadı"));
       }
 
-      const result = await response.json();
-      const requestId: string = result.id;
-
-      // Dosyaları yükle (talep oluşturulduktan sonra)
-      if (requestId && pendingFiles.length > 0) {
-        for (const file of pendingFiles) {
-          const formData = new FormData();
-          formData.append("file", file);
-          formData.append("request_id", requestId);
-          if (attachmentConfigId) {
-            formData.append("step_attachment_config_id", attachmentConfigId);
-          }
-          const uploadRes = await fetch("/api/attachments/upload", {
-            method: "POST",
-            body: formData,
-          });
-          if (!uploadRes.ok) {
-            console.error("Dosya yüklenemedi:", file.name);
-            toast.warning(`${file.name} yüklenemedi, talep yine de oluşturuldu`);
+      if (isEditMode) {
+        // V5: Edit sonrası otomatik resubmit → talep onay akışına geri girer
+        const resubmitRes = await fetch(`/api/requests/${editId}/resubmit`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({}),
+        });
+        if (!resubmitRes.ok) {
+          const err = await resubmitRes.json().catch(() => ({}));
+          throw new Error(err.error || "Talep güncellendi ama yeniden gönderilemedi");
+        }
+        toast.success("Talep güncellendi ve onaya gönderildi");
+      } else {
+        // Create akışı: dosyaları yükle
+        const result = await response.json();
+        const requestId: string = result.id;
+        if (requestId && pendingFiles.length > 0) {
+          for (const file of pendingFiles) {
+            const formData = new FormData();
+            formData.append("file", file);
+            formData.append("request_id", requestId);
+            if (attachmentConfigId) {
+              formData.append("step_attachment_config_id", attachmentConfigId);
+            }
+            const uploadRes = await fetch("/api/attachments/upload", {
+              method: "POST",
+              body: formData,
+            });
+            if (!uploadRes.ok) {
+              console.error("Dosya yüklenemedi:", file.name);
+              toast.warning(`${file.name} yüklenemedi, talep yine de oluşturuldu`);
+            }
           }
         }
+        toast.success("Talep formu başarıyla oluşturuldu");
       }
 
-      toast.success("Talep formu başarıyla oluşturuldu");
       router.push("/my-requests");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Bir hata oluştu");
@@ -278,7 +355,7 @@ export default function NewRequestFormPage() {
     }
   };
 
-  if (loadingUser) {
+  if (loadingUser || loadingEditData) {
     return (
       <div className="flex items-center justify-center p-12">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -289,8 +366,12 @@ export default function NewRequestFormPage() {
   return (
     <div className="flex flex-col gap-4 p-4 sm:p-6">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Yeni Talep Formu</h1>
-        <p className="text-muted-foreground">Talep formunuzu doldurun ve gönderin</p>
+        <h1 className="text-2xl font-bold tracking-tight">
+          {isEditMode ? "Talebi Güncelle" : "Yeni Talep Formu"}
+        </h1>
+        <p className="text-muted-foreground">
+          {isEditMode ? "Talep bilgilerini güncelleyin" : "Talep formunuzu doldurun ve gönderin"}
+        </p>
       </div>
 
       <Card className="max-w-2xl">
@@ -564,11 +645,11 @@ export default function NewRequestFormPage() {
                 >
                   İptal
                 </Button>
-                <Button type="submit" disabled={isSubmitting || !canSubmit}>
+                <Button type="submit" disabled={isSubmitting || (!isEditMode && !canSubmit)}>
                   {isSubmitting && (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   )}
-                  İmzala ve Talebi Gönder
+                  {isEditMode ? "Talebi Güncelle ve Gönder" : "İmzala ve Talebi Gönder"}
                 </Button>
               </div>
             </form>

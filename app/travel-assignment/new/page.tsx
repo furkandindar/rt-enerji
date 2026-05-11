@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -75,7 +75,11 @@ interface Company {
 
 export default function NewTravelAssignmentPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const editId = searchParams.get("edit");
+  const isEditMode = !!editId;
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [loadingEditData, setLoadingEditData] = useState<boolean>(isEditMode);
   const [signatureAccepted, setSignatureAccepted] = useState(false);
   const [signatureInfo, setSignatureInfo] = useState<SignatureInfo>({
     signatureText: null,
@@ -158,21 +162,105 @@ export default function NewTravelAssignmentPage() {
   const accommodationNeeded = form.watch("accommodation_needed");
   const advanceRequested = form.watch("advance_requested");
 
+  // V5: Edit mode — ?edit=<id> ile gelirse mevcut talebi yükle
+  useEffect(() => {
+    if (!editId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/my-requests`);
+        if (!res.ok) {
+          toast.error("Talep bulunamadı");
+          return;
+        }
+        const body = await res.json();
+        const found = (body.requests as Array<{ id: string; travel_assignment_request?: Record<string, unknown> }>)?.find(
+          (r) => r.id === editId
+        );
+        if (!found || !found.travel_assignment_request) {
+          toast.error("Talep bulunamadı");
+          return;
+        }
+        const f = found.travel_assignment_request as {
+          company_id?: string;
+          assignment_subject?: string;
+          destination_city?: string;
+          destination_institution?: string;
+          estimated_departure_at?: string;
+          estimated_return_at?: string;
+          transportation_type?: "COMPANY_VEHICLE" | "RENTAL_VEHICLE" | "AIRPLANE" | "OTHER";
+          transportation_cost?: number;
+          accommodation_needed?: boolean;
+          accommodation_cost?: number;
+          advance_requested?: boolean;
+          advance_amount?: number | null;
+          advance_subject?: string | null;
+          advance_content?: string | null;
+        };
+        if (cancelled) return;
+        const toDateTimeLocal = (iso: string | undefined): string =>
+          iso ? iso.slice(0, 16) : "";
+        form.reset({
+          company_id: f.company_id ?? "",
+          assignment_subject: f.assignment_subject ?? "",
+          destination_city: f.destination_city ?? "",
+          destination_institution: f.destination_institution ?? "",
+          estimated_departure_at: toDateTimeLocal(f.estimated_departure_at),
+          estimated_return_at: toDateTimeLocal(f.estimated_return_at),
+          transportation_type: f.transportation_type,
+          transportation_cost: f.transportation_cost ?? 0,
+          accommodation_needed: f.accommodation_needed ?? false,
+          accommodation_cost: f.accommodation_cost ?? 0,
+          advance_requested: f.advance_requested ?? false,
+          advance_amount: f.advance_amount ?? undefined,
+          advance_subject: f.advance_subject ?? undefined,
+          advance_content: f.advance_content ?? undefined,
+        });
+      } catch (err) {
+        console.error("Edit data load error:", err);
+        toast.error("Talep yüklenirken hata oluştu");
+      } finally {
+        if (!cancelled) setLoadingEditData(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editId]);
+
   const onSubmit = async (data: TravelAssignmentFormValues) => {
     setIsSubmitting(true);
     try {
-      const response = await fetch("/api/travel-assignment", {
-        method: "POST",
+      const url = isEditMode ? `/api/travel-assignment/${editId}` : "/api/travel-assignment";
+      const method = isEditMode ? "PATCH" : "POST";
+
+      const response = await fetch(url, {
+        method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
       });
 
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.error || "Talep oluşturulamadı");
+        throw new Error(error.error || (isEditMode ? "Talep güncellenemedi" : "Talep oluşturulamadı"));
       }
 
-      toast.success("Görev formu başarıyla oluşturuldu");
+      if (isEditMode) {
+        // V5: Edit sonrası otomatik resubmit → talep onay akışına geri girer
+        const resubmitRes = await fetch(`/api/requests/${editId}/resubmit`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({}),
+        });
+        if (!resubmitRes.ok) {
+          const err = await resubmitRes.json().catch(() => ({}));
+          throw new Error(err.error || "Talep güncellendi ama yeniden gönderilemedi");
+        }
+        toast.success("Talep güncellendi ve onaya gönderildi");
+      } else {
+        toast.success("Görev formu başarıyla oluşturuldu");
+      }
       router.push("/my-requests");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Bir hata oluştu");
@@ -181,11 +269,23 @@ export default function NewTravelAssignmentPage() {
     }
   };
 
+  if (loadingEditData) {
+    return (
+      <div className="flex items-center justify-center p-12">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-4 p-4 sm:p-6">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Yeni Şehir İçi/Dışı Görev Formu</h1>
-        <p className="text-muted-foreground">Görev bilgilerinizi doldurun ve onaya gönderin</p>
+        <h1 className="text-2xl font-bold tracking-tight">
+          {isEditMode ? "Talebi Güncelle" : "Yeni Şehir İçi/Dışı Görev Formu"}
+        </h1>
+        <p className="text-muted-foreground">
+          {isEditMode ? "Talep bilgilerini güncelleyin" : "Görev bilgilerinizi doldurun ve onaya gönderin"}
+        </p>
       </div>
 
       <Card className="max-w-2xl">
@@ -505,11 +605,11 @@ export default function NewTravelAssignmentPage() {
                 >
                   İptal
                 </Button>
-                <Button type="submit" disabled={isSubmitting || !canSubmit}>
+                <Button type="submit" disabled={isSubmitting || (!isEditMode && !canSubmit)}>
                   {isSubmitting && (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   )}
-                  İmzala ve Talebi Gönder
+                  {isEditMode ? "Talebi Güncelle ve Gönder" : "İmzala ve Talebi Gönder"}
                 </Button>
               </div>
             </form>

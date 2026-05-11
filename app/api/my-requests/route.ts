@@ -83,6 +83,7 @@ export async function GET(request: NextRequest) {
           decided_at,
           created_at,
           sequence_order,
+          revision_cycle,
           workflow_step:workflow_steps(
             step_order,
             name,
@@ -126,6 +127,18 @@ export async function GET(request: NextRequest) {
     for (const r of filteredRequests) {
       const m = (r as { mukayese_request?: { items?: Array<{ prices?: unknown[] }>; prices?: unknown[] } }).mukayese_request;
       if (m?.items) m.prices = m.items.flatMap((it) => it.prices ?? []);
+    }
+
+    // V5: approvals'ı sadece aktif cycle'a filtrele (eski cycle audit için DB'de kalır
+    // ama UI/onaycı listeleri yalnız aktif cycle'ı görmeli)
+    for (const r of filteredRequests) {
+      const reqRec = r as { current_revision_cycle?: number; approvals?: Array<{ revision_cycle?: number }> };
+      const activeCycle = reqRec.current_revision_cycle ?? 0;
+      if (Array.isArray(reqRec.approvals)) {
+        reqRec.approvals = reqRec.approvals.filter(
+          (a) => (a.revision_cycle ?? 0) === activeCycle
+        );
+      }
     }
 
     // Get workflow definitions for filter dropdown

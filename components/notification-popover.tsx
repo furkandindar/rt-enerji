@@ -23,6 +23,8 @@ const notificationTypeColors: Record<string, string> = {
   REQUEST_APPROVED: "bg-green-500",
   REQUEST_REJECTED: "bg-red-500",
   REQUEST_CANCELLED: "bg-gray-500",
+  REQUEST_UPDATED: "bg-blue-500",
+  REVISION_REQUESTED: "bg-orange-500",
 };
 
 export function NotificationPopover() {
@@ -51,7 +53,7 @@ export function NotificationPopover() {
         // Rollback on error - refetch yapılabilir
         toast.error("Bildirim güncellenemedi");
       }
-    } catch (error) {
+    } catch {
       toast.error("Bildirim güncellenemedi");
     }
   };
@@ -70,7 +72,7 @@ export function NotificationPopover() {
       } else {
         toast.error("Bildirimler güncellenemedi");
       }
-    } catch (error) {
+    } catch {
       toast.error("Bildirimler güncellenemedi");
     }
   };

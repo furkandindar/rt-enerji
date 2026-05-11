@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -167,9 +167,13 @@ function seedMatrix(): { items: MatrixItem[]; suppliers: MatrixSupplier[]; price
 
 export default function NewComparisonFormPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const editId = searchParams.get("edit");
+  const isEditMode = !!editId;
   const supabase = createClient();
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [loadingEditData, setLoadingEditData] = useState<boolean>(isEditMode);
   const [signatureAccepted, setSignatureAccepted] = useState(false);
   const [signatureInfo, setSignatureInfo] = useState<SignatureInfo>({
     signatureText: null,
@@ -219,6 +223,129 @@ export default function NewComparisonFormPage() {
         "Tüm ekipmanlar TSE ve IEC standartlarına uygun olmalıdır. Devreye alma test raporları talep edilecektir.",
     },
   });
+
+  // V5: Edit mode — ?edit=<id> ile gelirse mevcut talebi yükle
+  useEffect(() => {
+    if (!editId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/my-requests`);
+        if (!res.ok) {
+          toast.error("Talep bulunamadı");
+          return;
+        }
+        const body = await res.json();
+        const found = (body.requests as Array<{ id: string; mukayese_request?: Record<string, unknown> }>)?.find(
+          (r) => r.id === editId
+        );
+        if (!found || !found.mukayese_request) {
+          toast.error("Talep bulunamadı");
+          return;
+        }
+        const f = found.mukayese_request as {
+          project_title?: string;
+          form_currency?: "TRY" | "USD" | "EUR";
+          form_date?: string;
+          preparer_full_name?: string;
+          company?: string;
+          subject?: string;
+          request_content?: string;
+          request_amount_text?: string;
+          request_reason?: string;
+          notes?: string | null;
+          kdv_rate?: number;
+          fx_eur_try?: number | null;
+          fx_usd_try?: number | null;
+          fx_eur_usd?: number | null;
+          fx_snapshot_at?: string | null;
+          items?: Array<{
+            id: string;
+            row_order: number;
+            row_type: "ITEM" | "SUBTOTAL";
+            description: string | null;
+            quantity: number | null;
+            unit: "ADET" | "SET" | "GUN" | null;
+          }>;
+          suppliers?: Array<{
+            id: string;
+            column_order: number;
+            company_name: string;
+            payment_terms: string | null;
+            delivery_time: string | null;
+            technical_description: string | null;
+            contact_name: string | null;
+            contact_phone: string | null;
+          }>;
+          prices?: Array<{
+            mukayese_item_id: string;
+            mukayese_supplier_id: string;
+            unit_price: number;
+          }>;
+        };
+        if (cancelled) return;
+
+        // Header form'unu reset et
+        form.reset({
+          project_title: f.project_title ?? "",
+          form_currency: f.form_currency ?? "TRY",
+          form_date: f.form_date ?? new Date().toISOString().split("T")[0],
+          preparer_full_name: f.preparer_full_name ?? "",
+          company: f.company ?? "",
+          subject: f.subject ?? "",
+          request_content: f.request_content ?? "",
+          request_amount_text: f.request_amount_text ?? "",
+          request_reason: f.request_reason ?? "",
+          kdv_rate: f.kdv_rate ?? 20,
+          notes: f.notes ?? "",
+        });
+
+        // Matrix state'i reset et — DB id'lerini client id olarak kullanırız;
+        // submit'te tüm matris zaten yeniden numaralandırılarak gönderiliyor.
+        const sortedItems = (f.items ?? [])
+          .slice()
+          .sort((a, b) => (a.row_order ?? 0) - (b.row_order ?? 0))
+          .map((it) => ({
+            id: it.id, // DB UUID — client matrix tarafından opak şekilde kullanılır
+            row_type: it.row_type,
+            description: it.description ?? "",
+            quantity: it.row_type === "ITEM" ? (it.quantity ?? null) : null,
+            unit: it.row_type === "ITEM" ? (it.unit ?? null) : null,
+          })) as MatrixItem[];
+
+        const sortedSuppliers = (f.suppliers ?? [])
+          .slice()
+          .sort((a, b) => (a.column_order ?? 0) - (b.column_order ?? 0))
+          .map((s) => ({
+            id: s.id, // DB UUID — client matrix tarafından opak şekilde kullanılır
+            company_name: s.company_name ?? "",
+            payment_terms: s.payment_terms ?? "",
+            delivery_time: s.delivery_time ?? "",
+            technical_description: s.technical_description ?? "",
+            contact_name: s.contact_name ?? "",
+            contact_phone: s.contact_phone ?? "",
+          })) as MatrixSupplier[];
+
+        const pricesMap: MatrixPrices = {};
+        for (const p of f.prices ?? []) {
+          pricesMap[cellKey(p.mukayese_item_id, p.mukayese_supplier_id)] = p.unit_price;
+        }
+
+        setMatrixItems(sortedItems);
+        setMatrixSuppliers(sortedSuppliers);
+        setMatrixPrices(pricesMap);
+      } catch (err) {
+        console.error("Edit data load error:", err);
+        toast.error("Talep yüklenirken hata oluştu");
+      } finally {
+        if (!cancelled) setLoadingEditData(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editId]);
 
   // Kullanıcı + imza yükle, hazırlayan alanlarını doldur
   useEffect(() => {
@@ -308,6 +435,7 @@ export default function NewComparisonFormPage() {
     return () => {
       cancelled = true;
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Attachment config yükle (workflow_step_attachments — COMPARISON_FORM step 1)
@@ -447,40 +575,58 @@ export default function NewComparisonFormPage() {
         prices: apiPrices,
       };
 
-      const res = await fetch("/api/comparison-form", {
-        method: "POST",
+      const url = isEditMode ? `/api/comparison-form/${editId}` : "/api/comparison-form";
+      const method = isEditMode ? "PATCH" : "POST";
+
+      const res = await fetch(url, {
+        method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
 
       const data = await res.json();
       if (!res.ok) {
-        toast.error(data?.error ?? "Talep oluşturulamadı");
+        toast.error(data?.error ?? (isEditMode ? "Talep güncellenemedi" : "Talep oluşturulamadı"));
         return;
       }
 
-      // Dosyaları yükle (talep oluşturulduktan sonra)
-      const newRequestId: string | undefined = data?.id;
-      if (newRequestId && pendingFiles.length > 0) {
-        for (const file of pendingFiles) {
-          const formData = new FormData();
-          formData.append("file", file);
-          formData.append("request_id", newRequestId);
-          if (attachmentConfigId) {
-            formData.append("step_attachment_config_id", attachmentConfigId);
-          }
-          const uploadRes = await fetch("/api/attachments/upload", {
-            method: "POST",
-            body: formData,
-          });
-          if (!uploadRes.ok) {
-            console.error("Dosya yüklenemedi:", file.name);
-            toast.warning(`${file.name} yüklenemedi, talep yine de oluşturuldu`);
+      if (isEditMode) {
+        // V5: Edit sonrası otomatik resubmit → talep onay akışına geri girer
+        const resubmitRes = await fetch(`/api/requests/${editId}/resubmit`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({}),
+        });
+        if (!resubmitRes.ok) {
+          const err = await resubmitRes.json().catch(() => ({}));
+          toast.error(err.error || "Talep güncellendi ama yeniden gönderilemedi");
+          return;
+        }
+        toast.success("Talep güncellendi ve onaya gönderildi");
+      } else {
+        // Dosyaları yükle (talep oluşturulduktan sonra) — sadece create
+        const newRequestId: string | undefined = data?.id;
+        if (newRequestId && pendingFiles.length > 0) {
+          for (const file of pendingFiles) {
+            const formData = new FormData();
+            formData.append("file", file);
+            formData.append("request_id", newRequestId);
+            if (attachmentConfigId) {
+              formData.append("step_attachment_config_id", attachmentConfigId);
+            }
+            const uploadRes = await fetch("/api/attachments/upload", {
+              method: "POST",
+              body: formData,
+            });
+            if (!uploadRes.ok) {
+              console.error("Dosya yüklenemedi:", file.name);
+              toast.warning(`${file.name} yüklenemedi, talep yine de oluşturuldu`);
+            }
           }
         }
+        toast.success("Mukayese formu talebi oluşturuldu");
       }
 
-      toast.success("Mukayese formu talebi oluşturuldu");
       router.push("/my-requests");
     } catch (error) {
       console.error("Submit error:", error);
@@ -493,17 +639,29 @@ export default function NewComparisonFormPage() {
   const hasValidSignature = Boolean(signatureInfo.signatureText && signatureInfo.signatureFont);
   const hasItemRow = matrixItems.some((it) => it.row_type === "ITEM");
   const matrixReady = hasItemRow && matrixSuppliers.length > 0;
-  const canSubmit = !isSubmitting && !loadingUser && hasValidSignature && signatureAccepted && matrixReady;
+  const canSubmit = isEditMode
+    ? !isSubmitting && !loadingUser && matrixReady
+    : !isSubmitting && !loadingUser && hasValidSignature && signatureAccepted && matrixReady;
+
+  if (loadingEditData) {
+    return (
+      <div className="flex items-center justify-center p-12">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 p-4 md:p-6">
       <div>
         <h1 className="flex items-center gap-2 text-2xl font-semibold">
           <Scale className="h-6 w-6" />
-          Yeni Mukayese Formu
+          {isEditMode ? "Talebi Güncelle" : "Yeni Mukayese Formu"}
         </h1>
         <p className="text-sm text-muted-foreground">
-          Aynı iş için birden fazla firmadan alınan teklifleri matris üzerinden karşılaştırın
+          {isEditMode
+            ? "Talep bilgilerini güncelleyin"
+            : "Aynı iş için birden fazla firmadan alınan teklifleri matris üzerinden karşılaştırın"}
         </p>
       </div>
 
@@ -867,7 +1025,7 @@ export default function NewComparisonFormPage() {
                   }
                 >
                   {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  İmzala ve Talebi Gönder
+                  {isEditMode ? "Talebi Güncelle ve Gönder" : "İmzala ve Talebi Gönder"}
                 </Button>
               </div>
             </form>

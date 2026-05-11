@@ -50,6 +50,7 @@ export const STATUS_TO_FILENAME: Record<RequestStatus, string> = {
   COMPLETED:            'TAMAMLANDI',
   REJECTED:             'REDDEDILDI',
   CANCELLED:            'IPTAL',
+  REVISION_REQUESTED:   'REVIZE-ISTENDI',
 };
 
 // ----------------------------------------------------------------------------

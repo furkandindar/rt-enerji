@@ -83,6 +83,7 @@ interface ApprovalActionsProps {
   canApprove: boolean;
   isSubmitting: boolean;
   handleDecision: (decision: "APPROVED" | "REJECTED") => void;
+  handleRequestRevision: () => void;
 }
 
 export function ApprovalActions({
@@ -127,6 +128,7 @@ export function ApprovalActions({
   canApprove,
   isSubmitting,
   handleDecision,
+  handleRequestRevision,
 }: ApprovalActionsProps) {
   return (
     <div className="border-t pt-4 mt-6 space-y-4">
@@ -376,7 +378,7 @@ export function ApprovalActions({
 
       {/* Yorum Alanı */}
       <div className="space-y-2">
-        <Label htmlFor="comment">Yorum (Red için zorunlu)</Label>
+        <Label htmlFor="comment">Yorum (Red veya Revize için zorunlu)</Label>
         <Input
           id="comment"
           placeholder="Yorumunuzu buraya yazın..."
@@ -408,9 +410,9 @@ export function ApprovalActions({
         />
       )}
 
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <Button
-          className="flex-1"
+          className="flex-1 min-w-[140px]"
           onClick={() => handleDecision("APPROVED")}
           disabled={isSubmitting || !canApprove}
         >
@@ -418,8 +420,17 @@ export function ApprovalActions({
           İmzala ve Onayla
         </Button>
         <Button
+          variant="outline"
+          className="flex-1 min-w-[140px] border-orange-500 text-orange-700 hover:bg-orange-50 hover:text-orange-800"
+          onClick={() => handleRequestRevision()}
+          disabled={isSubmitting || !comment.trim()}
+        >
+          {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          Revize İste
+        </Button>
+        <Button
           variant="destructive"
-          className="flex-1"
+          className="flex-1 min-w-[140px]"
           onClick={() => handleDecision("REJECTED")}
           disabled={isSubmitting || !comment.trim()}
         >

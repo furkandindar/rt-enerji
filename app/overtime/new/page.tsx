@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -119,7 +119,11 @@ interface SignatureInfo {
 
 export default function NewOvertimePage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const editId = searchParams.get("edit");
+  const isEditMode = !!editId;
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [loadingEditData, setLoadingEditData] = useState<boolean>(isEditMode);
   const [signatureAccepted, setSignatureAccepted] = useState(false);
   const [signatureInfo, setSignatureInfo] = useState<SignatureInfo>({
     signatureText: null,
@@ -245,6 +249,122 @@ export default function NewOvertimePage() {
     name: "entries" as never,
   });
 
+  // V5: Edit mode — ?edit=<id> ile gelirse mevcut talebi yükle
+  useEffect(() => {
+    if (!editId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/my-requests`);
+        if (!res.ok) {
+          toast.error("Talep bulunamadı");
+          return;
+        }
+        const body = await res.json();
+        const found = (body.requests as Array<{ id: string; overtime_request?: Record<string, unknown> }>)?.find(
+          (r) => r.id === editId
+        );
+        if (!found || !found.overtime_request) {
+          toast.error("Talep bulunamadı");
+          return;
+        }
+        const f = found.overtime_request as {
+          overtime_type?: "EMERGENCY" | "STAFF_SHORTAGE";
+          month?: string;
+          year?: number;
+          reason_category?: string;
+          reason_detail?: string;
+          hr_note?: string | null;
+          work_location?: string | null;
+          work_start_date?: string | null;
+          work_end_date?: string | null;
+          work_reason?: string | null;
+          previous_shift_start?: string | null;
+          previous_shift_end?: string | null;
+          next_shift_start?: string | null;
+          next_shift_end?: string | null;
+          entries?: Array<{
+            full_name?: string;
+            role_title?: string;
+            overtime_hours?: number;
+            overtime_pay?: number;
+          }>;
+        };
+        if (cancelled) return;
+
+        // ISO timestamptz → datetime-local input ve date+time parça çıkarımı
+        const toDateTimeLocal = (iso: string | null | undefined): string =>
+          iso ? iso.slice(0, 16) : "";
+        const splitDateTime = (iso: string | null | undefined): { date: string; time: string } => {
+          if (!iso) return { date: "", time: "" };
+          const d = new Date(iso);
+          if (isNaN(d.getTime())) return { date: "", time: "" };
+          const pad = (n: number) => String(n).padStart(2, "0");
+          const date = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+          const time = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+          return { date, time };
+        };
+
+        const prevStart = splitDateTime(f.previous_shift_start);
+        const prevEnd = splitDateTime(f.previous_shift_end);
+        const nextStart = splitDateTime(f.next_shift_start);
+        const nextEnd = splitDateTime(f.next_shift_end);
+
+        if (f.overtime_type === "EMERGENCY") {
+          form.reset({
+            overtime_type: "EMERGENCY",
+            month: f.month ?? currentMonth,
+            year: f.year ?? currentYear,
+            reason_category: f.reason_category ?? "",
+            reason_detail: f.reason_detail ?? "",
+            hr_note: f.hr_note ?? "",
+            work_location: f.work_location ?? "",
+            work_start_date: toDateTimeLocal(f.work_start_date),
+            work_end_date: toDateTimeLocal(f.work_end_date),
+            previous_shift_start_date: prevStart.date,
+            previous_shift_start_time: prevStart.time,
+            previous_shift_end_date: prevEnd.date,
+            previous_shift_end_time: prevEnd.time,
+            next_shift_start_date: nextStart.date,
+            next_shift_start_time: nextStart.time,
+            next_shift_end_date: nextEnd.date,
+            next_shift_end_time: nextEnd.time,
+            work_reason: f.work_reason ?? "",
+          } as FormValues);
+        } else {
+          const entries = (f.entries ?? []).map((e) => ({
+            full_name: e.full_name ?? "",
+            role_title: e.role_title ?? "",
+            overtime_hours: e.overtime_hours ?? 0,
+            overtime_pay: e.overtime_pay ?? 0,
+          }));
+          form.reset({
+            overtime_type: "STAFF_SHORTAGE",
+            month: f.month ?? currentMonth,
+            year: f.year ?? currentYear,
+            reason_category: f.reason_category ?? "",
+            reason_detail: f.reason_detail ?? "",
+            hr_note: f.hr_note ?? "",
+            work_location: f.work_location ?? "",
+            entries:
+              entries.length > 0
+                ? entries
+                : [{ full_name: "", role_title: "", overtime_hours: 0, overtime_pay: 0 }],
+          } as FormValues);
+        }
+      } catch (err) {
+        console.error("Edit data load error:", err);
+        toast.error("Talep yüklenirken hata oluştu");
+      } finally {
+        if (!cancelled) setLoadingEditData(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editId]);
+
   const overtimeType = form.watch("overtime_type");
   const entries = form.watch("entries" as never) as unknown as Array<{ overtime_hours: number; overtime_pay: number }> | undefined;
 
@@ -295,41 +415,58 @@ export default function NewOvertimePage() {
   const onSubmit = async (data: FormValues) => {
     setIsSubmitting(true);
     try {
-      const response = await fetch("/api/overtime", {
-        method: "POST",
+      const url = isEditMode ? `/api/overtime/${editId}` : "/api/overtime";
+      const method = isEditMode ? "PATCH" : "POST";
+
+      const response = await fetch(url, {
+        method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
       });
 
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.error || "Talep oluşturulamadı");
+        throw new Error(error.error || (isEditMode ? "Talep güncellenemedi" : "Talep oluşturulamadı"));
       }
 
-      const result = await response.json();
-      const requestId: string = result.id;
+      if (isEditMode) {
+        // V5: Edit sonrası otomatik resubmit → talep onay akışına geri girer
+        const resubmitRes = await fetch(`/api/requests/${editId}/resubmit`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({}),
+        });
+        if (!resubmitRes.ok) {
+          const err = await resubmitRes.json().catch(() => ({}));
+          throw new Error(err.error || "Talep güncellendi ama yeniden gönderilemedi");
+        }
+        toast.success("Talep güncellendi ve onaya gönderildi");
+      } else {
+        const result = await response.json();
+        const requestId: string = result.id;
 
-      // Dosyaları yükle (talep oluşturulduktan sonra)
-      if (requestId && pendingFiles.length > 0) {
-        for (const file of pendingFiles) {
-          const formData = new FormData();
-          formData.append("file", file);
-          formData.append("request_id", requestId);
-          if (attachmentConfigId) {
-            formData.append("step_attachment_config_id", attachmentConfigId);
-          }
-          const uploadRes = await fetch("/api/attachments/upload", {
-            method: "POST",
-            body: formData,
-          });
-          if (!uploadRes.ok) {
-            console.error("Dosya yüklenemedi:", file.name);
-            toast.warning(`${file.name} yüklenemedi, talep yine de oluşturuldu`);
+        // Dosyaları yükle (talep oluşturulduktan sonra)
+        if (requestId && pendingFiles.length > 0) {
+          for (const file of pendingFiles) {
+            const formData = new FormData();
+            formData.append("file", file);
+            formData.append("request_id", requestId);
+            if (attachmentConfigId) {
+              formData.append("step_attachment_config_id", attachmentConfigId);
+            }
+            const uploadRes = await fetch("/api/attachments/upload", {
+              method: "POST",
+              body: formData,
+            });
+            if (!uploadRes.ok) {
+              console.error("Dosya yüklenemedi:", file.name);
+              toast.warning(`${file.name} yüklenemedi, talep yine de oluşturuldu`);
+            }
           }
         }
+        toast.success("Fazla mesai talebi başarıyla oluşturuldu");
       }
 
-      toast.success("Fazla mesai talebi başarıyla oluşturuldu");
       router.push("/my-requests");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Bir hata oluştu");
@@ -340,11 +477,23 @@ export default function NewOvertimePage() {
 
   const reasonOptions = overtimeType === "EMERGENCY" ? EMERGENCY_REASONS : STAFF_SHORTAGE_REASONS;
 
+  if (loadingEditData) {
+    return (
+      <div className="flex items-center justify-center p-12">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-4 p-4 sm:p-6">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Yeni Fazla Mesai Formu</h1>
-        <p className="text-muted-foreground">Fazla mesai onay formu oluşturun</p>
+        <h1 className="text-2xl font-bold tracking-tight">
+          {isEditMode ? "Talebi Güncelle" : "Yeni Fazla Mesai Formu"}
+        </h1>
+        <p className="text-muted-foreground">
+          {isEditMode ? "Talep bilgilerini güncelleyin" : "Fazla mesai onay formu oluşturun"}
+        </p>
       </div>
 
       <Card className="max-w-4xl">
@@ -368,7 +517,7 @@ export default function NewOvertimePage() {
                   render={({ field }) => (
                     <FormItem className="w-52">
                       <FormLabel>Fazla Mesai Tipi</FormLabel>
-                      <Select onValueChange={handleTypeChange} defaultValue={field.value}>
+                      <Select onValueChange={handleTypeChange} value={field.value} disabled={isEditMode}>
                         <FormControl>
                           <SelectTrigger>
                             <SelectValue placeholder="Tip seçin" />
@@ -865,11 +1014,11 @@ export default function NewOvertimePage() {
                 >
                   İptal
                 </Button>
-                <Button type="submit" disabled={isSubmitting || !canSubmit}>
+                <Button type="submit" disabled={isSubmitting || (!isEditMode && !canSubmit)}>
                   {isSubmitting && (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   )}
-                  İmzala ve Talebi Gönder
+                  {isEditMode ? "Talebi Güncelle ve Gönder" : "İmzala ve Talebi Gönder"}
                 </Button>
               </div>
             </form>
