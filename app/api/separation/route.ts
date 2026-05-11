@@ -1,14 +1,38 @@
 import { createClient } from "@/lib/supabase/server";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { createApprovalChain, getWorkflowDefinitionByCode, notifyApprover, canStartWorkflow } from "@/lib/workflow";
 import type { CreateSeparationInput } from "@/lib/workflow";
 
-// GET /api/separation - Kullanıcının işten çıkış takip taleplerini listele
-export async function GET() {
+const ALLOWED_PAGE_SIZES = [10, 25, 50, 100] as const;
+const DEFAULT_PAGE_SIZE = 10;
+const WORKFLOW_CODE = "EMPLOYEE_SEPARATION";
+
+// GET /api/separation
+//
+// Query params:
+//   - scope: "mine" (default) | "department"
+//   - status: opsiyonel
+//   - page, page_size: opsiyonel sayfalama. Yoksa düz array döner.
+export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient();
+    const searchParams = request.nextUrl.searchParams;
 
-    // 1. Mevcut kullanıcının employee_id'sini al
+    const scope = searchParams.get("scope") === "department" ? "department" : "mine";
+    const status = searchParams.get("status");
+    const pageParam = searchParams.get("page");
+    const pageSizeParam = searchParams.get("page_size");
+    const usePagination = pageParam !== null || pageSizeParam !== null;
+
+    const pageSize = (() => {
+      const n = Number(pageSizeParam);
+      return (ALLOWED_PAGE_SIZES as readonly number[]).includes(n) ? n : DEFAULT_PAGE_SIZE;
+    })();
+    const page = (() => {
+      const n = Number(pageParam);
+      return Number.isFinite(n) && n >= 1 ? Math.floor(n) : 1;
+    })();
+
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -16,7 +40,7 @@ export async function GET() {
 
     const { data: appUser } = await supabase
       .from("app_users")
-      .select("employee_id")
+      .select("employee_id, role")
       .eq("id", user.id)
       .single();
 
@@ -24,27 +48,57 @@ export async function GET() {
       return NextResponse.json({ error: "User not linked to employee" }, { status: 400 });
     }
 
-    // 2. Kullanıcının taleplerini getir
-    const { data: requests, error } = await supabase
+    if (scope === "department") {
+      const workflowDef = await getWorkflowDefinitionByCode(supabase, WORKFLOW_CODE);
+      if (!workflowDef) {
+        return NextResponse.json({ error: "Workflow not found" }, { status: 400 });
+      }
+      const hasPermission = await canStartWorkflow(supabase, appUser.employee_id, workflowDef.id, appUser.role);
+      if (!hasPermission) {
+        return NextResponse.json({ error: "Bu süreçleri görüntüleme yetkiniz yok" }, { status: 403 });
+      }
+    }
+
+    let query = supabase
       .from("requests")
       .select(`
         *,
-        workflow_definition:workflow_definitions(id, code, name),
-        separation_request:separation_requests(*)
-      `)
-      .eq("requester_employee_id", appUser.employee_id)
+        workflow_definition:workflow_definitions!inner(id, code, name),
+        separation_request:separation_requests(*),
+        requester:employees!requester_employee_id(id, first_name, last_name, employee_no)
+      `, usePagination ? { count: "exact" } : {})
+      .eq("workflow_definition.code", WORKFLOW_CODE)
       .order("created_at", { ascending: false });
+
+    if (scope === "mine") {
+      query = query.eq("requester_employee_id", appUser.employee_id);
+    }
+    if (status) {
+      query = query.eq("status", status);
+    }
+    if (usePagination) {
+      const from = (page - 1) * pageSize;
+      const to = from + pageSize - 1;
+      query = query.range(from, to);
+    }
+
+    const { data: requests, error, count } = await query;
 
     if (error) {
       console.error("Error fetching requests:", error);
       return NextResponse.json({ error: "Failed to fetch requests" }, { status: 500 });
     }
 
-    // workflow_code filtresi
-    const filtered = (requests || []).filter(
-      (r) => r.workflow_definition?.code === "EMPLOYEE_SEPARATION"
-    );
+    const filtered = requests?.filter(r => r.workflow_definition !== null) || [];
 
+    if (usePagination) {
+      return NextResponse.json({
+        items: filtered,
+        total: count ?? 0,
+        page,
+        page_size: pageSize,
+      });
+    }
     return NextResponse.json(filtered);
   } catch (error) {
     console.error("Unexpected error:", error);
