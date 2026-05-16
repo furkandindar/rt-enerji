@@ -10,10 +10,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { FileIcon, Download } from "lucide-react";
 import { overtimeTypeLabels, overtimeReasonLabels } from "@/lib/approvals/constants";
 import type { PendingApproval } from "@/lib/approvals/types";
 import type { PreviousStepAttachment } from "@/lib/workflow/types";
+import { AttachmentList } from "./attachment-list";
 
 interface OvertimeRequestDetailsProps {
   approval: PendingApproval;
@@ -84,14 +84,22 @@ export function OvertimeRequestDetails({ approval, previousStepAttachments = [] 
               </p>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2">
             <div>
-              <p className="text-sm font-medium text-muted-foreground">Önceki Mesai Saati</p>
-              <p className="text-sm font-semibold">{ot.previous_shift || "-"}</p>
+              <p className="text-sm font-medium text-muted-foreground">Önceki Vardiya</p>
+              <p className="text-sm font-semibold">
+                {ot.previous_shift_start
+                  ? `${format(new Date(ot.previous_shift_start), "dd/MM/yyyy HH:mm", { locale: tr })} – ${ot.previous_shift_end ? format(new Date(ot.previous_shift_end), "dd/MM/yyyy HH:mm", { locale: tr }) : "-"}`
+                  : "-"}
+              </p>
             </div>
             <div>
-              <p className="text-sm font-medium text-muted-foreground">Sonraki Mesai Saati</p>
-              <p className="text-sm font-semibold">{ot.next_shift || "-"}</p>
+              <p className="text-sm font-medium text-muted-foreground">Sonraki Vardiya</p>
+              <p className="text-sm font-semibold">
+                {ot.next_shift_start
+                  ? `${format(new Date(ot.next_shift_start), "dd/MM/yyyy HH:mm", { locale: tr })} – ${ot.next_shift_end ? format(new Date(ot.next_shift_end), "dd/MM/yyyy HH:mm", { locale: tr }) : "-"}`
+                  : "-"}
+              </p>
             </div>
           </div>
         </>
@@ -99,7 +107,14 @@ export function OvertimeRequestDetails({ approval, previousStepAttachments = [] 
 
       {/* STAFF_SHORTAGE specific fields */}
       {ot.overtime_type === 'STAFF_SHORTAGE' && ot.entries && (
-        <div className="space-y-2">
+        <div className="space-y-4">
+          {ot.work_location && (
+            <div>
+              <p className="text-sm font-medium text-muted-foreground">Merkez, Şube ve İşletmeler</p>
+              <p className="text-sm font-semibold">{ot.work_location}</p>
+            </div>
+          )}
+          <div className="space-y-2">
           <p className="text-sm font-medium text-muted-foreground">Çalışan Listesi</p>
           <div className="rounded-md border">
             <Table>
@@ -133,6 +148,7 @@ export function OvertimeRequestDetails({ approval, previousStepAttachments = [] 
               <p className="text-sm font-semibold">{(ot.total_pay || 0).toLocaleString('tr-TR')} TL</p>
             </div>
           </div>
+          </div>
         </div>
       )}
 
@@ -144,32 +160,7 @@ export function OvertimeRequestDetails({ approval, previousStepAttachments = [] 
       )}
 
       {/* Önceki adımda yüklenen ek dosyalar */}
-      {previousStepAttachments.length > 0 && (
-        <div className="space-y-2">
-          <p className="text-sm font-medium text-muted-foreground">Ek Dosyalar</p>
-          <div className="space-y-1.5">
-            {previousStepAttachments.map((attachment) => (
-              <div
-                key={attachment.id}
-                className="flex items-center justify-between rounded-md border px-3 py-2 bg-muted/30"
-              >
-                <div className="flex items-center gap-2 min-w-0">
-                  <FileIcon className="h-4 w-4 text-muted-foreground shrink-0" />
-                  <span className="text-sm truncate">{attachment.config_label || attachment.file_name}</span>
-                </div>
-                <a
-                  href={`/api/attachments/${attachment.id}/download`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="ml-2 shrink-0 text-muted-foreground hover:text-foreground"
-                >
-                  <Download className="h-4 w-4" />
-                </a>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+      <AttachmentList attachments={previousStepAttachments} />
     </>
   );
 }

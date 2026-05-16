@@ -80,8 +80,10 @@ export interface OvertimeRequest {
   work_location: string | null;
   work_start_date: string | null;
   work_end_date: string | null;
-  previous_shift: string | null;
-  next_shift: string | null;
+  previous_shift_start: string | null;
+  previous_shift_end: string | null;
+  next_shift_start: string | null;
+  next_shift_end: string | null;
   work_reason: string | null;
   total_hours: number | null;
   total_pay: number | null;

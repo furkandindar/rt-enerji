@@ -2,14 +2,10 @@
 
 import { format } from "date-fns";
 import { tr } from "date-fns/locale";
-import { useState } from "react";
-import { FileText, Download, Eye } from "lucide-react";
-import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
 import type { PendingApproval } from "@/lib/approvals/types";
 import type { PreviousStepAttachment } from "@/lib/workflow/types";
-import { PdfViewerDialog } from "@/components/pdf-viewer-dialog";
 import { ApprovalStatusBadge } from "./status-badge";
+import { AttachmentList } from "./attachment-list";
 import {
   financeExpenseAreaLabels,
   financeFundingSourceLabels,
@@ -32,7 +28,6 @@ export function FinanceApprovalCoverDetails({
   approval,
   previousStepAttachments = [],
 }: FinanceApprovalCoverDetailsProps) {
-  const [previewFile, setPreviewFile] = useState<{ id: string; name: string } | null>(null);
   const finance = approval.request.finance_approval_cover_request;
   if (!finance) return null;
 
@@ -169,74 +164,7 @@ export function FinanceApprovalCoverDetails({
       )}
 
       {/* Ek Dosyalar */}
-      {previousStepAttachments.length > 0 && (
-        <div className="space-y-2">
-          <p className="text-sm font-medium text-muted-foreground">Ek Dosyalar</p>
-          <div className="space-y-1.5">
-            {previousStepAttachments.map((attachment) => (
-              <div
-                key={attachment.id}
-                className="flex items-center justify-between rounded-md border px-3 py-2 bg-muted/30"
-              >
-                <div className="flex items-center gap-2 min-w-0">
-                  <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium truncate">{attachment.file_name}</p>
-                    <p className="text-xs text-muted-foreground truncate">
-                      {(attachment.file_size / 1024).toFixed(0)} KB
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-1 shrink-0 ml-2">
-                  {attachment.mime_type === "application/pdf" && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setPreviewFile({ id: attachment.id, name: attachment.file_name })}
-                      title="Görüntüle"
-                    >
-                      <Eye className="h-4 w-4" />
-                    </Button>
-                  )}
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={async () => {
-                      try {
-                        const response = await fetch(`/api/attachments/${attachment.id}/download`);
-                        if (!response.ok) throw new Error("Dosya indirilemedi");
-                        const blob = await response.blob();
-                        const url = URL.createObjectURL(blob);
-                        const link = document.createElement("a");
-                        link.href = url;
-                        link.download = attachment.file_name;
-                        document.body.appendChild(link);
-                        link.click();
-                        URL.revokeObjectURL(url);
-                        document.body.removeChild(link);
-                      } catch {
-                        toast.error("Dosya indirilemedi");
-                      }
-                    }}
-                    title="İndir"
-                  >
-                    <Download className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {previewFile && (
-        <PdfViewerDialog
-          open={!!previewFile}
-          onOpenChange={(open) => { if (!open) setPreviewFile(null); }}
-          attachmentId={previewFile.id}
-          fileName={previewFile.name}
-        />
-      )}
+      <AttachmentList attachments={previousStepAttachments} />
     </>
   );
 }
