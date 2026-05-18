@@ -257,7 +257,7 @@ export const OnboardingPDFTemplate: React.FC<OnboardingPDFTemplateProps> = ({
             <Text style={styles.approvalTitle}>FORM İÇERİĞİ KONTROLÜ</Text>
             {secondToLastApproval ? (
               <>
-                <Text style={styles.approvalSubtitle}>{(secondToLastApproval.workflow_step.name || secondToLastApproval.workflow_step.static_position?.title || '').toUpperCase()}</Text>
+                <Text style={styles.approvalSubtitle}>{(secondToLastApproval.workflow_step.static_position?.title || secondToLastApproval.workflow_step.name || '').toUpperCase()}</Text>
                 <Text style={styles.approvalName}>{secondToLastApproval.approver.first_name} {secondToLastApproval.approver.last_name}</Text>
                 {secondToLastApproval.decided_at ? <Text style={styles.approvalName}>{format(new Date(secondToLastApproval.decided_at), 'dd/MM/yyyy')}</Text> : null}
                 {renderSignature(secondToLastApproval.approver.id, false, secondToLastApproval.status)}
@@ -269,7 +269,7 @@ export const OnboardingPDFTemplate: React.FC<OnboardingPDFTemplateProps> = ({
             <Text style={styles.approvalTitle}>ONAY</Text>
             {lastApproval ? (
               <>
-                <Text style={styles.approvalSubtitle}>{(lastApproval.workflow_step.name || lastApproval.workflow_step.static_position?.title || '').toUpperCase()}</Text>
+                <Text style={styles.approvalSubtitle}>{(lastApproval.workflow_step.static_position?.title || lastApproval.workflow_step.name || '').toUpperCase()}</Text>
                 <Text style={styles.approvalName}>{lastApproval.approver.first_name} {lastApproval.approver.last_name}</Text>
                 {renderSignature(lastApproval.approver.id, false, lastApproval.status)}
               </>

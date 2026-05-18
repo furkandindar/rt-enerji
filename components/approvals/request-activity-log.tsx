@@ -177,10 +177,18 @@ function buildEvents(req: ActivityRequest): ActivityEvent[] {
     }
   }
 
-  // 3. Decisions: decided_at varsa ve REQUESTER tipi değilse (gerçek karar)
+  // 3. Decisions: decided_at varsa gerçek karar say. Sadece sequence 1'deki
+  // REQUESTER auto-approve'u atla — onu zaten "Onaya gönderildi" temsil ediyor.
+  // Sonraki adımlardaki REQUESTER kararları (örn. çok-adımlı formda talep
+  // sahibinin manuel doldurup imzaladığı adım) gösterilsin.
   for (const a of approvals) {
     if (!a.decided_at) continue;
-    if (a.workflow_step?.approver_type === "REQUESTER") continue;
+    if (
+      a.workflow_step?.approver_type === "REQUESTER" &&
+      (a.sequence_order ?? 0) === 1
+    ) {
+      continue;
+    }
     if (!DECISION_LABEL[a.status]) continue;
 
     const icon = DECISION_ICON[a.status];

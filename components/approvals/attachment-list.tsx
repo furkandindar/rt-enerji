@@ -5,10 +5,17 @@ import { FileText, Eye, Download } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { PdfViewerDialog } from "@/components/pdf-viewer-dialog";
-import type { PreviousStepAttachment } from "@/lib/workflow/types";
+
+export interface AttachmentListItem {
+  id: string;
+  file_name: string;
+  file_size: number;
+  mime_type: string;
+  config_label: string;
+}
 
 interface AttachmentListProps {
-  attachments: PreviousStepAttachment[];
+  attachments: AttachmentListItem[];
   label?: string;
 }
 

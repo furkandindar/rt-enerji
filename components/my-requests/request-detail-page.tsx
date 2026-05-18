@@ -39,9 +39,6 @@ function RequestDetailPageInner({ backLabel, backFallbackUrl }: RequestDetailPag
 
   const [showPdfPreview, setShowPdfPreview] = useState(false);
   const [showLivePreview, setShowLivePreview] = useState(false);
-  const [previewAttachment, setPreviewAttachment] = useState<
-    { id: string; name: string } | null
-  >(null);
 
   const loadRequest = async () => {
     try {
@@ -96,24 +93,6 @@ function RequestDetailPageInner({ backLabel, backFallbackUrl }: RequestDetailPag
   // Lifecycle actions (cancel, resubmit, withdraw vb.) sonrası refresh.
   const refresh = () => {
     loadRequest();
-  };
-
-  const handleDownloadAttachment = async (id: string, fileName: string) => {
-    try {
-      const response = await fetch(`/api/attachments/${id}/download`);
-      if (!response.ok) throw new Error("İndirme başarısız");
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = fileName;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Dosya indirilemedi");
-    }
   };
 
   const handleDownloadPDF = async (id: string) => {
@@ -188,10 +167,6 @@ function RequestDetailPageInner({ backLabel, backFallbackUrl }: RequestDetailPag
         request={request}
         attachments={attachments}
         onChange={refresh}
-        onDownloadAttachment={handleDownloadAttachment}
-        onPreviewAttachment={(id, name) =>
-          setPreviewAttachment({ id, name })
-        }
         onDownloadPDF={handleDownloadPDF}
         onShowPdfPreview={() => setShowPdfPreview(true)}
         onShowLivePreview={() => setShowLivePreview(true)}
@@ -214,17 +189,6 @@ function RequestDetailPageInner({ backLabel, backFallbackUrl }: RequestDetailPag
           previewUrl={`/api/requests/${request.id}/pdf/preview-live`}
           downloadUrl={`/api/requests/${request.id}/pdf/preview-live`}
           fileName={`talep_${request.id}_onizleme.pdf`}
-        />
-      )}
-
-      {previewAttachment && (
-        <PdfViewerDialog
-          open={!!previewAttachment}
-          onOpenChange={(open) => {
-            if (!open) setPreviewAttachment(null);
-          }}
-          attachmentId={previewAttachment.id}
-          fileName={previewAttachment.name}
         />
       )}
     </div>

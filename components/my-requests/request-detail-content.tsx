@@ -2,7 +2,7 @@
 
 import { format } from "date-fns";
 import { tr } from "date-fns/locale";
-import { Eye, Download, FileIcon } from "lucide-react";
+import { Eye, Download } from "lucide-react";
 
 import {
   Table,
@@ -32,6 +32,7 @@ import {
   accountingCapacityTypeLabels,
 } from "@/lib/approvals/constants";
 import { getApproverDisplayName } from "@/lib/approvals/types";
+import { AttachmentList } from "@/components/approvals/attachment-list";
 import { ComparisonFormDetails } from "@/components/approvals/comparison-form-details";
 import { RequestActivityLog } from "@/components/approvals/request-activity-log";
 import { ApprovalStatusBadge, RequestStatusBadge } from "@/components/approvals/status-badge";
@@ -415,8 +416,6 @@ interface RequestDetailContentProps {
   request: Request;
   attachments: Attachment[];
   onChange?: () => void;
-  onDownloadAttachment: (id: string, name: string) => void;
-  onPreviewAttachment: (id: string, name: string) => void;
   onDownloadPDF: (requestId: string) => void;
   onShowPdfPreview: () => void;
   onShowLivePreview: () => void;
@@ -426,8 +425,6 @@ export function RequestDetailContent({
   request: selectedRequest,
   attachments,
   onChange,
-  onDownloadAttachment,
-  onPreviewAttachment,
   onDownloadPDF,
   onShowPdfPreview,
   onShowLivePreview,
@@ -1434,42 +1431,7 @@ export function RequestDetailContent({
           })()}
 
           {/* Ek Dosyalar - tüm talep tipleri için */}
-          {attachments.length > 0 && (
-            <div className="space-y-2">
-              <p className="text-sm font-medium text-muted-foreground">Ek Dosyalar</p>
-              <div className="space-y-1.5">
-                {attachments.map((attachment) => (
-                  <div
-                    key={attachment.id}
-                    className="flex items-center justify-between rounded-md border px-3 py-2 bg-muted/30"
-                  >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <FileIcon className="h-4 w-4 text-muted-foreground shrink-0" />
-                      <span className="text-sm truncate">{attachment.config_label}</span>
-                    </div>
-                    <div className="flex items-center gap-1 shrink-0 ml-2">
-                      {attachment.mime_type === "application/pdf" && (
-                        <button
-                          onClick={() => onPreviewAttachment(attachment.id, attachment.file_name || attachment.config_label)}
-                          className="text-muted-foreground hover:text-foreground"
-                          title="Görüntüle"
-                        >
-                          <Eye className="h-4 w-4" />
-                        </button>
-                      )}
-                      <button
-                        onClick={() => onDownloadAttachment(attachment.id, attachment.file_name || attachment.config_label)}
-                        className="text-muted-foreground hover:text-foreground"
-                        title="İndir"
-                      >
-                        <Download className="h-4 w-4" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+          <AttachmentList attachments={attachments} />
 
           <div className="grid grid-cols-2 gap-4">
             <div>

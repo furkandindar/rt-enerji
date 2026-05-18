@@ -293,6 +293,11 @@ const leaveTypeLabels: Record<string, string> = {
   SHORT_LEAVE: 'Kısa Süreli İzin',
 };
 
+const leaveTypeTitles: Record<string, string> = {
+  ANNUAL_LEAVE: 'YILLIK İZİN TALEP FORMU',
+  SHORT_LEAVE: 'KISA SÜRELİ İZİN TALEP FORMU',
+};
+
 interface LeaveRequest {
   leave_type: string | null;
   start_datetime: string;
@@ -397,7 +402,7 @@ export const RequestPDFTemplate: React.FC<RequestPDFTemplateProps> = ({
             <Image src={getLogoPath()} style={styles.logoImage} />
           </View>
           <View style={styles.titleCell}>
-            <Text style={styles.titleText}>YILLIK İZİN TALEP FORMU</Text>
+            <Text style={styles.titleText}>{(leaveRequest?.leave_type && leaveTypeTitles[leaveRequest.leave_type]) || 'YILLIK İZİN TALEP FORMU'}</Text>
           </View>
           <View style={styles.logoRightCell}>
             <Image src={getLogoPath()} style={styles.logoImage} />
@@ -495,13 +500,17 @@ export const RequestPDFTemplate: React.FC<RequestPDFTemplateProps> = ({
             </View>
             {/* Info Box */}
             <View style={styles.infoBox}>
-              <Text style={styles.infoText}>
-                Yıllık izinler en fazla dört parçaya bölünebilir. Önemli olmayan konularda bölünmüş yıllık izin kullanımı uygun değildir.
-              </Text>
-              <Text style={styles.infoText}>
-                Bölünmüş yıllık izinler haftasonu, resmi tatil ve haftasonları ile birleştirilemez.
-              </Text>
-              <Text style={[styles.infoBold, { marginTop: 8 }]}>ASİSTAN – Bildirim</Text>
+              {leaveRequest?.leave_type === 'ANNUAL_LEAVE' && (
+                <>
+                  <Text style={styles.infoText}>
+                    Yıllık izinler en fazla dört parçaya bölünebilir. Önemli olmayan konularda bölünmüş yıllık izin kullanımı uygun değildir.
+                  </Text>
+                  <Text style={styles.infoText}>
+                    Bölünmüş yıllık izinler haftasonu, resmi tatil ve haftasonları ile birleştirilemez.
+                  </Text>
+                </>
+              )}
+              <Text style={[styles.infoBold, leaveRequest?.leave_type === 'ANNUAL_LEAVE' ? { marginTop: 8 } : {}]}>ASİSTAN – Bildirim</Text>
               <Text style={styles.infoText}>1-Talep Eden</Text>
               <Text style={styles.infoText}>2-İlgili Bölüm Müdürü</Text>
               <Text style={styles.infoText}>3-Personel Müdürlüğü</Text>

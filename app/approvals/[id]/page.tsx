@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { ArrowLeft, Loader2 } from "lucide-react";
@@ -69,15 +69,22 @@ function ApprovalDetailPageInner() {
   }, [approvalId]);
 
   // Karar verildikten sonra hook setSelectedApproval(null) çağırıyor — bunu yakalayıp
-  // /approvals listesine yönlendir.
+  // /approvals listesine yönlendir. "Null" tek başına yetmez; çünkü ilk mount'ta da
+  // null olur ve Next.js 16 cacheComponents senaryolarında stale closure ile yanlış
+  // tetiklenebilir. Bu yüzden non-null → null GEÇİŞİNİ ref ile izliyoruz.
+  const wasSelectedRef = useRef(false);
   useEffect(() => {
-    if (!pageLoading && !pageError && approvals.selectedApproval === null) {
-      // karar verildi
+    if (approvals.selectedApproval !== null) {
+      wasSelectedRef.current = true;
+      return;
+    }
+    if (wasSelectedRef.current && !pageLoading && !pageError) {
+      wasSelectedRef.current = false;
       toast.success("İşlem tamamlandı");
       router.push("/approvals");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [approvals.selectedApproval]);
+  }, [approvals.selectedApproval, pageLoading, pageError]);
 
   if (pageLoading || approvals.isLoading) {
     return (

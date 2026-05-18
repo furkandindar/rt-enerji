@@ -27,7 +27,11 @@
 -- View 1: Kullanıcının bekleyen onayları
 -- Koşullar:
 --   - bu kullanıcının onaycı olduğu kayıtlar
---   - status = PENDING
+--   - approval.status = PENDING
+--   - request.status aktif (PENDING veya AWAITING_COMPLETION) — terminal
+--     statuslar (CANCELLED, APPROVED, REJECTED, COMPLETED, DRAFT) bekleyen
+--     onaylarda görünmemeli, talep iptal/karara bağlanınca alttaki PENDING
+--     approval kayıtları silinmediği için bu filtre şart.
 --   - request.current_step = approval.sequence_order (sırası gelmiş)
 --   - request.current_revision_cycle = approval.revision_cycle (aktif cycle)
 DROP VIEW IF EXISTS public.v_user_pending_approvals;
@@ -41,6 +45,8 @@ JOIN public.requests r ON r.id = ra.request_id
 JOIN public.workflow_definitions wd ON wd.id = r.workflow_definition_id
 WHERE ra.approver_employee_id = public.get_current_employee_id()
   AND ra.status = 'PENDING'::public.approval_status
+  AND r.status IN ('PENDING'::public.request_status,
+                   'AWAITING_COMPLETION'::public.request_status)
   AND r.current_step = ra.sequence_order
   AND COALESCE(r.current_revision_cycle, 0) = COALESCE(ra.revision_cycle, 0);
 

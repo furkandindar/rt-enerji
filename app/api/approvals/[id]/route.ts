@@ -38,7 +38,8 @@ export async function GET(
     // Eski monolitik 13 join'lik select Postgres'te statement timeout
     // yiyebiliyordu (özellikle mukayese/expense gibi nested zincirlerde).
 
-    // Step 1: hafif fetch — sadece workflow code lazım
+    // Step 1: hafif fetch — sadece workflow code lazım + erişim kontrolü (RLS)
+    // RLS bu sorguyu yalnızca yetkili kullanıcıya açıyor; geçtiyse user authorize.
     const { data: head, error: headError } = await supabase
       .from("request_approvals")
       .select(`request:requests(workflow_definition:workflow_definitions(code))`)
@@ -62,7 +63,12 @@ export async function GET(
         ?.workflow_definition?.code ?? null;
 
     // Step 2: type-aware full select
-    const { data: approval, error } = await supabase
+    // Step 1'de RLS ile yetki doğrulandı; nested request.approvals'ın TÜM
+    // satırlarını döndürebilmek için service-role kullanılıyor (RLS aynı tabloya
+    // recursive sorguda is_approver_for_same_request'i kıryor → onaycı sadece
+    // kendi satırını görüyordu; "Onay Adımı 4/1", boş Süreç Logu hatası buradan).
+    const supabaseAdmin = createServiceRoleClient();
+    const { data: approval, error } = await supabaseAdmin
       .from("request_approvals")
       .select(getApprovalDetailSelect(workflowCode))
       .eq("id", approvalId)
@@ -547,7 +553,12 @@ export async function PATCH(
       );
     } else {
       // Onaylandı - sonraki adıma geç veya tamamla
-      const { data: allSteps } = await supabase
+      // RLS, onaycıya sadece kendi satırını gösteriyor; iş akışı tamamlandı mı
+      // hesabı için tüm satırlara ihtiyaç var → service-role ile çek (line 190'da
+      // approver kontrolü yapıldığı için güvenli).
+      const supabaseAdmin = createServiceRoleClient();
+
+      const { data: allSteps } = await supabaseAdmin
         .from("workflow_steps")
         .select("phase, form_section_key")
         .eq("workflow_definition_id", requestData.workflow_definition_id);
@@ -566,7 +577,7 @@ export async function PATCH(
 
       // Tüm approval kayıtlarını al (sequence_order ile sıralı)
       // V5: Sadece aktif cycle — eski cycle audit için tutuluyor, otomatik onay verilemez.
-      const { data: allApprovals } = await supabase
+      const { data: allApprovals } = await supabaseAdmin
         .from("request_approvals")
         .select(`
           id,
@@ -719,8 +730,7 @@ export async function PATCH(
                 signatureImageDataUrl: signature_data_url,
               });
 
-              // Kaşelenmiş PDF'i Storage'a yükle
-              const supabaseAdmin = createServiceRoleClient();
+              // Kaşelenmiş PDF'i Storage'a yükle (supabaseAdmin yukarıda kuruldu)
               const now = new Date();
               const year = now.getFullYear();
               const month = String(now.getMonth() + 1).padStart(2, '0');

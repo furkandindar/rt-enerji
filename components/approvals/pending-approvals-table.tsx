@@ -5,6 +5,7 @@ import { tr } from "date-fns/locale";
 import { Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PaginationControls } from "@/components/ui/pagination-controls";
+import { RequestStatusBadge } from "@/components/approvals/status-badge";
 import {
   Table,
   TableBody,
@@ -51,6 +52,7 @@ export function PendingApprovalsTable({
                   <TableHead className="w-[130px]">Talep No</TableHead>
                   <TableHead>Talep Sahibi</TableHead>
                   <TableHead>Talep Tipi</TableHead>
+                  <TableHead className="w-[110px]">Durum</TableHead>
                   <TableHead>Oluşturulma</TableHead>
                   <TableHead>Güncellenme</TableHead>
                   <TableHead className="w-[70px]">İşlemler</TableHead>
@@ -76,6 +78,9 @@ export function PendingApprovalsTable({
                     </TableCell>
                     <TableCell className="font-medium">
                       {approval.request.workflow_definition?.name || "-"}
+                    </TableCell>
+                    <TableCell>
+                      <RequestStatusBadge status={approval.request.status} />
                     </TableCell>
                     <TableCell className="text-muted-foreground">
                       {format(new Date(approval.request.created_at), "d MMM yyyy HH:mm", { locale: tr })}
