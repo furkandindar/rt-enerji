@@ -1,15 +1,18 @@
 # SharePoint Entegrasyonu — PDF Otomatik Yükleme
 
+> **Durum:** Tüm fazlar (0-6) tamamlandı ve dev ortamında test edildi.
+> Production deploy edilince pg_cron kurulumu (§11.5) yapılacak.
+
 ## Context
 
 RT-enerji İK/Talep Yönetim Sistemi şu an üretilen PDF'leri Supabase Storage'a yüklüyor (`request-documents` bucket). Şirket sahibi, süreç tamamlandığında bu PDF'lerin **aynı zamanda** SharePoint'e de yüklenmesini istiyor — kurumsal arşiv ve dokümantasyon için. Mevcut Microsoft entegrasyonu (auth, mail, calendar, to-do) ile uyumlu, mevcut PDF üretim akışını bozmadan eklenecek.
 
 **Tasarım kararları (kullanıcı onaylı):**
-- **Kimlik:** Application Permission (service account, mail gönderimi gibi). Tenant admin tek seferlik onay.
-- **Site/Library:** IT ile netleşecek — env var olarak tutulacak.
+- **Kimlik:** Application Permission (`Sites.Selected`, service account, mail gönderimi gibi). Dev ve prod için ayrı SharePoint site + ayrı app yetkisi.
+- **Site/Library:** RT-enerji tenant'ında iki site açıldı (`RTEnerjiDEVO`, `RTEnerjiPROD`). Library Türkçe tenant olduğu için `Belgeler` (env'de override).
 - **Hangi PDF'ler:** 4 statünün hepsi (COMPLETED, APPROVED, REJECTED, AWAITING_COMPLETION).
-- **Hata davranışı:** Bloklanmaz; başarısız upload'lar retry kuyruğuna girer.
-- **Folder yapısı:** Kategori → Talep Tipi → Yıl → Ay.
+- **Hata davranışı:** Bloklanmaz; başarısız upload'lar retry kuyruğuna girer. Cron her 5 dk + admin manuel retry endpoint'i.
+- **Folder yapısı:** Kategori → Talep Tipi → YYYY/MM/DD (kullanıcı tercihi).
 - **Versionlama:** Her statü ayrı dosya (file naming convention zaten statüyü içeriyor).
 
 ---
@@ -248,32 +251,39 @@ if (process.env.SHAREPOINT_SYNC_ENABLED === 'true') {
 
 `buildAndUploadRequestPDF()` çağrıları olduğu gibi kalır. SharePoint mantığı tamamen helper'ın içinde, route bilmez.
 
-### 4.3 [.env.local](../.env.local) — Yeni env var'lar
+### 4.3 [.env.local](../.env.local) — Yeni env var'lar (fiili)
 
 ```bash
 # SharePoint Integration
-SHAREPOINT_SITE_URL=https://rtenerji.sharepoint.com/sites/Talepler  # IT'den
-SHAREPOINT_LIBRARY_NAME=Documents                                    # IT'den (default: Documents)
-SHAREPOINT_ROOT_FOLDER=Talepler                                      # Library içindeki kök klasör
-SHAREPOINT_SYNC_ENABLED=true                                         # Killswitch
+SHAREPOINT_SITE_URL=https://rtenerji.sharepoint.com/sites/RTEnerjiDEVO  # dev; prod RTEnerjiPROD
+SHAREPOINT_LIBRARY_NAME=Belgeler                                         # Türkçe tenant
+SHAREPOINT_ROOT_FOLDER=Talepler                                          # Library içindeki kök klasör
+SHAREPOINT_SYNC_ENABLED=true                                             # Killswitch
 SHAREPOINT_MAX_RETRY_ATTEMPTS=5
+CRON_SECRET=<openssl rand -hex 32>                                       # pg_cron + admin auth
 ```
+
+> Site ID ve Drive ID env'de **tutulmuyor** — kod runtime'da URL'den resolve edip in-memory cache'liyor (`lib/msgraph/sharepoint.ts`).
 
 ---
 
-## 5. Kritik Dosyalar — Değişiklik Özeti
+## 5. Kritik Dosyalar — Fiili Değişiklikler
 
-| Dosya | Aksiyon |
-|-------|---------|
-| `lib/msgraph/sharepoint.ts` | YENİ — Graph wrapper |
-| `lib/sharepoint/folder-mapper.ts` | YENİ — workflow → path |
-| `lib/sharepoint/upload-pdf.ts` | YENİ — Business logic |
-| `lib/sharepoint/enqueue-sync.ts` | YENİ — Queue producer |
-| [lib/pdf/build-and-upload-request-pdf.ts](../lib/pdf/build-and-upload-request-pdf.ts) | EDİT — fire-and-forget enqueue |
-| `supabase/functions/sharepoint-sync-retry/index.ts` | YENİ — retry worker |
-| `app/api/admin/sharepoint-sync/retry/route.ts` | YENİ — manuel trigger |
-| [.env.local](../.env.local) | EDİT — env var'lar |
-| Migration SQL'leri (kullanıcı çalıştıracak) | YENİ — 2 migration |
+| Dosya | Aksiyon | Durum |
+|-------|---------|-------|
+| [lib/msgraph/sharepoint.ts](../lib/msgraph/sharepoint.ts) | YENİ — Graph wrapper | ✅ |
+| [lib/sharepoint/folder-mapper.ts](../lib/sharepoint/folder-mapper.ts) | YENİ — workflow → path (YYYY/MM/DD) | ✅ |
+| [lib/sharepoint/request-metadata.ts](../lib/sharepoint/request-metadata.ts) | YENİ — paylaşımlı metadata fetcher | ✅ |
+| [lib/sharepoint/upload-pdf.ts](../lib/sharepoint/upload-pdf.ts) | YENİ — Business logic | ✅ |
+| [lib/sharepoint/enqueue-sync.ts](../lib/sharepoint/enqueue-sync.ts) | YENİ — Queue producer | ✅ |
+| [lib/sharepoint/retry-worker.ts](../lib/sharepoint/retry-worker.ts) | YENİ — retry processor | ✅ |
+| [lib/pdf/build-and-upload-request-pdf.ts](../lib/pdf/build-and-upload-request-pdf.ts) | EDİT — fire-and-forget enqueue | ✅ |
+| [lib/supabase/proxy.ts](../lib/supabase/proxy.ts) | EDİT — `/api/cron/` için auth bypass | ✅ |
+| [app/api/cron/sharepoint-sync-retry/route.ts](../app/api/cron/sharepoint-sync-retry/route.ts) | YENİ — CRON_SECRET auth'lu retry endpoint | ✅ |
+| [app/api/admin/sharepoint-sync/retry/route.ts](../app/api/admin/sharepoint-sync/retry/route.ts) | YENİ — admin manuel retry (ORG_ADMIN gerekli) | ✅ |
+| [app/api/admin/sharepoint-test/route.ts](../app/api/admin/sharepoint-test/route.ts) | YENİ — smoke test + sync test (diagnostic) | ✅ |
+| [.env.local](../.env.local) | EDİT — env var'lar | ✅ |
+| Migration SQL'leri | YENİ — 2 migration | ✅ |
 
 ---
 
@@ -481,30 +491,59 @@ SELECT * FROM sharepoint_sync_queue LIMIT 1;
 
 ---
 
-### 11.3 `.env.local` Güncellemesi
-
-Faz 1 sonunda eklenecek değişkenler (IT'den gelen değerlerle doldurulacak):
+### 11.3 `.env.local` (fiili durum)
 
 ```bash
 # SharePoint Integration
-SHAREPOINT_SITE_URL=https://rtenerji.sharepoint.com/sites/Talepler
-SHAREPOINT_SITE_ID=                  # 11.1 Adım 3'ten gelen değer
-SHAREPOINT_DRIVE_ID=                 # 11.1 Adım 4'ten gelen değer
-SHAREPOINT_LIBRARY_NAME=Documents
+SHAREPOINT_SITE_URL=https://rtenerji.sharepoint.com/sites/RTEnerjiDEVO
+SHAREPOINT_LIBRARY_NAME=Belgeler
 SHAREPOINT_ROOT_FOLDER=Talepler
-SHAREPOINT_SYNC_ENABLED=false        # Başlangıçta false — geliştirme bitince true
+SHAREPOINT_SYNC_ENABLED=true
 SHAREPOINT_MAX_RETRY_ATTEMPTS=5
+CRON_SECRET=<openssl rand -hex 32 ile üretilmiş>
 ```
+
+Site ID / Drive ID env'de tutulmuyor — runtime'da URL'den resolve ediliyor, in-memory cache'leniyor.
 
 ---
 
-### 11.4 Faz 1 Tamamlanma Kriteri
+### 11.5 Production pg_cron Kurulumu (deploy sonrası)
 
-Aşağıdakiler sağlanmadan Faz 2'ye geçmiyoruz:
-- [ ] Azure AD app'a `Sites.Selected` (veya `Files.ReadWrite.All`) eklendi ve admin consent verildi
-- [ ] (Sites.Selected ise) hedef site'a write izni atandı
-- [ ] Supabase'de 2 migration başarıyla çalıştı
-- [ ] `requests` tablosunda 6 yeni kolon var (sharepoint_*)
-- [ ] `sharepoint_sync_queue` tablosu oluştu
-- [ ] `.env.local`'e değişkenler eklendi (IT'den gelenler dahil)
-- [ ] IT'den `SHAREPOINT_SITE_ID` ve `SHAREPOINT_DRIVE_ID` alındı
+**A. Extension'ları enable et:**
+Supabase Studio → Database → Extensions → `pg_cron` ve `pg_net` enable.
+
+**B. Secret'ı Postgres setting olarak sakla:**
+```sql
+ALTER DATABASE postgres SET app.cron_secret TO '<CRON_SECRET değeri>';
+```
+
+**C. Cron job:**
+```sql
+SELECT cron.schedule(
+  'sharepoint-sync-retry',
+  '*/5 * * * *',                          -- her 5 dakikada bir
+  $$
+  SELECT net.http_post(
+    url := 'https://<PROD_DOMAIN>/api/cron/sharepoint-sync-retry',
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'Authorization', 'Bearer ' || current_setting('app.cron_secret', true)
+    ),
+    body := '{}'::jsonb,
+    timeout_milliseconds := 30000
+  );
+  $$
+);
+
+-- Kontrol
+SELECT * FROM cron.job;
+SELECT * FROM cron.job_run_details ORDER BY start_time DESC LIMIT 10;
+```
+
+Silmek için: `SELECT cron.unschedule('sharepoint-sync-retry');`
+
+---
+
+### 11.6 Gotcha — `proxy.ts` /api/cron bypass'ı
+
+`lib/supabase/proxy.ts` içindeki `updateSession` tüm `/api/*` isteklerini önce auth'lar; cookie yoksa 401 döner. Bu pg_cron'un yapacağı sunucu-sunucu çağrılarını bloklardı. Çözüm: `/api/cron/` path'leri proxy'den bypass'lanıyor (cron endpoint'i kendi CRON_SECRET auth'unu yapıyor). Yeni cron route eklersen aynı `/api/cron/` prefix'ini kullan ya da bypass listesini güncelle.

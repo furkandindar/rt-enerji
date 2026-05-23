@@ -2,6 +2,7 @@ import { SupabaseClient } from '@supabase/supabase-js';
 import { generateRequestPDF } from './generate-request-pdf';
 import { mergeAttachments } from './merge-attachments';
 import { uploadRequestPDF } from '@/lib/storage/upload-request-pdf';
+import { enqueueSharePointSync } from '@/lib/sharepoint/enqueue-sync';
 
 interface BuildAndUploadOptions {
   requestId: string;
@@ -40,6 +41,15 @@ export async function buildAndUploadRequestPDF(
       console.error('Failed to persist pdf_path on requests row:', error);
     }
   }
+
+  // SharePoint sync — killswitch env içinde, fire-and-forget. PDF akışını bloklamaz.
+  void enqueueSharePointSync({
+    requestId,
+    pdfBuffer: finalPdfBuffer,
+    supabasePdfPath: pdfPath,
+  }).catch((err) => {
+    console.error('[sharepoint-enqueue] enqueue başarısız:', err);
+  });
 
   return pdfPath;
 }

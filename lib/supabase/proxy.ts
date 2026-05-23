@@ -13,6 +13,11 @@ export async function updateSession(request: NextRequest) {
     return supabaseResponse;
   }
 
+  // Cron endpoint'leri kendi CRON_SECRET auth'unu kullanır — Supabase session yok.
+  if (request.nextUrl.pathname.startsWith("/api/cron/")) {
+    return supabaseResponse;
+  }
+
   // With Fluid compute, don't put this client in a global environment
   // variable. Always create a new one on each request.
   const supabase = createServerClient(
