@@ -1,208 +1,81 @@
-# RT Enerji Organizasyon Yönetim Sistemi v1.1
+# RT Enerji – Onay Süreçleri & Organizasyon Yönetim Platformu
 
-RT Enerji ve bağlı sahaların organizasyon yapısını, pozisyonları, çalışanları ve atamalarını **tarihçeli** olarak yönetmek için merkezi platform.
+RT Enerji'nin **kurumsal onay süreçlerini (workflow)** dijital olarak yürüten ve **organizasyon yapısını** (şirketler, birimler, pozisyonlar, çalışanlar, tarihçeli atamalar) yöneten merkezi platform. İzin, fazla mesai, harcama, avans, mukayese, görev, kaşe onayı, onay kapağı gibi **14 form** kendi onay zinciriyle işletilir; süreç sonunda **imzalı/kaşeli PDF** üretilip SharePoint'e arşivlenir.
 
-## 🚀 Teknoloji Stack
-
-- **Frontend**: Next.js 15 + React 19 + TypeScript
-- **Backend**: Supabase (PostgreSQL + Auth + Storage)
-- **UI**: shadcn/ui + Tailwind CSS v4
-- **Auth**: Microsoft Azure/Entra ID SSO (`@rtenerji.com`)
-
-## 📚 Dokümantasyon
-
-- [Organizasyon Veri Modeli](docs/organizasyon-veri-modeli.md) - Database şeması ve ilişkiler
-- [Yönetici Özeti](docs/organizasyon-sistemi-yonetici-ozet.md) - İş tarafı için özet
-- [Teknik Tasarım](docs/teknik-tasarim-veritabani-ve-auth.md) - Teknik detaylar
-- [Auth Setup](docs/auth-setup.md) - OAuth callback fix dokümantasyonu
-- **[Frontend Geliştirme Planı](docs/frontend-development-plan.md)** 👈 **Buradan başla!**
+> ## 📖 Sistemin nasıl çalıştığını öğrenmek için → **[docs/genel-bakis.md](docs/genel-bakis.md)** 👈 **Buradan başla!**
+> Mimari, veri modeli, workflow motoru, talep yaşam döngüsü ve belge üretim hattı orada tek dokümanda anlatılır.
 
 ---
 
-## ✨ Özellikler
+## 🚀 Teknoloji Stack
 
-### Mevcut (Hazır)
-- ✅ Microsoft Azure/Entra ID SSO entegrasyonu
-- ✅ OAuth callback flow (düzeltildi)
-- ✅ Database schema (7 tablo + RLS policies)
-- ✅ Auto-provisioning (auth.users → app_users)
-- ✅ Role-based access (ORG_ADMIN / ORG_VIEWER)
-- ✅ App Shell + Sidebar layout
-- ✅ Dark/Light theme
-- ✅ TypeScript + Type generation
+- **Frontend:** Next.js 16 (App Router) + React 19 + TypeScript
+- **Backend:** Supabase (PostgreSQL + Auth + Storage + Realtime)
+- **UI:** shadcn/ui + Tailwind CSS v4
+- **Kimlik:** Microsoft Azure / Entra ID SSO (`@rtenerji.com`)
+- **Entegrasyon:** Microsoft Graph (Mail · Calendar · To-Do · SharePoint)
+- **Belge:** `@react-pdf/renderer` + `pdf-lib` (PDF/imza/kaşe), ExcelJS (dışa aktarım)
+- **Form:** react-hook-form + Zod · **Görselleştirme:** ReactFlow + ELK (org chart)
 
-### Geliştirme Aşamasında
-- 🚧 Sözlük yönetimi (unit_types, position_types, grade_levels)
-- 🚧 Organizasyon birimleri CRUD
-- 🚧 Pozisyon yönetimi
-- 🚧 Çalışan yönetimi
-- 🚧 Atama yönetimi (tarihçeli)
-- 🚧 Org chart görselleştirmesi
-- 🚧 Raporlar
+## ✨ Başlıca özellikler
 
-## 🚀 Hızlı Başlangıç
+- 🔐 Azure SSO + rol bazlı erişim (`ORG_ADMIN` / `ORG_VIEWER`) + satır düzeyi güvenlik (RLS)
+- 🗂️ Organizasyon yönetimi: şirket, birim, pozisyon, çalışan ve **tarihçeli** atamalar
+- 🧭 Org chart görselleştirmesi (Excel/PNG dışa aktarım)
+- 📝 14 onay süreci; dinamik onaycı (birim amiri/ilgili kişiler), koşullu adımlar, çok fazlı süreçler
+- 🔁 Talep yaşam döngüsü: taslak → onay → revize/geri-çek/iptal → tamamlandı (denetim izli)
+- 🖊️ Dijital imza (yazı tipi veya çizim) + kaşe; otomatik **PDF üretimi**
+- 📤 SharePoint'e otomatik belge arşivleme (kuyruk + her 5 dk cron retry)
+- 🔔 Uygulama içi (Realtime) + e-posta bildirimleri
 
-### 1. Gereksinimler
+## 🏁 Hızlı başlangıç
 
-- Node.js 18+
-- npm / yarn / pnpm
-- Supabase hesabı
-
-### 2. Kurulum
+**Gereksinimler:** Node.js 18+, bir Supabase projesi, Azure (Entra ID) uygulama kaydı.
 
 ```bash
-# Bağımlılıkları yükle
 npm install
-
-# Environment variables ayarla
-cp .env.example .env.local
+cp .env.example .env.local   # yoksa .env.local'i elle oluştur
+npm run dev                  # http://localhost:3000
 ```
 
-`.env.local` dosyasını düzenle:
+`.env.local` (asgari):
 ```env
-NEXT_PUBLIC_SUPABASE_URL=your-project-url
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+NEXT_PUBLIC_SUPABASE_URL=...
+NEXT_PUBLIC_SUPABASE_ANON_KEY=...
+# + Microsoft Graph / SharePoint sunucu secret'ları (mail, app-only kimlik, SharePoint site/kütüphane) — ekipten alın
 ```
 
-### 3. Database Setup
+**Supabase:** Şema `dev_schema.sql` / `sql/` altındadır; RLS tüm tablolarda aktiftir. Azure sağlayıcısı ve redirect URL'leri Supabase konsolundan ayarlanır (`/auth/callback`).
 
-Supabase SQL Editor'de sırasıyla çalıştır:
+## 🔧 Komutlar
 
 ```bash
-# 1. Schema
-sql/organizasyon_mvp_schema.sql
-
-# 2. Triggers
-sql/organizasyon_mvp_triggers.sql
-
-# 3. RLS Policies
-sql/organizasyon_mvp_rls.sql
+npm run dev         # geliştirme sunucusu
+npm run build       # production build
+npm start           # production sunucusu
+npm run lint        # ESLint
+npm run typecheck   # tsc --noEmit
+# Supabase tipleri:
+npx supabase gen types typescript --project-id <proje-id> > lib/database.types.ts
 ```
 
-### 4. Supabase Auth Ayarları
+## 📚 Dokümantasyon
 
-**Authentication → Providers → Azure:**
-- Client ID ve Secret ekle
-- Redirect URL: `http://localhost:3000/auth/callback`
-
-**Authentication → URL Configuration:**
-- Redirect URLs'e ekle: `http://localhost:3000/auth/callback`
-
-### 5. Uygulamayı Başlat
-
-```bash
-npm run dev
-```
-
-Uygulama [localhost:3000](http://localhost:3000) adresinde çalışacak.
-
-### 6. İlk Kullanıcı
-
-- `/auth/login` sayfasına git
-- "Microsoft ile giriş yap" butonuna tıkla
-- `@rtenerji.com` hesabınla giriş yap
-- Otomatik olarak `ORG_VIEWER` rolü atanacak
-
-**Admin yapmak için:**
-```sql
-UPDATE app_users
-SET role = 'ORG_ADMIN'
-WHERE email = 'your-email@rtenerji.com';
-```
-
-## 📂 Proje Yapısı
-
-```
-rt-enerji/
-├── app/
-│   ├── (dashboard)/              # Ana uygulama sayfaları
-│   │   ├── page.tsx              # Dashboard
-│   │   └── settings/
-│   │       └── dictionaries/     # 👈 İlk geliştirme buradan başlayacak
-│   ├── auth/                     # Auth sayfaları
-│   │   ├── login/
-│   │   ├── callback/             # OAuth callback
-│   │   └── auth-code-error/
-│   ├── api/                      # API routes (gelecek)
-│   └── layout.tsx
-├── components/
-│   ├── app-shell.tsx             # Ana layout
-│   ├── app-sidebar.tsx           # Sidebar navigation
-│   └── ui/                       # shadcn/ui components
-├── lib/
-│   ├── supabase/                 # Supabase clients
-│   ├── database.types.ts         # Auto-generated types
-│   └── utils.ts
-├── sql/
-│   ├── organizasyon_mvp_schema.sql    # Database schema
-│   ├── organizasyon_mvp_triggers.sql  # Triggers
-│   └── organizasyon_mvp_rls.sql       # RLS policies
-└── docs/
-    ├── organizasyon-veri-modeli.md
-    ├── organizasyon-sistemi-yonetici-ozet.md
-    ├── teknik-tasarim-veritabani-ve-auth.md
-    ├── auth-setup.md
-    └── frontend-development-plan.md   # 👈 Geliştirme planı
-```
-
-## 🎯 Geliştirme Yol Haritası
-
-### Faz 1: Temel Altyapı (1-2 hafta)
-- [ ] Sözlük yönetimi (unit_types, position_types, grade_levels)
-- [ ] Ortak data table component
-- [ ] Ortak form dialog component
-- [ ] Dashboard skeleton
-
-### Faz 2: Organizasyon Yönetimi (2-3 hafta)
-- [ ] Organizasyon birimleri CRUD
-- [ ] Pozisyon yönetimi
-- [ ] Hiyerarşik tree view
-
-### Faz 3: Çalışan Yönetimi (2-3 hafta)
-- [ ] Çalışan CRUD
-- [ ] Atama yönetimi (tarihçeli)
-- [ ] Terfi/transfer işlemleri
-
-### Faz 4: Görselleştirme (2-3 hafta)
-- [ ] Org chart
-- [ ] Raporlar
-- [ ] Export fonksiyonları
-
-Detaylı plan için: [Frontend Geliştirme Planı](docs/frontend-development-plan.md)
-
-## 🔧 Geliştirme Komutları
-
-```bash
-# Development server
-npm run dev
-
-# Type generation (Supabase)
-npx supabase gen types typescript --project-id your-project-id > lib/database.types.ts
-
-# Lint
-npm run lint
-
-# Build
-npm run build
-
-# Production server
-npm start
-```
+| Konu | Doküman |
+|---|---|
+| **Sistem genel bakış (önce bunu oku)** | **[docs/genel-bakis.md](docs/genel-bakis.md)** |
+| Tüm onay süreçleri ve zincirleri | [docs/surec-bilgileri-prod.md](docs/surec-bilgileri-prod.md) |
+| Workflow motoru (koşullu / yaşam döngüsü) | [docs/v4-workflow-engine-conditional.md](docs/v4-workflow-engine-conditional.md) · [docs/v5-workflow-engine-lifecycle.md](docs/v5-workflow-engine-lifecycle.md) |
+| Organizasyon veri modeli | [docs/organizasyon-veri-modeli.md](docs/organizasyon-veri-modeli.md) |
+| Veritabanı & Auth teknik tasarımı | [docs/teknik-tasarim-veritabani-ve-auth.md](docs/teknik-tasarim-veritabani-ve-auth.md) |
+| SharePoint entegrasyonu | [docs/sharepoint-integration-plan.md](docs/sharepoint-integration-plan.md) |
 
 ## 📝 Notlar
 
-- **Next.js 15**: `proxy.ts` kullanıyor (`middleware.ts` yerine)
-- **RLS**: Tüm tablolarda aktif, ORG_ADMIN ve ORG_VIEWER rolleri
-- **Soft Delete**: `is_active` alanı kullanılıyor
-- **Type Safety**: Supabase CLI ile otomatik type generation
+- **Middleware:** `proxy.ts` (Next.js `middleware.ts` yerine) — her istekte oturum tazelenir.
+- **RLS:** Tüm tablolarda aktif; temel desen "talep sahibi VEYA onaycı VEYA ORG_ADMIN".
+- **Belge arşivi:** SharePoint senkronu prod'da `pg_cron`/`pg_net` ile çalışır (dev'de yok).
 
-## 🤝 Katkıda Bulunma
+---
 
-1. Feature branch oluştur (`git checkout -b feature/amazing-feature`)
-2. Değişiklikleri commit et (`git commit -m 'feat: add amazing feature'`)
-3. Branch'i push et (`git push origin feature/amazing-feature`)
-4. Pull Request aç
-
-## 📄 Lisans
-
-Bu proje RT Enerji için geliştirilmiştir.
+_Bu proje RT Enerji için geliştirilmiştir._
