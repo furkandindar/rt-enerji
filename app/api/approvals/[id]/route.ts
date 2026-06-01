@@ -5,10 +5,8 @@ import {
   notifyRequestApproved,
   notifyRequestRejected
 } from "@/lib/workflow";
-import { generateRequestPDF } from "@/lib/pdf/generate-request-pdf";
-import { mergeAttachments } from "@/lib/pdf/merge-attachments";
-import { uploadRequestPDF } from "@/lib/storage/upload-request-pdf";
 import { buildAndUploadRequestPDF } from "@/lib/pdf/build-and-upload-request-pdf";
+import { enqueueSharePointSync } from "@/lib/sharepoint/enqueue-sync";
 import { stampPDF, type StampPositionOverrides } from "@/lib/pdf/stamp-pdf";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { StampPosition } from "@/lib/workflow/types";
@@ -760,37 +758,27 @@ export async function PATCH(
                   .eq("id", requestData.id);
 
                 console.log('Stamped PDF uploaded and saved:', stampedPdfPath);
+
+                // SharePoint sync — kaşeli akış buildAndUploadRequestPDF kullanmıyor
+                // (stampPDF kendi başına PDF üretiyor), bu yüzden manuel enqueue.
+                void enqueueSharePointSync({
+                  requestId: requestData.id,
+                  pdfBuffer: stampedPdfBuffer,
+                  supabasePdfPath: stampedPdfPath,
+                }).catch((err) => console.error('[sharepoint-enqueue stamp]', err));
               }
             } else {
               console.error('Stamp request or stamp not found for request:', requestData.id);
             }
           } else {
             // ===== DİĞER WORKFLOW'LAR: Normal PDF oluştur =====
-            console.log('Generating PDF for request:', requestData.id);
-            const pdfBuffer = await generateRequestPDF({
+            // buildAndUploadRequestPDF: generate + merge + Storage upload + pdf_path UPDATE
+            // + fire-and-forget SharePoint sync (env'le killswitch'li).
+            const pdfPath = await buildAndUploadRequestPDF({
               requestId: requestData.id,
               supabase,
             });
-
-            // Ek dosyaları (attachment) ana PDF'e birleştir
-            console.log('Merging attachments...');
-            const finalPdfBuffer = await mergeAttachments(pdfBuffer, requestData.id, supabase);
-
-            console.log('Uploading PDF to storage...');
-            const pdfPath = await uploadRequestPDF({
-              requestId: requestData.id,
-              pdfBuffer: finalPdfBuffer,
-            });
-
             console.log('PDF uploaded successfully:', pdfPath);
-
-            // PDF path'i database'e kaydet
-            await supabase
-              .from("requests")
-              .update({ pdf_path: pdfPath })
-              .eq("id", requestData.id);
-
-            console.log('PDF path saved to database');
           }
         } catch (pdfError) {
           // PDF oluşturma hatası - loglayalım ama işlemi durdurmayalım
@@ -823,25 +811,13 @@ export async function PATCH(
           .eq("id", requestData.id);
 
         // Onay PDF'i oluştur (gerçekleşen tarihler henüz boş)
+        // buildAndUploadRequestPDF: generate + merge + Storage upload + pdf_path UPDATE
+        // + fire-and-forget SharePoint sync (env'le killswitch'li).
         try {
-          console.log('Generating approval PDF for request:', requestData.id);
-          const pdfBuffer = await generateRequestPDF({
+          const pdfPath = await buildAndUploadRequestPDF({
             requestId: requestData.id,
             supabase,
           });
-
-          const finalPdfBuffer = await mergeAttachments(pdfBuffer, requestData.id, supabase);
-
-          const pdfPath = await uploadRequestPDF({
-            requestId: requestData.id,
-            pdfBuffer: finalPdfBuffer,
-          });
-
-          await supabase
-            .from("requests")
-            .update({ pdf_path: pdfPath })
-            .eq("id", requestData.id);
-
           console.log('Approval phase PDF uploaded:', pdfPath);
         } catch (pdfError) {
           console.error('Error generating approval phase PDF:', pdfError);
@@ -904,25 +880,13 @@ export async function PATCH(
         // tarama zaten pdf_path'e yazıldı; burada otomatik PDF üretirsek o taramayı
         // eziyor olurduk → atla.
         if (!hasSignedPdfCompletionStep) {
+          // buildAndUploadRequestPDF: generate + merge + Storage upload + pdf_path UPDATE
+          // + fire-and-forget SharePoint sync.
           try {
-            console.log('Generating final PDF for completed request:', requestData.id);
-            const pdfBuffer = await generateRequestPDF({
+            const pdfPath = await buildAndUploadRequestPDF({
               requestId: requestData.id,
               supabase,
             });
-
-            const finalPdfBuffer = await mergeAttachments(pdfBuffer, requestData.id, supabase);
-
-            const pdfPath = await uploadRequestPDF({
-              requestId: requestData.id,
-              pdfBuffer: finalPdfBuffer,
-            });
-
-            await supabase
-              .from("requests")
-              .update({ pdf_path: pdfPath })
-              .eq("id", requestData.id);
-
             console.log('Final PDF uploaded:', pdfPath);
           } catch (pdfError) {
             console.error('Error generating final PDF:', pdfError);
