@@ -50,6 +50,18 @@ export async function GET(request: Request) {
         }
       }
 
+      // Provider token'ları (Microsoft) user_ms_tokens'a yazdık; artık Supabase
+      // session cookie'sinde tutmaya gerek yok. Orada bırakınca cookie ~4 KB şişiyor
+      // (provider_token ~2.6 KB + provider_refresh_token ~1.6 KB) ve 4 chunk'a bölünüp
+      // Vercel HTTP/2 başlık limitini aşıyor → client-side nav'da ERR_HTTP2_PROTOCOL_ERROR.
+      // refreshSession, provider token'sız yeni bir session yazar; @supabase/ssr eski
+      // fazla chunk'ları temizler → cookie ~2 chunk'a iner, limitin altında kalır.
+      try {
+        await supabase.auth.refreshSession();
+      } catch (e) {
+        console.error("[AuthCallback] refreshSession (cookie slim) failed:", e);
+      }
+
       const forwardedHost = request.headers.get("x-forwarded-host"); // original origin before load balancer
       const isLocalEnv = process.env.NODE_ENV === "development";
       if (isLocalEnv) {
