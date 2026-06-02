@@ -1,6 +1,7 @@
 import React from 'react';
 import { Document, Page, Text, View, StyleSheet, Font, Image } from '@react-pdf/renderer';
 import { format } from 'date-fns';
+import { formatTrDate } from '@/lib/timezone';
 import { SignatureFont } from '@/lib/signature/types';
 import type { PdfApproval, PdfRequest, PdfRequester, SignatureInfo } from './types';
 import path from 'path';
@@ -226,7 +227,7 @@ export const ExpenseFormPDFTemplate: React.FC<ExpenseFormPDFTemplateProps> = ({
             <View style={styles.infoLabel}><Text style={styles.infoLabelText}>Tarih</Text></View>
             <View style={styles.infoValue}><Text style={styles.infoText}>{format(new Date(expenseRequest.request_date), 'dd.MM.yyyy')}</Text></View>
             <View style={styles.infoLabel}><Text style={styles.infoLabelText}>Form Tarihi</Text></View>
-            <View style={styles.infoValueLast}><Text style={styles.infoText}>{format(new Date(request.created_at), 'dd.MM.yyyy')}</Text></View>
+            <View style={styles.infoValueLast}><Text style={styles.infoText}>{formatTrDate(request.created_at, '.')}</Text></View>
           </View>
           <View style={styles.infoRow}>
             <View style={styles.infoLabel}><Text style={styles.infoLabelText}>Proje Adı</Text></View>

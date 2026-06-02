@@ -2,6 +2,7 @@
 // https://learn.microsoft.com/en-us/graph/api/user-sendmail
 
 import { graphAppFetch } from '@/lib/msgraph/app-client';
+import { APP_TZ } from '@/lib/timezone';
 
 // ============================================================================
 // Config
@@ -78,6 +79,7 @@ function formatDateTime(iso?: string): string | null {
     const d = new Date(iso);
     if (isNaN(d.getTime())) return null;
     return new Intl.DateTimeFormat('tr-TR', {
+      timeZone: APP_TZ,
       day: '2-digit', month: '2-digit', year: 'numeric',
       hour: '2-digit', minute: '2-digit',
     }).format(d);

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Document, Page, Text, View, StyleSheet, Font, Image } from '@react-pdf/renderer';
-import { format } from 'date-fns';
+import { formatTrDate, formatTrDateTime } from '@/lib/timezone';
 import { SignatureFont } from '@/lib/signature/types';
 import type { PdfApproval, PdfRequest, PdfRequester, SignatureInfo } from './types';
 import path from 'path';
@@ -443,7 +443,7 @@ export const RequestPDFTemplate: React.FC<RequestPDFTemplateProps> = ({
               <View style={styles.labelCell}><Text style={styles.labelText}>İzne Çıkış Tarihi/Saati</Text></View>
               <View style={styles.valueCell}>
                 <Text style={styles.valueText}>
-                  {leaveRequest ? format(new Date(leaveRequest.start_datetime), 'dd/MM/yyyy HH:mm') : '-'}
+                  {leaveRequest ? formatTrDateTime(leaveRequest.start_datetime) : '-'}
                 </Text>
               </View>
             </View>
@@ -452,7 +452,7 @@ export const RequestPDFTemplate: React.FC<RequestPDFTemplateProps> = ({
               <View style={styles.labelCell}><Text style={styles.labelText}>İzinden Dönüş Tarihi/Saati</Text></View>
               <View style={styles.valueCell}>
                 <Text style={styles.valueText}>
-                  {leaveRequest ? format(new Date(leaveRequest.end_datetime), 'dd/MM/yyyy HH:mm') : '-'}
+                  {leaveRequest ? formatTrDateTime(leaveRequest.end_datetime) : '-'}
                 </Text>
               </View>
             </View>
@@ -494,7 +494,7 @@ export const RequestPDFTemplate: React.FC<RequestPDFTemplateProps> = ({
               <View style={styles.rightLabelCell}><Text style={styles.labelText}>İzin Talep Tarihi:</Text></View>
               <View style={styles.rightValueCell}>
                 <Text style={styles.valueText}>
-                  {format(new Date(request.created_at), 'dd/MM/yyyy')}
+                  {formatTrDate(request.created_at)}
                 </Text>
               </View>
             </View>

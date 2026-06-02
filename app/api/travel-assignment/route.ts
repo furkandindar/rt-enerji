@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { createApprovalChain, getWorkflowDefinitionByCode, notifyApprover, canStartWorkflow } from "@/lib/workflow";
 import type { CreateTravelAssignmentInput } from "@/lib/workflow";
+import { istanbulInputToTimestamptz } from "@/lib/timezone";
 
 // GET /api/travel-assignment - Kullanıcının görev formlarını listele
 export async function GET() {
@@ -131,8 +132,8 @@ export async function POST(request: Request) {
         assignment_subject: body.assignment_subject,
         destination_city: body.destination_city,
         destination_institution: body.destination_institution,
-        estimated_departure_at: body.estimated_departure_at,
-        estimated_return_at: body.estimated_return_at,
+        estimated_departure_at: istanbulInputToTimestamptz(body.estimated_departure_at),
+        estimated_return_at: istanbulInputToTimestamptz(body.estimated_return_at),
         transportation_type: body.transportation_type,
         transportation_cost: body.transportation_cost || 0,
         accommodation_needed: body.accommodation_needed || false,

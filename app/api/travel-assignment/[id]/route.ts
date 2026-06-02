@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { applyAuditStamp, canEditRequest } from "@/lib/workflow";
 import type { CreateTravelAssignmentInput } from "@/lib/workflow";
+import { istanbulInputToTimestamptz } from "@/lib/timezone";
 
 // PATCH /api/travel-assignment/[id] — Seyahat görevi temel alanlarını günceller.
 // NOT: actual_departure_at / actual_return_at alanları (COMPLETION fazı, asistan doldurur)
@@ -49,8 +50,8 @@ export async function PATCH(
     if (body.assignment_subject !== undefined) patch.assignment_subject = body.assignment_subject;
     if (body.destination_city !== undefined) patch.destination_city = body.destination_city;
     if (body.destination_institution !== undefined) patch.destination_institution = body.destination_institution;
-    if (body.estimated_departure_at !== undefined) patch.estimated_departure_at = body.estimated_departure_at;
-    if (body.estimated_return_at !== undefined) patch.estimated_return_at = body.estimated_return_at;
+    if (body.estimated_departure_at !== undefined) patch.estimated_departure_at = istanbulInputToTimestamptz(body.estimated_departure_at);
+    if (body.estimated_return_at !== undefined) patch.estimated_return_at = istanbulInputToTimestamptz(body.estimated_return_at);
     if (body.transportation_type !== undefined) patch.transportation_type = body.transportation_type;
     if (body.transportation_cost !== undefined) patch.transportation_cost = body.transportation_cost || 0;
     if (body.accommodation_needed !== undefined) patch.accommodation_needed = body.accommodation_needed;

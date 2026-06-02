@@ -4,6 +4,7 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import type { EmailDetailRow } from './email-service';
 import { buildWorkflowDetails } from './workflow-details';
+import { APP_TZ } from '@/lib/timezone';
 
 // ============================================================================
 // Types
@@ -31,6 +32,7 @@ export function fmtDate(iso?: string | null): string | null {
   const d = new Date(iso);
   if (isNaN(d.getTime())) return null;
   return new Intl.DateTimeFormat('tr-TR', {
+    timeZone: APP_TZ,
     day: '2-digit', month: '2-digit', year: 'numeric',
   }).format(d);
 }
@@ -40,6 +42,7 @@ export function fmtDateTime(iso?: string | null): string | null {
   const d = new Date(iso);
   if (isNaN(d.getTime())) return null;
   return new Intl.DateTimeFormat('tr-TR', {
+    timeZone: APP_TZ,
     day: '2-digit', month: '2-digit', year: 'numeric',
     hour: '2-digit', minute: '2-digit',
   }).format(d);

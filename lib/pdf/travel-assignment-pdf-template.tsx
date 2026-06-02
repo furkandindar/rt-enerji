@@ -1,6 +1,6 @@
 import React from 'react';
 import { Document, Page, Text, View, StyleSheet, Font, Image } from '@react-pdf/renderer';
-import { format } from 'date-fns';
+import { formatTrDate, formatTrDateTime } from '@/lib/timezone';
 import { SignatureFont } from '@/lib/signature/types';
 import type { PdfApproval, PdfRequest, PdfRequester, SignatureInfo } from './types';
 import path from 'path';
@@ -180,7 +180,7 @@ export const TravelAssignmentPDFTemplate: React.FC<TravelAssignmentPDFTemplatePr
           </View>
           <View style={styles.tableRowLast}>
             <View style={styles.labelCell}><Text style={styles.labelText}>Form Tarihi</Text></View>
-            <View style={styles.valueCell}><Text style={styles.valueText}>{format(new Date(request.created_at), 'dd/MM/yyyy')}</Text></View>
+            <View style={styles.valueCell}><Text style={styles.valueText}>{formatTrDate(request.created_at)}</Text></View>
           </View>
         </View>
 
@@ -199,9 +199,9 @@ export const TravelAssignmentPDFTemplate: React.FC<TravelAssignmentPDFTemplatePr
           </View>
           <View style={styles.halfRow}>
             <View style={styles.halfLabelCell}><Text style={styles.labelText}>Tahmini Çıkış</Text></View>
-            <View style={styles.halfValueCell}><Text style={styles.valueText}>{tr?.estimated_departure_at ? format(new Date(tr.estimated_departure_at), 'dd/MM/yyyy HH:mm') : '-'}</Text></View>
+            <View style={styles.halfValueCell}><Text style={styles.valueText}>{tr?.estimated_departure_at ? formatTrDateTime(tr.estimated_departure_at) : '-'}</Text></View>
             <View style={styles.halfLabelCell}><Text style={styles.labelText}>Tahmini Dönüş</Text></View>
-            <View style={styles.halfValueCellLast}><Text style={styles.valueText}>{tr?.estimated_return_at ? format(new Date(tr.estimated_return_at), 'dd/MM/yyyy HH:mm') : '-'}</Text></View>
+            <View style={styles.halfValueCellLast}><Text style={styles.valueText}>{tr?.estimated_return_at ? formatTrDateTime(tr.estimated_return_at) : '-'}</Text></View>
           </View>
           <View style={styles.halfRow}>
             <View style={styles.halfLabelCell}><Text style={styles.labelText}>Ulaşım Aracı</Text></View>
@@ -226,9 +226,9 @@ export const TravelAssignmentPDFTemplate: React.FC<TravelAssignmentPDFTemplatePr
         <View style={styles.tableContainer}>
           <View style={styles.halfRow}>
             <View style={styles.halfLabelCell}><Text style={styles.labelText}>Gidiş Tarihi</Text></View>
-            <View style={styles.halfValueCell}><Text style={styles.valueText}>{tr?.actual_departure_at ? format(new Date(tr.actual_departure_at), 'dd/MM/yyyy HH:mm') : '—'}</Text></View>
+            <View style={styles.halfValueCell}><Text style={styles.valueText}>{tr?.actual_departure_at ? formatTrDateTime(tr.actual_departure_at) : '—'}</Text></View>
             <View style={styles.halfLabelCell}><Text style={styles.labelText}>Dönüş Tarihi</Text></View>
-            <View style={styles.halfValueCellLast}><Text style={styles.valueText}>{tr?.actual_return_at ? format(new Date(tr.actual_return_at), 'dd/MM/yyyy HH:mm') : '—'}</Text></View>
+            <View style={styles.halfValueCellLast}><Text style={styles.valueText}>{tr?.actual_return_at ? formatTrDateTime(tr.actual_return_at) : '—'}</Text></View>
           </View>
         </View>
 

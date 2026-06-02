@@ -1,6 +1,6 @@
 import React from 'react';
 import { Document, Page, Text, View, StyleSheet, Font, Image } from '@react-pdf/renderer';
-import { format } from 'date-fns';
+import { formatTrDate } from '@/lib/timezone';
 import { SignatureFont } from '@/lib/signature/types';
 import type { PdfApproval, PdfRequest, PdfRequester, SignatureInfo } from './types';
 import path from 'path';
@@ -151,7 +151,7 @@ export const SalaryAdvancePDFTemplate: React.FC<SalaryAdvancePDFTemplateProps> =
             <View style={styles.tableRow}><View style={styles.labelCell}><Text style={styles.labelText}>Adı / Soyadı</Text></View><View style={styles.valueCell}><Text style={styles.valueText}>{requester.first_name} {requester.last_name}</Text></View></View>
             <View style={styles.tableRow}><View style={styles.labelCell}><Text style={styles.labelText}>Şirket</Text></View><View style={styles.valueCell}><Text style={styles.valueText}>RT ENERJİ TURİZM SAN. TİC. A.Ş.</Text></View></View>
             <View style={styles.tableRow}><View style={styles.labelCell}><Text style={styles.labelText}>Görev Unvanı</Text></View><View style={styles.valueCell}><Text style={styles.valueText}>{getRequesterPosition()}</Text></View></View>
-            <View style={styles.tableRowLast}><View style={styles.labelCell}><Text style={styles.labelText}>Tarih</Text></View><View style={styles.valueCell}><Text style={styles.valueText}>{format(new Date(request.created_at), 'dd/MM/yyyy')}</Text></View></View>
+            <View style={styles.tableRowLast}><View style={styles.labelCell}><Text style={styles.labelText}>Tarih</Text></View><View style={styles.valueCell}><Text style={styles.valueText}>{formatTrDate(request.created_at)}</Text></View></View>
           </View>
           <View style={styles.rightColumn}>
             <View style={styles.rightTopRow}><View style={styles.rightLabelCell}><Text style={styles.labelText}>Avans Miktarı:</Text></View><View style={styles.rightValueCell}><Text style={styles.valueText}>{salaryAdvanceRequest?.amount?.toLocaleString('tr-TR')} TL</Text></View></View>

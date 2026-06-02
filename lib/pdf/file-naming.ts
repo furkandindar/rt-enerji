@@ -16,6 +16,7 @@
 // ============================================================================
 
 import type { Database } from '@/lib/database.types';
+import { APP_TZ } from '@/lib/timezone';
 
 type RequestStatus = Database['public']['Enums']['request_status'];
 
@@ -101,10 +102,13 @@ export function slugifyTr(input: string): string {
 export function formatYYYYMMDD(input: string | Date): string {
   const d = typeof input === 'string' ? new Date(input) : input;
   if (isNaN(d.getTime())) return '00000000';
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}${m}${day}`;
+  // Dosya adı, Türkiye saatine göre günü yansıtsın (sunucu UTC olsa bile).
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: APP_TZ,
+    year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(d);
+  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? '';
+  return `${get('year')}${get('month')}${get('day')}`;
 }
 
 // ----------------------------------------------------------------------------

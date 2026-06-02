@@ -1,6 +1,6 @@
 import React from 'react';
 import { Document, Page, Text, View, StyleSheet, Font, Image } from '@react-pdf/renderer';
-import { format } from 'date-fns';
+import { formatTrDate, formatTrDateTime } from '@/lib/timezone';
 import { SignatureFont } from '@/lib/signature/types';
 import type { PdfApproval, PdfRequest, PdfRequester, SignatureInfo } from './types';
 import path from 'path';
@@ -135,7 +135,7 @@ const StaffShortagePDF: React.FC<StaffShortageProps> = ({
   };
 
   const monthName = MONTH_NAMES[String(overtimeRequest.month)] || String(overtimeRequest.month);
-  const requestDate = format(new Date(request.created_at), 'dd/MM/yyyy');
+  const requestDate = formatTrDate(request.created_at);
   const locationLabel = overtimeRequest.work_location || 'Merkez, Şube ve İşletmeler';
 
   return (
@@ -231,8 +231,8 @@ const EmergencyPDF: React.FC<EmergencyProps> = ({
   };
 
   const monthName = MONTH_NAMES[String(overtimeRequest.month)] || String(overtimeRequest.month);
-  const requestDate = format(new Date(request.created_at), 'dd/MM/yyyy');
-  const fmtDate = (val: string | null | undefined) => val ? format(new Date(val), 'dd/MM/yyyy HH:mm') : '-';
+  const requestDate = formatTrDate(request.created_at);
+  const fmtDate = (val: string | null | undefined) => val ? formatTrDateTime(val) : '-';
 
   return (
     <Page size="A4" style={staffStyles.page}>

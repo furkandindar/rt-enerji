@@ -10,6 +10,7 @@ import { Loader2, MapPin } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { SignaturePanel } from "@/components/signature-panel";
 import { SignatureFont } from "@/lib/signature/types";
+import { utcToIstanbulInput } from "@/lib/timezone";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -199,7 +200,7 @@ export default function NewTravelAssignmentPage() {
         };
         if (cancelled) return;
         const toDateTimeLocal = (iso: string | undefined): string =>
-          iso ? iso.slice(0, 16) : "";
+          utcToIstanbulInput(iso);
         form.reset({
           company_id: f.company_id ?? "",
           assignment_subject: f.assignment_subject ?? "",

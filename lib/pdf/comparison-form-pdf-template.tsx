@@ -1,6 +1,7 @@
 import React from 'react';
 import { Document, Page, Text, View, StyleSheet, Font, Image } from '@react-pdf/renderer';
 import { format } from 'date-fns';
+import { formatTrDate } from '@/lib/timezone';
 import { SignatureFont } from '@/lib/signature/types';
 import type { PdfApproval, PdfRequester, SignatureInfo } from './types';
 import path from 'path';
@@ -720,7 +721,7 @@ const SignatureSection: React.FC<SignatureSectionProps> = ({
       : a.status === 'REJECTED'
         ? <Text style={{ fontSize: 9, fontWeight: 700, color: '#DC2626' }}>Reddedildi</Text>
         : <Text style={styles.signaturePending}></Text>,
-    meta: a.decided_at ? format(new Date(a.decided_at), 'dd.MM.yyyy') : '',
+    meta: a.decided_at ? formatTrDate(a.decided_at, '.') : '',
     comment: a.comment || '',
   }));
   const cellW = Math.floor(totalRowW / Math.max(blocks.length, 1));

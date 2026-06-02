@@ -10,6 +10,7 @@ import { Loader2, Clock, Plus, Trash2, Upload, X, FileText } from "lucide-react"
 import { createClient } from "@/lib/supabase/client";
 import { SignaturePanel } from "@/components/signature-panel";
 import { SignatureFont } from "@/lib/signature/types";
+import { utcToIstanbulInput } from "@/lib/timezone";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -294,7 +295,7 @@ export default function NewOvertimePage() {
 
         // ISO timestamptz → datetime-local input ve date+time parça çıkarımı
         const toDateTimeLocal = (iso: string | null | undefined): string =>
-          iso ? iso.slice(0, 16) : "";
+          utcToIstanbulInput(iso);
         const splitDateTime = (iso: string | null | undefined): { date: string; time: string } => {
           if (!iso) return { date: "", time: "" };
           const d = new Date(iso);

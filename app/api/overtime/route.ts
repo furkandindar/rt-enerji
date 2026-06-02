@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 import { createApprovalChain, getWorkflowDefinitionByCode, notifyApprover, canStartWorkflow } from "@/lib/workflow";
 import type { CreateOvertimeInput } from "@/lib/workflow";
+import { APP_UTC_OFFSET, istanbulInputToTimestamptz } from "@/lib/timezone";
 
 const ALLOWED_PAGE_SIZES = [10, 25, 50, 100] as const;
 const DEFAULT_PAGE_SIZE = 10;
@@ -205,11 +206,11 @@ export async function POST(request: Request) {
     // EMERGENCY alanları
     if (body.overtime_type === 'EMERGENCY') {
       const toTimestamptz = (date: string, time: string) =>
-        `${date}T${time}:00+03:00`;
+        `${date}T${time}:00${APP_UTC_OFFSET}`;
 
       overtimeData.work_location = body.work_location;
-      overtimeData.work_start_date = body.work_start_date;
-      overtimeData.work_end_date = body.work_end_date;
+      overtimeData.work_start_date = istanbulInputToTimestamptz(body.work_start_date);
+      overtimeData.work_end_date = istanbulInputToTimestamptz(body.work_end_date);
       overtimeData.previous_shift_start = toTimestamptz(body.previous_shift_start_date, body.previous_shift_start_time);
       overtimeData.previous_shift_end = toTimestamptz(body.previous_shift_end_date, body.previous_shift_end_time);
       overtimeData.next_shift_start = toTimestamptz(body.next_shift_start_date, body.next_shift_start_time);
