@@ -10,6 +10,9 @@
 import { processSharePointRetryQueue } from "@/lib/sharepoint/retry-worker";
 import { NextRequest, NextResponse } from "next/server";
 
+// Up to 20 entries × multi-step Graph upload her birinde — yeterli pencere lazım.
+export const maxDuration = 60;
+
 export async function POST(request: NextRequest) {
   const secret = process.env.CRON_SECRET;
   if (!secret) {

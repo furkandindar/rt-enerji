@@ -15,6 +15,9 @@ import {
 import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 
+// Admin "all" modunda queue'nun tamamı işlenebilir — geniş pencere şart.
+export const maxDuration = 60;
+
 export async function POST(request: NextRequest) {
   // 1) Auth + role check
   const supabase = await createClient();

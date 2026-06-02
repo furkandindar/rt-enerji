@@ -22,6 +22,9 @@ import {
 } from "@/lib/msgraph/sharepoint";
 import { NextRequest, NextResponse } from "next/server";
 
+// full-sync modu PDF gen + SharePoint zinciri + 15s polling içeriyor.
+export const maxDuration = 60;
+
 export async function GET(request: NextRequest) {
   const supabase = await createClient();
   const {

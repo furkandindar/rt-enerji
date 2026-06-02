@@ -56,6 +56,27 @@ export async function enqueueSharePointSync(
   const folderPath = deriveFolderPath(ctx);
   const targetSharepointPath = `${folderPath}/${fileName}`;
 
+  // Idempotency guard — aynı (request, status, pdf path) için success ya da
+  // henüz biten/işleyen bir kayıt varsa yeni enqueue yapma. Yalnızca 'failed'
+  // veya 'skipped' durumlardan sonra yeni attempt anlamlı olur.
+  const { data: existing } = await supabaseAdmin
+    .from("sharepoint_sync_queue")
+    .select("id, sync_status")
+    .eq("request_id", requestId)
+    .eq("request_status", ctx.status)
+    .eq("supabase_pdf_path", supabasePdfPath)
+    .in("sync_status", ["success", "pending", "processing"])
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (existing) {
+    console.log(
+      `[sharepoint-enqueue] skip — ${existing.sync_status} entry mevcut requestId=${requestId} status=${ctx.status}`
+    );
+    return;
+  }
+
   const { data: queueRow, error: queueErr } = await supabaseAdmin
     .from("sharepoint_sync_queue")
     .insert({

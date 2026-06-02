@@ -5,12 +5,17 @@ import {
   notifyRequestApproved,
   notifyRequestRejected
 } from "@/lib/workflow";
+import { after } from "next/server";
 import { buildAndUploadRequestPDF } from "@/lib/pdf/build-and-upload-request-pdf";
 import { enqueueSharePointSync } from "@/lib/sharepoint/enqueue-sync";
 import { stampPDF, type StampPositionOverrides } from "@/lib/pdf/stamp-pdf";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { StampPosition } from "@/lib/workflow/types";
 import { getApprovalDetailSelect } from "@/lib/my-requests/server-selects";
+
+// PDF gen + merge + Storage upload + SharePoint enqueue (after()) zinciri
+// Vercel Pro default 60s'yi aşabilir; explicit set ediyoruz.
+export const maxDuration = 60;
 
 // Postgres "canceling statement due to statement timeout"
 const PG_STATEMENT_TIMEOUT = "57014";
@@ -744,6 +749,13 @@ export async function PATCH(
 
               if (uploadError) {
                 console.error('Error uploading stamped PDF:', uploadError);
+                await supabase
+                  .from("requests")
+                  .update({
+                    pdf_status: 'failed',
+                    pdf_last_error: `Stamp upload: ${uploadError.message}`,
+                  })
+                  .eq("id", requestData.id);
               } else {
                 // stamp_requests tablosunda stamped_pdf_path güncelle
                 await supabase
@@ -751,24 +763,43 @@ export async function PATCH(
                   .update({ stamped_pdf_path: stampedPdfPath })
                   .eq("id", stampRequest.id);
 
-                // requests tablosunda pdf_path güncelle
+                // requests tablosunda pdf_path + pdf_status güncelle
                 await supabase
                   .from("requests")
-                  .update({ pdf_path: stampedPdfPath })
+                  .update({
+                    pdf_path: stampedPdfPath,
+                    pdf_status: 'success',
+                    pdf_last_error: null,
+                  })
                   .eq("id", requestData.id);
 
                 console.log('Stamped PDF uploaded and saved:', stampedPdfPath);
 
                 // SharePoint sync — kaşeli akış buildAndUploadRequestPDF kullanmıyor
                 // (stampPDF kendi başına PDF üretiyor), bu yüzden manuel enqueue.
-                void enqueueSharePointSync({
-                  requestId: requestData.id,
-                  pdfBuffer: stampedPdfBuffer,
-                  supabasePdfPath: stampedPdfPath,
-                }).catch((err) => console.error('[sharepoint-enqueue stamp]', err));
+                // after(): Vercel response'tan sonra runtime'ı açık tutar.
+                const stampRequestId = requestData.id;
+                after(async () => {
+                  try {
+                    await enqueueSharePointSync({
+                      requestId: stampRequestId,
+                      pdfBuffer: stampedPdfBuffer,
+                      supabasePdfPath: stampedPdfPath,
+                    });
+                  } catch (err) {
+                    console.error('[sharepoint-enqueue stamp]', err);
+                  }
+                });
               }
             } else {
               console.error('Stamp request or stamp not found for request:', requestData.id);
+              await supabase
+                .from("requests")
+                .update({
+                  pdf_status: 'failed',
+                  pdf_last_error: 'Stamp request or stamp not found',
+                })
+                .eq("id", requestData.id);
             }
           } else {
             // ===== DİĞER WORKFLOW'LAR: Normal PDF oluştur =====
@@ -781,8 +812,15 @@ export async function PATCH(
             console.log('PDF uploaded successfully:', pdfPath);
           }
         } catch (pdfError) {
-          // PDF oluşturma hatası - loglayalım ama işlemi durdurmayalım
+          // PDF oluşturma hatası - loglayalım ama işlemi durdurmayalım.
+          // buildAndUploadRequestPDF zaten kendi içinde pdf_status='failed'
+          // yazıyor; stamp akışı için defansif olarak biz de yazıyoruz.
           console.error('Error generating/uploading PDF:', pdfError);
+          const message = pdfError instanceof Error ? pdfError.message : String(pdfError);
+          await supabase
+            .from("requests")
+            .update({ pdf_status: 'failed', pdf_last_error: message })
+            .eq("id", requestData.id);
         }
 
         // Talep edene "onaylandı" bildirimi gönder

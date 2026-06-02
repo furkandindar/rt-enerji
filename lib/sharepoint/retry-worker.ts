@@ -71,7 +71,10 @@ export async function processSharePointRetryQueue(
   const { data: rawEntries, error } = await supabaseAdmin
     .from("sharepoint_sync_queue")
     .select("id, request_id, supabase_pdf_path, attempt_count, last_attempt_at")
-    .in("sync_status", ["pending", "failed"])
+    // 'processing' de dahil: Vercel function timeout sonrası kayıt processing'de
+    // takılıp kalır (last_error olmadan). Backoff (last_attempt_at kontrolü) bu
+    // yetim kayıtları zaman geçince yakalar.
+    .in("sync_status", ["pending", "failed", "processing"])
     .lt("attempt_count", maxAttempts)
     .order("created_at", { ascending: true })
     .limit(maxEntries);
