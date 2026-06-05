@@ -7,6 +7,12 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Eraser, RotateCcw } from "lucide-react";
 
+// İmza kalem kalınlığı — kanvas genişliğinin oranı olarak. PDF'te çizgi kalınlığı
+// ≈ oran × kaşe genişliği (190pt), yani cihazdan bağımsız sabit pt değeri.
+// Daha ince istiyorsan bu iki sayıyı küçült, daha kalın istiyorsan büyüt.
+const PEN_MIN_RATIO = 0.0052; // ≈ 1.0pt
+const PEN_MAX_RATIO = 0.0084; // ≈ 1.6pt
+
 interface SignatureCanvasPanelProps {
   /** Canvas'tan alınan data URL */
   signatureDataUrl: string | null;
@@ -59,10 +65,10 @@ export function SignatureCanvasPanel({
     return () => ro.disconnect();
   }, []);
 
-  // Çizgi kalınlığı = kanvas genişliğinin sabit oranı (≈ masaüstü görünümü).
+  // Çizgi kalınlığı = kanvas genişliğinin sabit oranı → her cihazda aynı pt.
   const refWidth = canvasWidth || 480; // ilk render fallback
-  const penMinWidth = Math.max(1.2, refWidth * 0.0073);
-  const penMaxWidth = Math.max(penMinWidth + 0.5, refWidth * 0.0115);
+  const penMinWidth = Math.max(1, refWidth * PEN_MIN_RATIO);
+  const penMaxWidth = Math.max(penMinWidth + 0.4, refWidth * PEN_MAX_RATIO);
 
   const handleEnd = () => {
     if (sigCanvasRef.current && !sigCanvasRef.current.isEmpty()) {
