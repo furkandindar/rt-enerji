@@ -174,21 +174,15 @@ export async function stampPDF(options: StampPDFOptions): Promise<Buffer> {
 
     // İmza: Canvas görseli varsa PNG olarak, yoksa text olarak bas
     if (sigImage) {
-      // Canvas imzasını kaşenin üstüne çiz
-      const sigDims = sigImage.scale(1);
-      const maxSigWidth = stampWidth * 0.8;
-      const maxSigHeight = stampHeight * 0.5;
-      const scale = Math.min(maxSigWidth / sigDims.width, maxSigHeight / sigDims.height, 1);
-      const finalSigWidth = sigDims.width * scale;
-      const finalSigHeight = sigDims.height * scale;
-      const sigX = x + (stampWidth - finalSigWidth) / 2;
-      const sigY = y + (stampHeight - finalSigHeight) / 2;
-
+      // WYSIWYG: İmza kanvası kaşe oranında ve KIRPILMADAN (tüm kanvas) yakalanıyor.
+      // Bu yüzden imzayı doğrudan kaşenin tam alanına (1:1) basıyoruz — GM kaşenin
+      // neresine çizdiyse belgede de aynı konum ve boyutta çıkar. Kanvasın saydam
+      // arka planı sayesinde yalnızca imza çizgileri kaşenin üzerine biner.
       page.drawImage(sigImage, {
-        x: sigX,
-        y: sigY,
-        width: finalSigWidth,
-        height: finalSigHeight,
+        x,
+        y,
+        width: stampWidth,
+        height: stampHeight,
         opacity: 1.0,
       });
     } else if (signatureText && sigFont) {

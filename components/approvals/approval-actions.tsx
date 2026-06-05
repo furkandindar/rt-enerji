@@ -64,6 +64,10 @@ interface ApprovalActionsProps {
   isStampApproval: boolean;
   signatureDataUrl: string | null;
   setSignatureDataUrl: (dataUrl: string | null) => void;
+  /** Kaşe görseli (imza kanvasının arkasında WYSIWYG hizalama için) */
+  stampImageUrl?: string;
+  /** Kaşe en/boy oranı = genişlik / yükseklik */
+  stampAspectRatio?: number;
 
   // Travel completion (V4: asistan gerçekleşen tarihleri girer)
   isTravelCompletionForm: boolean;
@@ -115,6 +119,8 @@ export function ApprovalActions({
   isStampApproval,
   signatureDataUrl,
   setSignatureDataUrl,
+  stampImageUrl,
+  stampAspectRatio,
   isTravelCompletionForm,
   actualDeparture,
   setActualDeparture,
@@ -395,8 +401,10 @@ export function ApprovalActions({
           isAccepted={signatureAccepted}
           onAcceptChange={setSignatureAccepted}
           title="İMZA / PARAF"
-          description="Kaşenin üzerine basılacak imzanızı veya parafınızı aşağıdaki alana çizin:"
+          description="Aşağıda kaşenin görüntüsü var. İmzanızı/parafınızı doğrudan kaşenin üzerine, kalmasını istediğiniz yere çizin — belgede aynı konum ve boyutta basılacaktır."
           disabled={isSubmitting}
+          stampImageUrl={stampImageUrl}
+          stampAspectRatio={stampAspectRatio}
         />
       ) : (
         <SignaturePanel

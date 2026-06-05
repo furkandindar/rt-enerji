@@ -139,6 +139,13 @@ export function ApprovalDetailView({
 
   const isDecided = selectedApproval.status !== "PENDING";
 
+  // Kaşeli onayda imza kanvasının arkasına gerçek kaşeyi koymak için (WYSIWYG):
+  // kaşe görsel URL'i ve en/boy oranı.
+  const stampForSign = selectedApproval.request.stamp_request?.stamp;
+  const stampSignImageUrl = stampForSign ? `/api/stamps/${stampForSign.id}/image` : undefined;
+  const stampSignAspectRatio =
+    stampForSign && stampForSign.height > 0 ? stampForSign.width / stampForSign.height : undefined;
+
   return (
     <>
       {/* Header — sol: başlık, sağ: aksiyon butonları (Anlık Önizleme + PDF) */}
@@ -333,6 +340,8 @@ export function ApprovalDetailView({
             isStampApproval={isStampApproval}
             signatureDataUrl={signatureDataUrl}
             setSignatureDataUrl={setSignatureDataUrl}
+            stampImageUrl={stampSignImageUrl}
+            stampAspectRatio={stampSignAspectRatio}
             isTravelCompletionForm={isTravelCompletionForm}
             actualDeparture={actualDeparture}
             setActualDeparture={setActualDeparture}
