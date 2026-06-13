@@ -5,6 +5,7 @@ import { FileText, Eye, Download } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { PdfViewerDialog } from "@/components/pdf-viewer-dialog";
+import { openPdfPreview } from "@/lib/pdf/open-preview";
 
 export interface AttachmentListItem {
   id: string;
@@ -78,7 +79,14 @@ export function AttachmentList({ attachments, label = "Ek Dosyalar" }: Attachmen
                       variant="ghost"
                       size="sm"
                       onClick={() =>
-                        setPreviewFile({ id: attachment.id, name: attachment.file_name })
+                        openPdfPreview(
+                          `/api/attachments/${attachment.id}/preview`,
+                          () =>
+                            setPreviewFile({
+                              id: attachment.id,
+                              name: attachment.file_name,
+                            }),
+                        )
                       }
                       title="Görüntüle"
                     >

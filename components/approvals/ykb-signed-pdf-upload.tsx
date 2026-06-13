@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { PdfViewerDialog } from "@/components/pdf-viewer-dialog";
+import { openPdfPreview } from "@/lib/pdf/open-preview";
 import { parseContentDispositionFilename } from "@/lib/pdf/file-naming";
 
 const MAX_PDF_BYTES = 25 * 1024 * 1024;
@@ -124,7 +125,12 @@ export function YkbSignedPdfUpload({
             variant="outline"
             size="sm"
             className="flex-1"
-            onClick={() => setShowPreview(true)}
+            onClick={() =>
+              openPdfPreview(
+                `/api/requests/${requestId}/pdf/preview`,
+                () => setShowPreview(true),
+              )
+            }
             disabled={disabled}
           >
             <Eye className="mr-2 h-4 w-4" />

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import type { WorkflowStepAttachmentConfig, RequestAttachment } from "@/lib/workflow/types";
 import { PdfViewerDialog } from "@/components/pdf-viewer-dialog";
+import { openPdfPreview } from "@/lib/pdf/open-preview";
 
 interface AttachmentUploaderProps {
   requestId: string;
@@ -189,7 +190,12 @@ export function AttachmentUploader({
                           variant="ghost"
                           size="icon"
                           className="h-7 w-7"
-                          onClick={() => setPreviewFile({ id: file.id, name: file.file_name })}
+                          onClick={() =>
+                            openPdfPreview(
+                              `/api/attachments/${file.id}/preview`,
+                              () => setPreviewFile({ id: file.id, name: file.file_name }),
+                            )
+                          }
                           title="Görüntüle"
                         >
                           <Eye className="h-3.5 w-3.5" />

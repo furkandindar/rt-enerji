@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PdfViewerDialog } from "@/components/pdf-viewer-dialog";
+import { openPdfPreview } from "@/lib/pdf/open-preview";
 import type { PendingApproval } from "@/lib/approvals/types";
 
 const positionLabels: Record<string, string> = {
@@ -73,7 +74,12 @@ export function StampRequestDetails({ approval }: StampRequestDetailsProps) {
         <Button
           variant="outline"
           className="w-full"
-          onClick={() => setShowPdfPreview(true)}
+          onClick={() =>
+            openPdfPreview(
+              `/api/stamp-approval/${approval.request.id}/original-pdf`,
+              () => setShowPdfPreview(true),
+            )
+          }
         >
           <Eye className="mr-2 h-4 w-4" />
           Orijinal PDF&apos;i Görüntüle

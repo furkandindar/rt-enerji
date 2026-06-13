@@ -26,6 +26,7 @@ import { ApprovalHistoryAccordion } from "./approval-history-accordion";
 import { RequestActivityLog } from "./request-activity-log";
 import { ApprovalActions } from "./approval-actions";
 import { PdfViewerDialog } from "@/components/pdf-viewer-dialog";
+import { openPdfPreview } from "@/lib/pdf/open-preview";
 
 export interface ApprovalDetailViewProps {
   selectedApproval: PendingApproval;
@@ -158,14 +159,32 @@ export function ApprovalDetailView({
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {livePreviewVisible && (
-            <Button variant="outline" size="sm" onClick={() => setShowLivePreview(true)}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() =>
+                openPdfPreview(
+                  `/api/requests/${selectedApproval.request.id}/pdf/preview-live`,
+                  () => setShowLivePreview(true),
+                )
+              }
+            >
               <Eye className="mr-2 h-4 w-4" />
               Anlık Önizleme
             </Button>
           )}
           {pdfButtonsVisible && (
             <>
-              <Button variant="outline" size="sm" onClick={() => setShowPdfPreview(true)}>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  openPdfPreview(
+                    `/api/requests/${selectedApproval.request.id}/pdf/preview`,
+                    () => setShowPdfPreview(true),
+                  )
+                }
+              >
                 <Eye className="mr-2 h-4 w-4" />
                 PDF Görüntüle
               </Button>

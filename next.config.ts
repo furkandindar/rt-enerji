@@ -8,7 +8,7 @@ const nextConfig: NextConfig = {
   // Mobil/başka cihazdan yerel ağ üzerinden dev sunucusuna erişirken
   // Next.js'in cross-origin uyarısını engeller. Tüm yerel ağ alt ağlarını
   // kapsayacak şekilde wildcard kullanıldı (sadece dev'i etkiler, prod'u değil).
-  allowedDevOrigins: ["192.168.1.*", "192.168.0.*", "10.0.0.*"],
+  allowedDevOrigins: ["192.168.1.*", "192.168.0.*", "10.0.0.*", "172.20.10.*"],
 };
 
 export default nextConfig;

@@ -13,6 +13,7 @@ import {
   type Attachment,
 } from "@/components/my-requests/request-detail-content";
 import { PdfViewerDialog } from "@/components/pdf-viewer-dialog";
+import { openPdfPreview } from "@/lib/pdf/open-preview";
 import { parseContentDispositionFilename } from "@/lib/pdf/file-naming";
 
 export type RequestDetailPageProps = {
@@ -168,8 +169,16 @@ function RequestDetailPageInner({ backLabel, backFallbackUrl }: RequestDetailPag
         attachments={attachments}
         onChange={refresh}
         onDownloadPDF={handleDownloadPDF}
-        onShowPdfPreview={() => setShowPdfPreview(true)}
-        onShowLivePreview={() => setShowLivePreview(true)}
+        onShowPdfPreview={() =>
+          openPdfPreview(`/api/requests/${request.id}/pdf/preview`, () =>
+            setShowPdfPreview(true),
+          )
+        }
+        onShowLivePreview={() =>
+          openPdfPreview(`/api/requests/${request.id}/pdf/preview-live`, () =>
+            setShowLivePreview(true),
+          )
+        }
       />
 
       {showPdfPreview && (
