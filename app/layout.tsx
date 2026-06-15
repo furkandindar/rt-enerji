@@ -14,6 +14,15 @@ export const metadata: Metadata = {
   metadataBase: new URL(defaultUrl),
   title: "RT Enerji",
   description: "RT Enerji ve bağlı sahaların organizasyon yapısını, pozisyonları, çalışanları ve atamalarını yönetmek için merkezi bir platform.",
+  // Şirket içi yönetim paneli — arama motorlarında indekslenmesini istemiyoruz.
+  robots: {
+    index: false,
+    follow: false,
+    googleBot: {
+      index: false,
+      follow: false,
+    },
+  },
 };
 
 const geistSans = Geist({
@@ -50,7 +59,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="tr" translate="no" suppressHydrationWarning>
       <body className={`${geistSans.className} ${ballet.variable} ${greatVibes.variable} ${sacramento.variable} antialiased`}>
         <ThemeProvider
           attribute="class"
