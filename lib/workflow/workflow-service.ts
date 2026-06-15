@@ -265,9 +265,12 @@ function shouldSkipStep(
 /**
  * Bir talep için tüm approval kayıtlarını oluşturur.
  *
- * Oluşturma anında otomatik onaylama koşulları (yalnızca):
+ * Oluşturma anında otomatik onaylama (yalnızca):
  * 1. İlk adım REQUESTER tipinde ise (talep eden kendi formunu imzalıyor/gönderiyor)
- * 2. Koşullu adım: step.condition varsa ve formData ile eşleşmiyorsa (V4)
+ *
+ * Koşullu adım (step.condition) formData ile eşleşmiyorsa adım HİÇ oluşturulmaz
+ * (skip — DYNAMIC_USER_LIST ile aynı). Böylece sahte onaycı/sahte imza oluşmaz ve
+ * sequence_order sürekli kalır; ilerleme motoru (PATCH /api/approvals/[id]) bozulmaz.
  *
  * İlk adım auto-approve edildikten sonra, talep edenin ilerideki SIGN_ONLY adımları da
  * otomatik onaylanır (form doldurmaya gerek olmayan mükerrer imzalar).
@@ -308,17 +311,21 @@ export async function createApprovalChain(
   let sequenceCounter = 0; // DYNAMIC_USER_LIST adımları dahil mutlak sıra
 
   for (const step of steps) {
-    // Koşullu adım kontrolü (tüm tipler için geçerli)
+    // Koşullu adım kontrolü (tüm tipler için geçerli).
+    // Koşulu sağlanmayan adım HİÇ oluşturulmaz (skip) — tüm onaycı tipleri için
+    // DYNAMIC_USER_LIST ile aynı davranış. Skip edilen adım sequence_order
+    // numarası tüketmez, böylece zincir sürekli (1..N) kalır ve ilerleme motoru
+    // (PATCH /api/approvals/[id]) bozulmaz. Eskiden standart tipler için APPROVED
+    // satır yazılıyordu; bu "sahte onaycı + PDF'te sahte imza" üretiyordu.
     const isConditionNotMet = shouldSkipStep(
       (step as WorkflowStep).condition,
       formData
     );
+    if (isConditionNotMet) continue;
 
     // DYNAMIC_USER_LIST: tek step, N sıralı approval satırı
     if (step.approver_type === 'DYNAMIC_USER_LIST') {
-      // Koşul sağlanmıyorsa VEYA liste boş/tanımsız ise adım tamamen atlanır
-      if (isConditionNotMet) continue;
-
+      // Liste boş/tanımsız ise adım tamamen atlanır
       const selectedIds = dynamicApprovers?.[step.id] ?? [];
       if (selectedIds.length === 0) continue;
 
@@ -349,12 +356,11 @@ export async function createApprovalChain(
       throw new Error(`Could not determine approver for step: ${step.name}`);
     }
 
-    // Otomatik onaylama koşulları (oluşturma anında):
-    // 1. İlk adım REQUESTER tipinde ise (talep gönderimi = ilk onay)
+    // Otomatik onaylama (oluşturma anında):
+    // İlk adım REQUESTER tipinde ise (talep gönderimi = ilk onay).
+    // NOT: Koşulu sağlanmayan adımlar yukarıda zaten skip edildi (satır oluşmaz).
     const isFirstRequesterStep = step.step_order === 1 && step.approver_type === 'REQUESTER';
-
-    // 2. Koşullu adım: condition sağlanmıyorsa atla (V4)
-    const autoApproveThisStep = isFirstRequesterStep || isConditionNotMet;
+    const autoApproveThisStep = isFirstRequesterStep;
 
     sequenceCounter++;
     approvals.push({

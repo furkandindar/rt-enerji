@@ -85,6 +85,36 @@ export function canRequestRevision(
 // ============================================================================
 
 /**
+ * Koşullu adımlar (workflow_steps.condition) için formData'yı SUNUCUDAN, yani
+ * doğruluk kaynağı olan süreç-detay tablosundan kurar. Resubmit/reset akışında
+ * client'a güvenmemek için kullanılır: client boş gövde gönderse bile koşul
+ * değerlendirmesi ilk gönderimdeki ile birebir aynı olur.
+ *
+ * Yeni koşullu workflow eklendiğinde bu switch genişletilir (tek merkez).
+ * Koşullu adımı olmayan workflow'lar için undefined döner — createApprovalChain
+ * undefined formData ile tüm adımları normal (koşulsuz) oluşturur.
+ */
+async function buildConditionFormData(
+  supabase: SupabaseClient,
+  requestId: string,
+  workflowCode: string | null | undefined
+): Promise<Record<string, unknown> | undefined> {
+  switch (workflowCode) {
+    case 'TRAVEL_ASSIGNMENT': {
+      // Step 4 "Muhasebe" koşulu: { field: 'advance_requested', value: true }
+      const { data } = await supabase
+        .from('travel_assignment_requests')
+        .select('advance_requested')
+        .eq('request_id', requestId)
+        .single();
+      return { advance_requested: data?.advance_requested ?? false };
+    }
+    default:
+      return undefined;
+  }
+}
+
+/**
  * Bir talebin onay zincirini sıfırlar:
  *
  *  1. requests.current_revision_cycle değeri 1 artırılır
@@ -106,7 +136,7 @@ export async function resetApprovalChain(
 
   const { data: req, error: reqError } = await serviceSupabase
     .from('requests')
-    .select('id, workflow_definition_id, requester_employee_id, current_revision_cycle')
+    .select('id, workflow_definition_id, requester_employee_id, current_revision_cycle, workflow_definition:workflow_definitions(code)')
     .eq('id', requestId)
     .single();
 
@@ -115,6 +145,14 @@ export async function resetApprovalChain(
   }
 
   const newCycle = ((req as { current_revision_cycle: number | null }).current_revision_cycle ?? 0) + 1;
+
+  // Koşullu adımları doğru değerlendirmek için formData'yı sunucudan kur (client'a
+  // güvenme). Çağıran açıkça formData verdiyse onu kullan (override); aksi halde
+  // doğruluk kaynağı olan detay tablosundan oku. Böylece resubmit'te koşul atlama
+  // mantığı ilk gönderimle aynı çalışır.
+  const workflowCode = (req as unknown as { workflow_definition?: { code?: string } }).workflow_definition?.code;
+  const effectiveFormData =
+    formData ?? (await buildConditionFormData(serviceSupabase as unknown as SupabaseClient, requestId, workflowCode));
 
   const { error: bumpError } = await serviceSupabase
     .from('requests')
@@ -130,7 +168,7 @@ export async function resetApprovalChain(
     requestId,
     req.workflow_definition_id,
     req.requester_employee_id,
-    formData,
+    effectiveFormData,
     dynamicApprovers,
     newCycle
   );
