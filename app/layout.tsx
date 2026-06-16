@@ -23,6 +23,10 @@ export const metadata: Metadata = {
       follow: false,
     },
   },
+  // Chrome/Google Translate'in "bu sayfayı çevir" önerisini (popover) tamamen kapatır.
+  other: {
+    google: "notranslate",
+  },
 };
 
 const geistSans = Geist({
