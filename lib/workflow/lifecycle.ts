@@ -27,6 +27,18 @@ const TERMINAL_FOR_CANCEL: ReadonlyArray<RequestStatus> = [
 ];
 
 /**
+ * Bir onaycının onay/red kararı verebileceği talep statüleri.
+ * Yalnızca akış canlıyken (approval fazı = PENDING, completion fazı =
+ * AWAITING_COMPLETION) karar alınabilir. Terminal bir talebe (CANCELLED /
+ * REJECTED / COMPLETED / APPROVED) karar vermek final statüyü ezer → bunu
+ * karar route'unda engelliyoruz.
+ */
+export const ACTIONABLE_REQUEST_STATUSES: ReadonlyArray<RequestStatus> = [
+  'PENDING',
+  'AWAITING_COMPLETION',
+];
+
+/**
  * Edit: detay tablo + items üzerinde UPDATE. Status'u değiştirmez.
  * - Talep sahibi: status DRAFT veya REVISION_REQUESTED
  * - ORG_ADMIN: her durumda
@@ -55,15 +67,26 @@ export function canWithdrawRequest(
 }
 
 /**
- * Cancel: status ∉ (CANCELLED, COMPLETED, APPROVED).
- * Talep sahibi veya ORG_ADMIN.
+ * Cancel: talebi CANCELLED'a çeker (terminal). Faz-bazlı yetki:
+ *  - ORG_ADMIN: terminal olmayan her durumda. İmza ilerlemiş veya completion
+ *    fazına geçmiş ("takılı") talepleri de sonlandırabilen escape hatch.
+ *  - Talep eden: YALNIZCA imza öncesi — status PENDING ve aktif cycle'da hiç
+ *    gerçek onay verilmemiş (withdraw ile aynı eşik). İmzalardan geçmiş bir
+ *    talebi talep eden tek taraflı iptal edemez; bir ORG_ADMIN'e başvurur.
+ *
+ * activeCycleRealApprovals: aktif revize cycle'ının onay kayıtları, REQUESTER
+ * tipindeki (talep gönderme imzası) adımlar HARİÇ — filtreleme çağırana ait.
  */
 export function canCancelRequest(
   req: Pick<Request, 'status' | 'requester_employee_id'>,
+  activeCycleRealApprovals: Pick<RequestApproval, 'status'>[],
   user: LifecycleUser
 ): boolean {
-  if (user.role !== 'ORG_ADMIN' && req.requester_employee_id !== user.employeeId) return false;
-  return !TERMINAL_FOR_CANCEL.includes(req.status);
+  if (TERMINAL_FOR_CANCEL.includes(req.status)) return false;
+  if (user.role === 'ORG_ADMIN') return true;
+  if (req.requester_employee_id !== user.employeeId) return false;
+  if (req.status !== 'PENDING') return false;
+  return activeCycleRealApprovals.every(a => a.status === 'PENDING');
 }
 
 /**

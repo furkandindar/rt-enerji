@@ -27,6 +27,7 @@ export {
   canRequestRevision,
   resetApprovalChain,
   applyAuditStamp,
+  ACTIONABLE_REQUEST_STATUSES,
 } from './lifecycle';
 export type { LifecycleUser } from './lifecycle';
 export {

@@ -37,6 +37,7 @@ export async function POST(
         requester_employee_id,
         workflow_definition_id,
         current_revision_cycle,
+        current_step,
         workflow_definition:workflow_definitions(name)
       `)
       .eq("id", requestId)
@@ -46,9 +47,24 @@ export async function POST(
       return NextResponse.json({ error: "Request not found" }, { status: 404 });
     }
 
-    // 3. Eligibility
+    // 2b. Aktif cycle onay kayıtları — eligibility (imza ilerledi mi?) ve bekleyen
+    //     onaycı bildirimi için. REQUESTER tipindeki adım (talep gönderme imzası)
+    //     "gerçek onay" sayılmaz; withdraw eligibility'siyle aynı mantık.
+    const { data: cycleApprovals } = await supabase
+      .from("request_approvals")
+      .select("status, sequence_order, approver_employee_id, workflow_step:workflow_steps(approver_type)")
+      .eq("request_id", requestId)
+      .eq("revision_cycle", req.current_revision_cycle ?? 0);
+
+    const realApprovals = (cycleApprovals ?? []).filter((a) => {
+      const stepType = (a as unknown as { workflow_step?: { approver_type?: string } }).workflow_step?.approver_type;
+      return stepType !== "REQUESTER";
+    });
+
+    // 3. Eligibility (faz-bazlı: admin her non-terminal; talep eden yalnızca imza öncesi)
     const ok = canCancelRequest(
       { status: req.status, requester_employee_id: req.requester_employee_id },
+      realApprovals,
       { employeeId: appUser.employee_id, role: appUser.role }
     );
 
@@ -112,6 +128,30 @@ export async function POST(
           type: "REQUEST_CANCELLED",
           referenceId: requestId,
         });
+      }
+
+      // 6b. Aktif adımda BEKLEYEN onaycıya da haber ver. Bu kişi APPROVED listesinde
+      //     olmadığı için yukarıdaki döngüye girmez; oysa iptali en çok bilmesi
+      //     gereken kişi odur (aksi halde iptal edilmiş talebi "reddetme" durumu olur).
+      const pendingApprover = (cycleApprovals ?? []).find(
+        (a) => a.status === "PENDING" && a.sequence_order === req.current_step
+      );
+      const pendingApproverId = pendingApprover?.approver_employee_id;
+      if (pendingApproverId && pendingApproverId !== req.requester_employee_id) {
+        const { data: pendingUser } = await supabase
+          .from("app_users")
+          .select("id")
+          .eq("employee_id", pendingApproverId)
+          .single();
+        if (pendingUser) {
+          await createNotification(supabase, {
+            userId: pendingUser.id,
+            title: "Talep İptal Edildi",
+            message: `Onayınızı bekleyen ${workflowName} talebi iptal edildi.`,
+            type: "REQUEST_CANCELLED",
+            referenceId: requestId,
+          });
+        }
       }
     } catch (notifErr) {
       console.error("[cancel] notification dispatch failed:", notifErr);

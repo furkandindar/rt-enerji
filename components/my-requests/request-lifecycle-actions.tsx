@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { getEditUrl } from "@/lib/workflow/route-map";
+import { useUser } from "@/lib/contexts/user-context";
 import type { RequestStatus, ApprovalStatus } from "@/lib/workflow/types";
 
 interface LifecycleRequestSummary {
@@ -34,6 +35,7 @@ interface Props {
 
 export function RequestLifecycleActions({ request, onChange }: Props) {
   const router = useRouter();
+  const { isAdmin } = useUser();
   const [busy, setBusy] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
 
@@ -51,8 +53,12 @@ export function RequestLifecycleActions({ request, onChange }: Props) {
     status === "PENDING" && realApprovals.every((a) => a.status === "PENDING");
   const canEdit =
     (status === "DRAFT" || status === "REVISION_REQUESTED") && editUrl !== null;
-  const canCancel =
-    status !== "CANCELLED" && status !== "COMPLETED" && status !== "APPROVED";
+  // Faz-bazlı iptal yetkisi (server'daki canCancelRequest ile aynı kural):
+  //  - Talep eden: yalnızca imza öncesi (withdraw ile aynı eşik).
+  //  - ORG_ADMIN: terminal olmayan her durumda (imza sonrası / completion fazı dahil).
+  const isTerminalForCancel =
+    status === "CANCELLED" || status === "COMPLETED" || status === "APPROVED";
+  const canCancel = isAdmin ? !isTerminalForCancel : canWithdraw;
 
   // Hiçbir aksiyon yoksa render etme
   if (!canWithdraw && !canEdit && !canCancel) return null;

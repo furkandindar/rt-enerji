@@ -3,7 +3,8 @@ import { NextResponse } from "next/server";
 import {
   notifyApprover,
   notifyRequestApproved,
-  notifyRequestRejected
+  notifyRequestRejected,
+  ACTIONABLE_REQUEST_STATUSES,
 } from "@/lib/workflow";
 import { after } from "next/server";
 import { buildAndUploadRequestPDF } from "@/lib/pdf/build-and-upload-request-pdf";
@@ -216,6 +217,17 @@ export async function PATCH(
     // Sırası mı? (sequence_order — DYNAMIC_USER_LIST ile uyumlu)
     if (requestData.current_step !== approval.sequence_order) {
       return NextResponse.json({ error: "Not your turn to approve" }, { status: 400 });
+    }
+
+    // Talep hâlâ karar alınabilir bir statüde mi? Cancel route request_approvals'a
+    // dokunmadığı için satır PENDING + current_step eşleşse bile talep CANCELLED'a
+    // çekilmiş olabilir. O durumda red/onay vermek terminal final statüyü ezerdi
+    // (CANCELLED → REJECTED gibi) → engelle. Bkz. lifecycle.ACTIONABLE_REQUEST_STATUSES.
+    if (!(ACTIONABLE_REQUEST_STATUSES as readonly string[]).includes(requestData.status)) {
+      return NextResponse.json(
+        { error: "Talep artık işleme kapalı (iptal edilmiş veya sonuçlanmış)." },
+        { status: 409 }
+      );
     }
 
     // 2b. Zorunlu attachment kontrolü (onay durumunda)
