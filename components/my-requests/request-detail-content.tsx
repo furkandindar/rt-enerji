@@ -211,6 +211,7 @@ export interface Request {
     advance_requested: boolean;
     actual_departure_at: string | null;
     actual_return_at: string | null;
+    assignment_summary: string | null;
   };
   stamp_request?: {
     id: string;
@@ -525,7 +526,7 @@ export function RequestDetailContent({
             </div>
             <div>
               <p className="text-sm font-medium text-muted-foreground">Durum</p>
-              <RequestStatusBadge status={selectedRequest.status} />
+              <RequestStatusBadge status={selectedRequest.status} workflowCode={selectedRequest.workflow_definition?.code} />
             </div>
           </div>
 
@@ -1061,6 +1062,14 @@ export function RequestDetailContent({
                       </p>
                     </div>
                   )}
+                </div>
+              )}
+              {selectedRequest.travel_assignment_request.assignment_summary && (
+                <div className="border-t pt-4">
+                  <p className="text-sm font-medium text-muted-foreground">Görev Özeti</p>
+                  <p className="text-sm font-semibold whitespace-pre-wrap">
+                    {selectedRequest.travel_assignment_request.assignment_summary}
+                  </p>
                 </div>
               )}
             </>

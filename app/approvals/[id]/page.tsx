@@ -165,6 +165,8 @@ function ApprovalDetailPageInner() {
         setActualDeparture={approvals.setActualDeparture}
         actualReturn={approvals.actualReturn}
         setActualReturn={approvals.setActualReturn}
+        assignmentSummary={approvals.assignmentSummary}
+        setAssignmentSummary={approvals.setAssignmentSummary}
         isYkbSignedPdfForm={approvals.isYkbSignedPdfForm}
         ykbSignedPdfPath={approvals.ykbSignedPdfPath}
         setYkbSignedPdfPath={approvals.setYkbSignedPdfPath}

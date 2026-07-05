@@ -80,7 +80,7 @@ export function PendingApprovalsTable({
                       {approval.request.workflow_definition?.name || "-"}
                     </TableCell>
                     <TableCell>
-                      <RequestStatusBadge status={approval.request.status} />
+                      <RequestStatusBadge status={approval.request.status} workflowCode={approval.request.workflow_definition?.code} />
                     </TableCell>
                     <TableCell className="text-muted-foreground">
                       {format(new Date(approval.request.created_at), "d MMM yyyy HH:mm", { locale: tr })}

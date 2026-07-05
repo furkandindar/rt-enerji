@@ -80,9 +80,10 @@ export function useApprovals(options: UseApprovalsOptions = {}) {
   // Canvas signature state (stamp approval için)
   const [signatureDataUrl, setSignatureDataUrl] = useState<string | null>(null);
 
-  // Travel assignment completion state (asistan gerçekleşen tarihleri girer)
+  // Travel assignment completion state (göreve giden kişi gerçekleşen tarihleri + özeti girer)
   const [actualDeparture, setActualDeparture] = useState("");
   const [actualReturn, setActualReturn] = useState("");
+  const [assignmentSummary, setAssignmentSummary] = useState("");
 
   // YKB signed PDF upload state (mukayese formu COMPLETION fazı)
   const [ykbSignedPdfPath, setYkbSignedPdfPath] = useState<string | null>(null);
@@ -162,7 +163,7 @@ export function useApprovals(options: UseApprovalsOptions = {}) {
     .filter((c) => c.is_required)
     .every((c) => uploadedAttachments.some((f) => f.step_attachment_config_id === c.id));
 
-  const travelCompletionFormValid = !isTravelCompletionForm || (actualDeparture.trim() !== "" && actualReturn.trim() !== "");
+  const travelCompletionFormValid = !isTravelCompletionForm || (actualDeparture.trim() !== "" && actualReturn.trim() !== "" && assignmentSummary.trim() !== "");
 
   const ykbSignedPdfFormValid = !isYkbSignedPdfForm || Boolean(ykbSignedPdfPath);
 
@@ -458,7 +459,7 @@ export function useApprovals(options: UseApprovalsOptions = {}) {
         salary_consent_fields?: { consent: boolean };
         onboarding_fields?: { section_key: string; items: Record<string, { status: string; notes: string }> };
         separation_fields?: { section_key: string; items: Record<string, { status: string; notes: string }> };
-        travel_completion_fields?: { actual_departure_at: string; actual_return_at: string };
+        travel_completion_fields?: { actual_departure_at: string; actual_return_at: string; summary: string };
         signature_data_url?: string;
         ykb_signed_pdf_path?: string;
       } = { decision, comment };
@@ -493,6 +494,7 @@ export function useApprovals(options: UseApprovalsOptions = {}) {
         requestBody.travel_completion_fields = {
           actual_departure_at: new Date(actualDeparture).toISOString(),
           actual_return_at: new Date(actualReturn).toISOString(),
+          summary: assignmentSummary.trim(),
         };
       }
       if (decision === "APPROVED" && isYkbSignedPdfForm && ykbSignedPdfPath) {
@@ -520,6 +522,7 @@ export function useApprovals(options: UseApprovalsOptions = {}) {
       setSeparationChecklist({});
       setActualDeparture("");
       setActualReturn("");
+      setAssignmentSummary("");
       setYkbSignedPdfPath(null);
       setYkbSignedPdfFileName(null);
       setAttachmentConfigs([]);
@@ -724,6 +727,7 @@ export function useApprovals(options: UseApprovalsOptions = {}) {
     separationChecklist,
     actualDeparture,
     actualReturn,
+    assignmentSummary,
     ykbSignedPdfPath,
     ykbSignedPdfFileName,
     attachmentConfigs,
@@ -774,6 +778,7 @@ export function useApprovals(options: UseApprovalsOptions = {}) {
     setSeparationChecklist,
     setActualDeparture,
     setActualReturn,
+    setAssignmentSummary,
     setYkbSignedPdfPath,
     setYkbSignedPdfFileName,
     setUploadedAttachments,

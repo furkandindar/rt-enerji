@@ -2101,6 +2101,7 @@ export type Database = {
           actual_return_at: string | null
           advance_requested: boolean
           assignment_subject: string
+          assignment_summary: string | null
           company_id: string
           created_at: string | null
           destination_city: string
@@ -2120,6 +2121,7 @@ export type Database = {
           actual_return_at?: string | null
           advance_requested?: boolean
           assignment_subject: string
+          assignment_summary?: string | null
           company_id: string
           created_at?: string | null
           destination_city: string
@@ -2139,6 +2141,7 @@ export type Database = {
           actual_return_at?: string | null
           advance_requested?: boolean
           assignment_subject?: string
+          assignment_summary?: string | null
           company_id?: string
           created_at?: string | null
           destination_city?: string

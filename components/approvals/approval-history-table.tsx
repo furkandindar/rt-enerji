@@ -89,7 +89,7 @@ export function ApprovalHistoryTable({
                       <ApprovalStatusBadge status={approval.status} />
                     </TableCell>
                     <TableCell>
-                      <RequestStatusBadge status={approval.request.status} />
+                      <RequestStatusBadge status={approval.request.status} workflowCode={approval.request.workflow_definition?.code} />
                     </TableCell>
                     <TableCell className="text-muted-foreground text-sm">
                       {approval.decided_at

@@ -69,12 +69,14 @@ interface ApprovalActionsProps {
   /** Kaşe en/boy oranı = genişlik / yükseklik */
   stampAspectRatio?: number;
 
-  // Travel completion (V4: asistan gerçekleşen tarihleri girer)
+  // Travel completion (V4: göreve giden kişi gerçekleşen tarihleri + görev özetini girer)
   isTravelCompletionForm: boolean;
   actualDeparture: string;
   setActualDeparture: (value: string) => void;
   actualReturn: string;
   setActualReturn: (value: string) => void;
+  assignmentSummary: string;
+  setAssignmentSummary: (value: string) => void;
 
   // YKB imzalı PDF (Mukayese Formu COMPLETION)
   isYkbSignedPdfForm: boolean;
@@ -126,6 +128,8 @@ export function ApprovalActions({
   setActualDeparture,
   actualReturn,
   setActualReturn,
+  assignmentSummary,
+  setAssignmentSummary,
   isYkbSignedPdfForm,
   ykbSignedPdfPath,
   setYkbSignedPdfPath,
@@ -138,11 +142,11 @@ export function ApprovalActions({
 }: ApprovalActionsProps) {
   return (
     <div className="border-t pt-4 mt-6 space-y-4">
-      {/* V4: Travel Completion Form — Asistan gerçekleşen tarihleri girer */}
+      {/* V4: Travel Completion Form — göreve giden kişi gerçekleşen tarihleri + görev özetini girer */}
       {isTravelCompletionForm && (
         <div className="space-y-4 border-t pt-4">
           <div className="text-sm font-medium text-muted-foreground">
-            Gerçekleşen Görev Tarihleri
+            Görev Tamamlama
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
@@ -167,6 +171,19 @@ export function ApprovalActions({
                 onChange={(e) => setActualReturn(e.target.value)}
               />
             </div>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="assignment_summary" className="text-sm font-medium">
+              Görev Özeti / Bilgilendirme <span className="text-red-500">*</span>
+            </Label>
+            <Textarea
+              id="assignment_summary"
+              placeholder="Görevde neler yapıldığına dair kısa bir özet ve bilgilendirme yazın..."
+              value={assignmentSummary}
+              onChange={(e) => setAssignmentSummary(e.target.value)}
+              rows={4}
+              disabled={isSubmitting}
+            />
           </div>
         </div>
       )}

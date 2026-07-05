@@ -558,8 +558,9 @@ export interface TravelAssignmentRequest {
   accommodation_needed: boolean;
   accommodation_cost: number;
   advance_requested: boolean;
-  actual_departure_at: string | null;  // Asistan doldurur (COMPLETION fazı)
-  actual_return_at: string | null;     // Asistan doldurur (COMPLETION fazı)
+  actual_departure_at: string | null;  // Göreve giden kişi doldurur (COMPLETION fazı)
+  actual_return_at: string | null;     // Göreve giden kişi doldurur (COMPLETION fazı)
+  assignment_summary: string | null;   // Göreve giden kişi doldurur (COMPLETION fazı) — görev özeti
   created_at: string;
   updated_at: string;
 }

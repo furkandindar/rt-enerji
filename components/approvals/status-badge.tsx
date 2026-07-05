@@ -3,7 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   approvalStatusLabels,
   approvalStatusColors,
-  requestStatusLabels,
+  getRequestStatusLabel,
   requestStatusColors,
 } from "@/lib/approvals/constants";
 
@@ -12,11 +12,16 @@ interface StatusBadgeProps {
   className?: string;
 }
 
-export function RequestStatusBadge({ status, className }: StatusBadgeProps) {
+interface RequestStatusBadgeProps extends StatusBadgeProps {
+  /** AWAITING_COMPLETION gibi süreçten sürece anlamı değişen statüler için */
+  workflowCode?: string | null;
+}
+
+export function RequestStatusBadge({ status, workflowCode, className }: RequestStatusBadgeProps) {
   if (!status) return null;
   return (
     <Badge className={cn(requestStatusColors[status], className)}>
-      {requestStatusLabels[status] ?? status}
+      {getRequestStatusLabel(status, workflowCode)}
     </Badge>
   );
 }

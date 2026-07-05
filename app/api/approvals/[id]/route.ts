@@ -156,6 +156,7 @@ export async function PATCH(
       travel_completion_fields?: {
         actual_departure_at: string;
         actual_return_at: string;
+        summary: string;
       };
       signature_data_url?: string;
       ykb_signed_pdf_path?: string;
@@ -410,10 +411,14 @@ export async function PATCH(
       }
     }
 
-    // 3e. FILL_AND_SIGN adımları için travel completion alanlarını güncelle (V4: asistan gerçekleşen tarihleri girer)
+    // 3e. FILL_AND_SIGN adımları için travel completion alanlarını güncelle
+    // (V4: göreve giden kişi gerçekleşen tarihleri + görev özetini girer)
     if (decision === 'APPROVED' && stepData.action_type === 'FILL_AND_SIGN' && stepData.form_section_key === 'actual_dates') {
       if (!travel_completion_fields?.actual_departure_at || !travel_completion_fields?.actual_return_at) {
         return NextResponse.json({ error: "Gerçekleşen gidiş ve dönüş tarihleri zorunludur" }, { status: 400 });
+      }
+      if (!travel_completion_fields?.summary?.trim()) {
+        return NextResponse.json({ error: "Görev özeti zorunludur" }, { status: 400 });
       }
 
       const { data: travelRequest } = await supabase
@@ -428,6 +433,7 @@ export async function PATCH(
           .update({
             actual_departure_at: travel_completion_fields.actual_departure_at,
             actual_return_at: travel_completion_fields.actual_return_at,
+            assignment_summary: travel_completion_fields.summary.trim(),
             updated_at: new Date().toISOString(),
           })
           .eq("id", travelRequest.id);

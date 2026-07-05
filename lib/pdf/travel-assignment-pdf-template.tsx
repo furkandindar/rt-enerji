@@ -83,6 +83,7 @@ interface TravelAssignmentRequest {
   estimated_return_at: string | null;
   actual_departure_at: string | null;
   actual_return_at: string | null;
+  assignment_summary: string | null;
   transportation_type: string | null;
   transportation_cost: number | null;
   accommodation_needed: boolean | null;
@@ -232,6 +233,14 @@ export const TravelAssignmentPDFTemplate: React.FC<TravelAssignmentPDFTemplatePr
           </View>
         </View>
 
+        {/* GÖREV ÖZETİ */}
+        <View style={styles.sectionHeader}><Text style={styles.sectionHeaderText}>GÖREV ÖZETİ</Text></View>
+        <View style={styles.tableContainer}>
+          <View style={styles.tableRowLast}>
+            <View style={styles.valueCell}><Text style={styles.valueText}>{tr?.assignment_summary || '—'}</Text></View>
+          </View>
+        </View>
+
         {/* ONAY */}
         <View style={styles.onayHeader}><Text style={styles.onayHeaderText}>ONAY</Text></View>
         <View style={styles.onayContent}>
@@ -245,10 +254,6 @@ export const TravelAssignmentPDFTemplate: React.FC<TravelAssignmentPDFTemplatePr
               {col.note ? (<View style={styles.onayNoteRow}><Text style={styles.onayNoteText}>{col.note}</Text></View>) : null}
             </View>
           ))}
-        </View>
-
-        <View style={styles.footer}>
-          <Text style={styles.footerText}>Tüm Formlar SharePoint/İK/Formlar dosyasına kaydedilir.</Text>
         </View>
       </Page>
     </Document>

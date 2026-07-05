@@ -207,7 +207,6 @@ const StaffShortagePDF: React.FC<StaffShortageProps> = ({
           </View>
         ))}
       </View>
-      {/* <View style={staffStyles.footer}><Text>Tüm Formlar SharePoint/İK/Formlar dosyasına kaydedilir.</Text></View> */}
     </Page>
   );
 };

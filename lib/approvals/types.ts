@@ -110,6 +110,7 @@ export interface PendingApproval {
     updated_at?: string | null;
     pdf_path?: string | null;
     workflow_definition: {
+      code?: string;
       name: string;
     };
     requester: Requester;
@@ -201,6 +202,7 @@ export interface PendingApproval {
       advance_requested: boolean;
       actual_departure_at: string | null;
       actual_return_at: string | null;
+      assignment_summary: string | null;
     };
     approval_letter_request?: {
       id: string;

@@ -186,7 +186,7 @@ function DepartmentProcessListInner({ config }: { config: DepartmentProcessListC
               <SelectItem value="PENDING">Beklemede</SelectItem>
               <SelectItem value="REVISION_REQUESTED">Revize İstendi</SelectItem>
               <SelectItem value="APPROVED">Onaylandı</SelectItem>
-              <SelectItem value="AWAITING_COMPLETION">RT Onayı</SelectItem>
+              <SelectItem value="AWAITING_COMPLETION">RT Onayı / Görev Dönüşü</SelectItem>
               <SelectItem value="COMPLETED">Tamamlandı</SelectItem>
               <SelectItem value="REJECTED">Reddedildi</SelectItem>
               <SelectItem value="CANCELLED">İptal Edildi</SelectItem>
@@ -258,7 +258,7 @@ function DepartmentProcessListInner({ config }: { config: DepartmentProcessListC
                         : "-"}
                     </TableCell>
                     <TableCell>
-                      <RequestStatusBadge status={request.status} />
+                      <RequestStatusBadge status={request.status} workflowCode={request.workflow_definition?.code} />
                     </TableCell>
                     <TableCell>
                       <Button

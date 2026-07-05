@@ -130,6 +130,27 @@ export const requestStatusLabels: Record<string, string> = {
   REVISION_REQUESTED: "Revize İstendi",
 };
 
+// AWAITING_COMPLETION süreçten sürece farklı anlama gelir: ykb_signed_pdf'li
+// süreçlerde RT'nin (YKB) ıslak imzası beklenir → "RT Onayı" doğru. Travel'da
+// completion'ı göreve giden kişi doldurur, RT dahil değil → farklı etiket.
+const workflowStatusLabelOverrides: Record<string, Record<string, string>> = {
+  TRAVEL_ASSIGNMENT: {
+    AWAITING_COMPLETION: "Görev Dönüşü Bekleniyor",
+  },
+};
+
+export function getRequestStatusLabel(
+  status: string | null | undefined,
+  workflowCode?: string | null
+): string {
+  if (!status) return "";
+  return (
+    (workflowCode ? workflowStatusLabelOverrides[workflowCode]?.[status] : undefined) ??
+    requestStatusLabels[status] ??
+    status
+  );
+}
+
 export const requestStatusColors: Record<string, string> = {
   DRAFT: "bg-gray-500",
   PENDING: "bg-yellow-500",

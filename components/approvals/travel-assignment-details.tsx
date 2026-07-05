@@ -107,6 +107,13 @@ export function TravelAssignmentDetails({ approval }: TravelAssignmentDetailsPro
           )}
         </div>
       )}
+
+      {travel.assignment_summary && (
+        <div className="border-t pt-4">
+          <p className="text-sm font-medium text-muted-foreground">Görev Özeti</p>
+          <p className="text-sm font-semibold whitespace-pre-wrap">{travel.assignment_summary}</p>
+        </div>
+      )}
     </>
   );
 }

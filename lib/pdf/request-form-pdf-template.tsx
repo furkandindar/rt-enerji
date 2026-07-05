@@ -163,8 +163,6 @@ export const RequestFormPDFTemplate: React.FC<RequestFormPDFTemplateProps> = ({
             </View>
           ))}
         </View>
-
-        {/* <View style={styles.footer}><Text style={styles.footerText}>Tüm Formlar SharePoint/İK/Formlar dosyasına kaydedilir.</Text></View> */}
       </Page>
     </Document>
   );

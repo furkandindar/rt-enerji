@@ -67,6 +67,8 @@ export interface ApprovalDetailViewProps {
   setActualDeparture: (value: string) => void;
   actualReturn: string;
   setActualReturn: (value: string) => void;
+  assignmentSummary: string;
+  setAssignmentSummary: (value: string) => void;
   isYkbSignedPdfForm: boolean;
   ykbSignedPdfPath: string | null;
   setYkbSignedPdfPath: (value: string | null) => void;
@@ -116,6 +118,8 @@ export function ApprovalDetailView({
   setActualDeparture,
   actualReturn,
   setActualReturn,
+  assignmentSummary,
+  setAssignmentSummary,
   isYkbSignedPdfForm,
   ykbSignedPdfPath,
   setYkbSignedPdfPath,
@@ -362,6 +366,8 @@ export function ApprovalDetailView({
             stampImageUrl={stampSignImageUrl}
             stampAspectRatio={stampSignAspectRatio}
             isTravelCompletionForm={isTravelCompletionForm}
+            assignmentSummary={assignmentSummary}
+            setAssignmentSummary={setAssignmentSummary}
             actualDeparture={actualDeparture}
             setActualDeparture={setActualDeparture}
             actualReturn={actualReturn}
