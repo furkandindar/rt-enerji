@@ -47,7 +47,7 @@ export async function POST(request: Request) {
     // Talebin AWAITING_COMPLETION durumunda olduğunu doğrula
     const { data: targetRequest, error: reqError } = await supabase
       .from("requests")
-      .select("id, status")
+      .select("id, status, current_step, current_revision_cycle")
       .eq("id", requestId)
       .single();
 
@@ -60,6 +60,9 @@ export async function POST(request: Request) {
     }
 
     // Kullanıcının COMPLETION fazındaki ykb_signed_pdf PENDING onaycı olduğunu doğrula
+    // V5: revize edilen taleplerde eski cycle'ın PENDING satırları audit için
+    // duruyor — cycle + sıra filtresi olmadan aynı onaycıya birden fazla satır
+    // döner ve .single() patlar (revize edilmiş taleplerde YKB yükleme 403'ü).
     const { data: completionApproval } = await supabase
       .from("request_approvals")
       .select(`
@@ -70,7 +73,9 @@ export async function POST(request: Request) {
       .eq("request_id", requestId)
       .eq("approver_employee_id", appUser.employee_id)
       .eq("status", "PENDING")
-      .single();
+      .eq("revision_cycle", targetRequest.current_revision_cycle ?? 0)
+      .eq("sequence_order", targetRequest.current_step)
+      .maybeSingle();
 
     if (!completionApproval) {
       return NextResponse.json({ error: "Bu adımda yükleme yapma yetkiniz yok" }, { status: 403 });
