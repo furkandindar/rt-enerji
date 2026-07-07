@@ -2,7 +2,10 @@
 
 RT Enerji'nin **kurumsal onay süreçlerini (workflow)** dijital olarak yürüten ve **organizasyon yapısını** (şirketler, birimler, pozisyonlar, çalışanlar, tarihçeli atamalar) yöneten merkezi platform. İzin, fazla mesai, harcama, avans, mukayese, görev, kaşe onayı, onay kapağı gibi **14 form** kendi onay zinciriyle işletilir; süreç sonunda **imzalı/kaşeli PDF** üretilip SharePoint'e arşivlenir.
 
-> ## 📖 Sistemin nasıl çalıştığını öğrenmek için → **[docs/genel-bakis.md](docs/genel-bakis.md)** 👈 **Buradan başla!**
+> ## 🧑‍💻 Projeye yeni mi katıldın? → **[ONBOARDING.md](ONBOARDING.md)** 👈 **Buradan başla!**
+> Lokal kurulum, ortam kuralları (dev/prod), mimari özet, test rehberi ve bilinen konular tek dokümanda. AI agent kullanıyorsan kurallar: [CLAUDE.md](CLAUDE.md).
+>
+> ## 📖 Sistemin nasıl çalıştığının bütünsel anlatımı → **[docs/genel-bakis.md](docs/genel-bakis.md)**
 > Mimari, veri modeli, workflow motoru, talep yaşam döngüsü ve belge üretim hattı orada tek dokümanda anlatılır.
 
 ---
