@@ -703,7 +703,8 @@ export interface CreateStampApprovalInput {
 export type FinanceExpenseArea =
   | 'ANA_SAHA'
   | 'ELEKTRIKSEL_KAPASITE_ARTISI'
-  | 'YEKA';
+  | 'YEKA_1'
+  | 'YEKA_2';
 
 export type FinanceFundingSource =
   | 'KREDI'

@@ -139,7 +139,7 @@ interface FinanceRequest {
   items?: FinanceItem[] | null;
   account_available?: boolean | null;
   cash_flow_recorded?: boolean | null;
-  expense_area?: 'ANA_SAHA' | 'ELEKTRIKSEL_KAPASITE_ARTISI' | 'YEKA' | string | null;
+  expense_area?: 'ANA_SAHA' | 'ELEKTRIKSEL_KAPASITE_ARTISI' | 'YEKA_1' | 'YEKA_2' | string | null;
   funding_source?: 'KREDI' | 'OZ_KAYNAK' | 'NAKIT_FAZLASI' | 'DIGER' | string | null;
   has_rt_enerji_proforma?: boolean | null;
 }
@@ -261,8 +261,10 @@ export const FinanceApprovalCoverPDFTemplate: React.FC<FinanceApprovalCoverPDFTe
               <CheckBox checked={financeRequest.expense_area === 'ANA_SAHA'} />
               <Text style={styles.evalItemText}>/ ELEKTRİKSEL KAPASİTE ARTIŞI</Text>
               <CheckBox checked={financeRequest.expense_area === 'ELEKTRIKSEL_KAPASITE_ARTISI'} />
-              <Text style={styles.evalItemText}>/ YEKA</Text>
-              <CheckBox checked={financeRequest.expense_area === 'YEKA'} />
+              <Text style={styles.evalItemText}>/ YEKA 1</Text>
+              <CheckBox checked={financeRequest.expense_area === 'YEKA_1'} />
+              <Text style={styles.evalItemText}>/ YEKA 2</Text>
+              <CheckBox checked={financeRequest.expense_area === 'YEKA_2'} />
             </View>
           </View>
           <View style={styles.evalRow}>

@@ -2464,7 +2464,11 @@ export type Database = {
         | "STATIC_POSITION"
         | "DYNAMIC_USER_LIST"
       checklist_status: "DONE" | "NOT_DONE" | "NA"
-      finance_expense_area: "ANA_SAHA" | "ELEKTRIKSEL_KAPASITE_ARTISI" | "YEKA"
+      finance_expense_area:
+        | "ANA_SAHA"
+        | "ELEKTRIKSEL_KAPASITE_ARTISI"
+        | "YEKA_1"
+        | "YEKA_2"
       finance_funding_source: "KREDI" | "OZ_KAYNAK" | "NAKIT_FAZLASI" | "DIGER"
       leave_type: "ANNUAL_LEAVE" | "SHORT_LEAVE"
       mukayese_currency: "TRY" | "USD" | "EUR"
@@ -2637,7 +2641,7 @@ export const Constants = {
         "DYNAMIC_USER_LIST",
       ],
       checklist_status: ["DONE", "NOT_DONE", "NA"],
-      finance_expense_area: ["ANA_SAHA", "ELEKTRIKSEL_KAPASITE_ARTISI", "YEKA"],
+      finance_expense_area: ["ANA_SAHA", "ELEKTRIKSEL_KAPASITE_ARTISI", "YEKA_1", "YEKA_2"],
       finance_funding_source: ["KREDI", "OZ_KAYNAK", "NAKIT_FAZLASI", "DIGER"],
       leave_type: ["ANNUAL_LEAVE", "SHORT_LEAVE"],
       mukayese_currency: ["TRY", "USD", "EUR"],

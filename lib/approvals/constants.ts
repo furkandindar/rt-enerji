@@ -72,7 +72,8 @@ export const overtimeTypeLabels: Record<string, string> = {
 export const financeExpenseAreaLabels: Record<string, string> = {
   ANA_SAHA: "Ana Saha",
   ELEKTRIKSEL_KAPASITE_ARTISI: "Elektriksel Kapasite Artışı",
-  YEKA: "YEKA",
+  YEKA_1: "YEKA 1",
+  YEKA_2: "YEKA 2",
 };
 
 export const financeFundingSourceLabels: Record<string, string> = {

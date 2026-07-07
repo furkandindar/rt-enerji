@@ -36,7 +36,8 @@ import {
 const EXPENSE_AREA_OPTIONS = [
   { value: "ANA_SAHA", label: "Ana Saha" },
   { value: "ELEKTRIKSEL_KAPASITE_ARTISI", label: "Elektriksel Kapasite Artışı" },
-  { value: "YEKA", label: "YEKA" },
+  { value: "YEKA_1", label: "YEKA 1" },
+  { value: "YEKA_2", label: "YEKA 2" },
 ] as const;
 
 const FUNDING_SOURCE_OPTIONS = [
@@ -67,7 +68,7 @@ const financeCoverSchema = z.object({
   account_available: z.enum(["yes", "no"], { message: "Seçim yapın" }),
   cash_flow_recorded: z.enum(["yes", "no"], { message: "Seçim yapın" }),
   has_rt_enerji_proforma: z.enum(["yes", "no"], { message: "Seçim yapın" }),
-  expense_area: z.enum(["ANA_SAHA", "ELEKTRIKSEL_KAPASITE_ARTISI", "YEKA"], {
+  expense_area: z.enum(["ANA_SAHA", "ELEKTRIKSEL_KAPASITE_ARTISI", "YEKA_1", "YEKA_2"], {
     message: "Harcama alanı seçin",
   }),
   funding_source: z.enum(["KREDI", "OZ_KAYNAK", "NAKIT_FAZLASI", "DIGER"], {

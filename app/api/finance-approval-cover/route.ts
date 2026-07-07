@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createApprovalChain, getWorkflowDefinitionByCode, notifyApprover, canStartWorkflow } from "@/lib/workflow";
 import type { CreateFinanceApprovalCoverInput } from "@/lib/workflow";
 
-const EXPENSE_AREAS = ['ANA_SAHA', 'ELEKTRIKSEL_KAPASITE_ARTISI', 'YEKA'] as const;
+const EXPENSE_AREAS = ['ANA_SAHA', 'ELEKTRIKSEL_KAPASITE_ARTISI', 'YEKA_1', 'YEKA_2'] as const;
 const FUNDING_SOURCES = ['KREDI', 'OZ_KAYNAK', 'NAKIT_FAZLASI', 'DIGER'] as const;
 
 const ALLOWED_PAGE_SIZES = [10, 25, 50, 100] as const;
