@@ -1,7 +1,9 @@
 import { createClient } from "@/lib/supabase/server";
+import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { NextResponse } from "next/server";
 import { downloadRequestPDF } from "@/lib/storage/upload-request-pdf";
 import { buildPdfFileName, buildContentDisposition } from "@/lib/pdf/file-naming";
+import { authorizePdfAccess } from "@/lib/pdf/authorize-pdf-access";
 
 // GET /api/requests/[id]/pdf - PDF'i indir
 export async function GET(
@@ -12,53 +14,12 @@ export async function GET(
     const supabase = await createClient();
     const { id } = await params;
 
-    // 1. Kullanıcı kontrolü
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    // 1-3. Kullanıcı + yetki kontrolü (talep sahibi / onaycı / ORG_ADMIN)
+    const auth = await authorizePdfAccess(supabase, id);
+    if (!auth.ok) {
+      return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
-
-    const { data: appUser } = await supabase
-      .from("app_users")
-      .select("employee_id")
-      .eq("id", user.id)
-      .single();
-
-    if (!appUser?.employee_id) {
-      return NextResponse.json({ error: "User not linked to employee" }, { status: 400 });
-    }
-
-    // 2. Request'i getir (dosya adı için requester ve workflow code dahil)
-    const { data: requestData, error: requestError } = await supabase
-      .from("requests")
-      .select(`
-        id,
-        request_no,
-        status,
-        created_at,
-        pdf_path,
-        requester_employee_id,
-        workflow_definition:workflow_definitions(code),
-        requester:employees!requests_requester_employee_id_fkey(first_name, last_name),
-        approvals:request_approvals(approver_employee_id)
-      `)
-      .eq("id", id)
-      .single();
-
-    if (requestError || !requestData) {
-      return NextResponse.json({ error: "Request not found" }, { status: 404 });
-    }
-
-    // 3. Yetki kontrolü - Sadece talep sahibi veya onaylayanlar görebilir
-    const isRequester = requestData.requester_employee_id === appUser.employee_id;
-    const isApprover = requestData.approvals?.some(
-      (approval: { approver_employee_id: string }) =>
-        approval.approver_employee_id === appUser.employee_id
-    );
-
-    if (!isRequester && !isApprover) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const { requestData } = auth;
 
     // 4. PDF path kontrolü
     if (!requestData.pdf_path) {
@@ -66,19 +27,18 @@ export async function GET(
     }
 
     // 5. Storage'dan PDF'i indir
-    const pdfBlob = await downloadRequestPDF(requestData.pdf_path, supabase);
+    // Yetki yukarıda uygulama seviyesinde doğrulandı; storage bucket
+    // politikası ORG_ADMIN'i kapsamadığı için indirme service role ile yapılır.
+    const pdfBlob = await downloadRequestPDF(
+      requestData.pdf_path,
+      createServiceRoleClient()
+    );
 
     // 6. İnsan-okur dosya adı üret
     // Supabase typegen embedded relations'ı array olarak çıkarır; runtime'da
     // 1:1 ilişki olduğu için object dönebilir → her iki şekle de toleranslı ol.
-    const wf = requestData.workflow_definition as
-      | { code: string }
-      | { code: string }[]
-      | null;
-    const requester = requestData.requester as
-      | { first_name: string | null; last_name: string | null }
-      | { first_name: string | null; last_name: string | null }[]
-      | null;
+    const wf = requestData.workflow_definition;
+    const requester = requestData.requester;
     const workflowCode = Array.isArray(wf) ? wf[0]?.code : wf?.code;
     const requesterRow = Array.isArray(requester) ? requester[0] : requester;
 
@@ -110,4 +70,3 @@ export async function GET(
     );
   }
 }
-
