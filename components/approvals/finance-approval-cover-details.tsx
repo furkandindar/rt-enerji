@@ -10,19 +10,12 @@ import {
   financeExpenseAreaLabels,
   financeFundingSourceLabels,
 } from "@/lib/approvals/constants";
+import { formatMoney, sumItemsByCurrency, joinCurrencyTotals } from "@/lib/currency";
 
 interface FinanceApprovalCoverDetailsProps {
   approval: PendingApproval;
   previousStepAttachments?: PreviousStepAttachment[];
 }
-
-const formatAmount = (value: number | null | undefined): string => {
-  if (value === null || value === undefined) return "-";
-  return new Intl.NumberFormat("tr-TR", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(value);
-};
 
 export function FinanceApprovalCoverDetails({
   approval,
@@ -32,8 +25,7 @@ export function FinanceApprovalCoverDetails({
   if (!finance) return null;
 
   const items = [...(finance.items || [])].sort((a, b) => a.row_order - b.row_order);
-  const totalInvoice = items.reduce((sum, it) => sum + Number(it.invoice_amount || 0), 0);
-  const totalPayable = items.reduce((sum, it) => sum + Number(it.payable_amount || 0), 0);
+  const currencyTotals = sumItemsByCurrency(items);
 
   // DYNAMIC_USER_LIST tipindeki onaycıları (İlgililer) filtrele
   const relatedApprovals = (approval.request.approvals || [])
@@ -72,8 +64,8 @@ export function FinanceApprovalCoverDetails({
                   <th className="py-1.5 pr-2 font-medium">Firma</th>
                   <th className="py-1.5 pr-2 font-medium">Ödenecek</th>
                   <th className="py-1.5 pr-2 font-medium">Konu</th>
-                  <th className="py-1.5 pr-2 font-medium text-right">Fatura (TL)</th>
-                  <th className="py-1.5 font-medium text-right">Ödenecek (TL)</th>
+                  <th className="py-1.5 pr-2 font-medium text-right">Fatura</th>
+                  <th className="py-1.5 font-medium text-right">Ödenecek</th>
                 </tr>
               </thead>
               <tbody>
@@ -86,20 +78,20 @@ export function FinanceApprovalCoverDetails({
                     <td className="py-1.5 pr-2">{it.payee_name}</td>
                     <td className="py-1.5 pr-2">{it.item_subject}</td>
                     <td className="py-1.5 pr-2 text-right whitespace-nowrap">
-                      {formatAmount(it.invoice_amount)}
+                      {formatMoney(it.invoice_amount, it.currency)}
                     </td>
                     <td className="py-1.5 text-right whitespace-nowrap">
-                      {formatAmount(it.payable_amount)}
+                      {formatMoney(it.payable_amount, it.currency)}
                     </td>
                   </tr>
                 ))}
                 <tr className="font-semibold">
                   <td colSpan={4} className="py-1.5 pr-2 text-right">Toplam</td>
                   <td className="py-1.5 pr-2 text-right whitespace-nowrap">
-                    {formatAmount(totalInvoice)}
+                    {joinCurrencyTotals(currencyTotals, "invoice")}
                   </td>
                   <td className="py-1.5 text-right whitespace-nowrap">
-                    {formatAmount(totalPayable)}
+                    {joinCurrencyTotals(currencyTotals, "payable")}
                   </td>
                 </tr>
               </tbody>
@@ -130,6 +122,37 @@ export function FinanceApprovalCoverDetails({
           <span className="font-medium">{finance.has_rt_enerji_proforma ? "Var" : "Yok"}</span>
         </div>
       </div>
+
+      {/* Opsiyonel Ödeme Tablosu (olur yazısındaki blokla aynı) */}
+      {finance.has_payment_table && (
+        <div className="border rounded-lg p-3 space-y-2">
+          <p className="text-sm font-semibold">Ödeme Tablosu</p>
+          <div className="grid grid-cols-2 gap-2 text-sm">
+            <span className="text-muted-foreground">Karşılaştırma Onay Tarihi:</span>
+            <span className="font-medium">
+              {finance.comparison_approval_date
+                ? format(new Date(finance.comparison_approval_date), "d MMM yyyy", { locale: tr })
+                : "-"}
+            </span>
+            <span className="text-muted-foreground">Anlaşma Tutarı:</span>
+            <span className="font-medium">{finance.agreement_amount || "-"}</span>
+            <span className="text-muted-foreground">Sözleşme:</span>
+            <span className="font-medium">{finance.has_contract ? "VAR" : "YOK"}</span>
+            {(finance.paid_amounts || []).map((amount, idx) => (
+              <div key={idx} className="contents">
+                <span className="text-muted-foreground">Ödenen ({idx + 1}):</span>
+                <span className="font-medium">{amount || "-"}</span>
+              </div>
+            ))}
+            <span className="text-muted-foreground">Kalan Ödeme:</span>
+            <span className="font-medium">{finance.remaining_payment || "-"}</span>
+            <span className="text-muted-foreground">Ödenmesi Talep Edilen:</span>
+            <span className="font-medium">{finance.requested_payment_amount || "-"}</span>
+            <span className="text-muted-foreground">Bu Ödeme Sonrası Kalan:</span>
+            <span className="font-medium">{finance.remaining_after_payment || "-"}</span>
+          </div>
+        </div>
+      )}
 
       {/* İlgililer (Dinamik Onaycılar) */}
       {relatedApprovals.length > 0 && (

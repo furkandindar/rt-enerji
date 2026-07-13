@@ -11,6 +11,7 @@ import { createClient } from "@/lib/supabase/client";
 import { SignaturePanel } from "@/components/signature-panel";
 import { SignatureFont } from "@/lib/signature/types";
 import { UserMultiPicker, type UserMultiPickerEmployee } from "@/components/user-multi-picker";
+import { sumItemsByCurrency, joinCurrencyTotals } from "@/lib/currency";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -39,6 +40,12 @@ const CAPACITY_TYPE_OPTIONS = [
   { value: "YEKA", label: "YEKA" },
 ] as const;
 
+const CURRENCY_OPTIONS = [
+  { value: "TRY", label: "TL" },
+  { value: "USD", label: "USD" },
+  { value: "EUR", label: "EUR" },
+] as const;
+
 const amountString = z
   .string()
   .min(1, "Tutar gerekli")
@@ -52,6 +59,7 @@ const itemSchema = z.object({
   capacity_type: z.enum(["KAPASITE", "ANASAHA", "YEKA"], { message: "Kapasite tipi seçin" }),
   invoice_amount: amountString,
   payable_amount: amountString,
+  currency: z.enum(["TRY", "USD", "EUR"], { message: "Para birimi seçin" }),
 });
 
 const accountingCoverSchema = z.object({
@@ -74,9 +82,6 @@ interface SignatureInfo {
   signatureText: string | null;
   signatureFont: SignatureFont | null;
 }
-
-const formatTRY = (value: number) =>
-  new Intl.NumberFormat("tr-TR", { style: "currency", currency: "TRY" }).format(value);
 
 export default function NewAccountingApprovalCoverPage() {
   const router = useRouter();
@@ -126,6 +131,7 @@ export default function NewAccountingApprovalCoverPage() {
           capacity_type: undefined as unknown as "KAPASITE",
           invoice_amount: "0",
           payable_amount: "0",
+          currency: "TRY",
         },
       ],
     },
@@ -137,11 +143,10 @@ export default function NewAccountingApprovalCoverPage() {
   });
 
   const watchedItems = useWatch({ control: form.control, name: "items" });
-  const totals = useMemo(() => {
-    const invoice = (watchedItems || []).reduce((sum, it) => sum + (Number(it?.invoice_amount) || 0), 0);
-    const payable = (watchedItems || []).reduce((sum, it) => sum + (Number(it?.payable_amount) || 0), 0);
-    return { invoice, payable };
-  }, [watchedItems]);
+  const totals = useMemo(
+    () => sumItemsByCurrency(watchedItems || []),
+    [watchedItems]
+  );
   // Kullanıcı + imza + çalışan listesi yükle
   useEffect(() => {
     const loadUserData = async () => {
@@ -269,6 +274,7 @@ export default function NewAccountingApprovalCoverPage() {
       capacity_type: undefined as unknown as "KAPASITE",
       invoice_amount: "0",
       payable_amount: "0",
+      currency: "TRY",
     });
   };
 
@@ -313,6 +319,7 @@ export default function NewAccountingApprovalCoverPage() {
             capacity_type: it.capacity_type,
             invoice_amount: Number(it.invoice_amount),
             payable_amount: Number(it.payable_amount),
+            currency: it.currency,
           })),
           dynamic_approvers,
         }),
@@ -466,7 +473,7 @@ export default function NewAccountingApprovalCoverPage() {
                             </FormItem>
                           )}
                         />
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-3">
                         <FormField
                           control={form.control}
                           name={`items.${index}.company_name`}
@@ -533,7 +540,7 @@ export default function NewAccountingApprovalCoverPage() {
                           name={`items.${index}.invoice_amount`}
                           render={({ field }) => (
                             <FormItem className="min-w-0">
-                              <FormLabel className="text-xs">Fatura Tutarı (TL)</FormLabel>
+                              <FormLabel className="text-xs">Fatura Tutarı</FormLabel>
                               <FormControl>
                                 <Input type="number" step="0.01" min="0" className="w-full" {...field} />
                               </FormControl>
@@ -546,10 +553,32 @@ export default function NewAccountingApprovalCoverPage() {
                           name={`items.${index}.payable_amount`}
                           render={({ field }) => (
                             <FormItem className="min-w-0">
-                              <FormLabel className="text-xs">Ödenecek (TL)</FormLabel>
+                              <FormLabel className="text-xs">Ödenecek</FormLabel>
                               <FormControl>
                                 <Input type="number" step="0.01" min="0" className="w-full" {...field} />
                               </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name={`items.${index}.currency`}
+                          render={({ field }) => (
+                            <FormItem className="min-w-0">
+                              <FormLabel className="text-xs">Para Birimi</FormLabel>
+                              <Select value={field.value} onValueChange={field.onChange}>
+                                <FormControl>
+                                  <SelectTrigger className="w-full">
+                                    <SelectValue placeholder="Seçiniz" />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  {CURRENCY_OPTIONS.map((opt) => (
+                                    <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
                               <FormMessage />
                             </FormItem>
                           )}
@@ -562,11 +591,11 @@ export default function NewAccountingApprovalCoverPage() {
                 <div className="flex justify-end gap-6 pt-2 text-sm border-t">
                   <div className="flex items-center gap-2">
                     <span className="text-muted-foreground">Toplam Fatura:</span>
-                    <span className="font-semibold">{formatTRY(totals.invoice)}</span>
+                    <span className="font-semibold">{joinCurrencyTotals(totals, "invoice")}</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-muted-foreground">Toplam Ödenecek:</span>
-                    <span className="font-semibold">{formatTRY(totals.payable)}</span>
+                    <span className="font-semibold">{joinCurrencyTotals(totals, "payable")}</span>
                   </div>
                 </div>
                 {form.formState.errors.items && !Array.isArray(form.formState.errors.items) && (

@@ -31,6 +31,7 @@ import {
   financeFundingSourceLabels,
   accountingCapacityTypeLabels,
 } from "@/lib/approvals/constants";
+import { formatMoney, sumItemsByCurrency, joinCurrencyTotals } from "@/lib/currency";
 import { getApproverDisplayName } from "@/lib/approvals/types";
 import { AttachmentList } from "@/components/approvals/attachment-list";
 import { ComparisonFormDetails } from "@/components/approvals/comparison-form-details";
@@ -236,6 +237,14 @@ export interface Request {
     expense_area: string;
     funding_source: string;
     has_rt_enerji_proforma: boolean;
+    has_payment_table?: boolean | null;
+    comparison_approval_date?: string | null;
+    agreement_amount?: string | null;
+    has_contract?: boolean | null;
+    paid_amounts?: string[] | null;
+    remaining_payment?: string | null;
+    requested_payment_amount?: string | null;
+    remaining_after_payment?: string | null;
     items?: Array<{
       id: string;
       row_order: number;
@@ -245,6 +254,7 @@ export interface Request {
       item_subject: string;
       invoice_amount: number;
       payable_amount: number;
+      currency?: string | null;
     }>;
   };
   accounting_approval_cover_request?: {
@@ -269,6 +279,7 @@ export interface Request {
       capacity_type: string;
       invoice_amount: number;
       payable_amount: number;
+      currency?: string | null;
     }>;
   };
   approval_letter_request?: {
@@ -1138,12 +1149,7 @@ export function RequestDetailContent({
           {selectedRequest.finance_approval_cover_request && (() => {
             const fin = selectedRequest.finance_approval_cover_request;
             const items = [...(fin.items || [])].sort((a, b) => a.row_order - b.row_order);
-            const totalInvoice = items.reduce((sum, it) => sum + Number(it.invoice_amount || 0), 0);
-            const totalPayable = items.reduce((sum, it) => sum + Number(it.payable_amount || 0), 0);
-            const fmt = (v: number) => new Intl.NumberFormat("tr-TR", {
-              minimumFractionDigits: 2,
-              maximumFractionDigits: 2,
-            }).format(v);
+            const currencyTotals = sumItemsByCurrency(items);
             return (
               <>
                 <div className="grid grid-cols-2 gap-4">
@@ -1173,8 +1179,8 @@ export function RequestDetailContent({
                             <th className="py-1.5 pr-2 font-medium">Firma</th>
                             <th className="py-1.5 pr-2 font-medium">Ödenecek</th>
                             <th className="py-1.5 pr-2 font-medium">Konu</th>
-                            <th className="py-1.5 pr-2 font-medium text-right">Fatura (TL)</th>
-                            <th className="py-1.5 font-medium text-right">Ödenecek (TL)</th>
+                            <th className="py-1.5 pr-2 font-medium text-right">Fatura</th>
+                            <th className="py-1.5 font-medium text-right">Ödenecek</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -1187,17 +1193,17 @@ export function RequestDetailContent({
                               <td className="py-1.5 pr-2">{it.payee_name}</td>
                               <td className="py-1.5 pr-2">{it.item_subject}</td>
                               <td className="py-1.5 pr-2 text-right whitespace-nowrap">
-                                {fmt(Number(it.invoice_amount))}
+                                {formatMoney(Number(it.invoice_amount), it.currency)}
                               </td>
                               <td className="py-1.5 text-right whitespace-nowrap">
-                                {fmt(Number(it.payable_amount))}
+                                {formatMoney(Number(it.payable_amount), it.currency)}
                               </td>
                             </tr>
                           ))}
                           <tr className="font-semibold">
                             <td colSpan={4} className="py-1.5 pr-2 text-right">Toplam</td>
-                            <td className="py-1.5 pr-2 text-right whitespace-nowrap">{fmt(totalInvoice)}</td>
-                            <td className="py-1.5 text-right whitespace-nowrap">{fmt(totalPayable)}</td>
+                            <td className="py-1.5 pr-2 text-right whitespace-nowrap">{joinCurrencyTotals(currencyTotals, "invoice")}</td>
+                            <td className="py-1.5 text-right whitespace-nowrap">{joinCurrencyTotals(currencyTotals, "payable")}</td>
                           </tr>
                         </tbody>
                       </table>
@@ -1223,6 +1229,35 @@ export function RequestDetailContent({
                     <span className="font-medium">{fin.has_rt_enerji_proforma ? "Var" : "Yok"}</span>
                   </div>
                 </div>
+                {fin.has_payment_table && (
+                  <div className="border rounded-lg p-3 space-y-2">
+                    <p className="text-sm font-semibold">Ödeme Tablosu</p>
+                    <div className="grid grid-cols-2 gap-2 text-sm">
+                      <span className="text-muted-foreground">Karşılaştırma Onay Tarihi:</span>
+                      <span className="font-medium">
+                        {fin.comparison_approval_date
+                          ? format(new Date(fin.comparison_approval_date), "d MMM yyyy", { locale: tr })
+                          : "-"}
+                      </span>
+                      <span className="text-muted-foreground">Anlaşma Tutarı:</span>
+                      <span className="font-medium">{fin.agreement_amount || "-"}</span>
+                      <span className="text-muted-foreground">Sözleşme:</span>
+                      <span className="font-medium">{fin.has_contract ? "VAR" : "YOK"}</span>
+                      {(fin.paid_amounts || []).map((amount, idx) => (
+                        <div key={idx} className="contents">
+                          <span className="text-muted-foreground">Ödenen ({idx + 1}):</span>
+                          <span className="font-medium">{amount || "-"}</span>
+                        </div>
+                      ))}
+                      <span className="text-muted-foreground">Kalan Ödeme:</span>
+                      <span className="font-medium">{fin.remaining_payment || "-"}</span>
+                      <span className="text-muted-foreground">Ödenmesi Talep Edilen:</span>
+                      <span className="font-medium">{fin.requested_payment_amount || "-"}</span>
+                      <span className="text-muted-foreground">Bu Ödeme Sonrası Kalan:</span>
+                      <span className="font-medium">{fin.remaining_after_payment || "-"}</span>
+                    </div>
+                  </div>
+                )}
               </>
             );
           })()}
@@ -1231,12 +1266,7 @@ export function RequestDetailContent({
           {selectedRequest.accounting_approval_cover_request && (() => {
             const acc = selectedRequest.accounting_approval_cover_request;
             const items = [...(acc.items || [])].sort((a, b) => a.row_order - b.row_order);
-            const totalInvoice = items.reduce((sum, it) => sum + Number(it.invoice_amount || 0), 0);
-            const totalPayable = items.reduce((sum, it) => sum + Number(it.payable_amount || 0), 0);
-            const fmt = (v: number) => new Intl.NumberFormat("tr-TR", {
-              minimumFractionDigits: 2,
-              maximumFractionDigits: 2,
-            }).format(v);
+            const currencyTotals = sumItemsByCurrency(items);
             return (
               <>
                 <div className="grid grid-cols-2 gap-4">
@@ -1267,8 +1297,8 @@ export function RequestDetailContent({
                             <th className="py-1.5 pr-2 font-medium">Ödenecek</th>
                             <th className="py-1.5 pr-2 font-medium">Konu</th>
                             <th className="py-1.5 pr-2 font-medium">Kapasite</th>
-                            <th className="py-1.5 pr-2 font-medium text-right">Fatura (TL)</th>
-                            <th className="py-1.5 font-medium text-right">Ödenecek (TL)</th>
+                            <th className="py-1.5 pr-2 font-medium text-right">Fatura</th>
+                            <th className="py-1.5 font-medium text-right">Ödenecek</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -1284,17 +1314,17 @@ export function RequestDetailContent({
                                 {accountingCapacityTypeLabels[it.capacity_type] || it.capacity_type}
                               </td>
                               <td className="py-1.5 pr-2 text-right whitespace-nowrap">
-                                {fmt(Number(it.invoice_amount))}
+                                {formatMoney(Number(it.invoice_amount), it.currency)}
                               </td>
                               <td className="py-1.5 text-right whitespace-nowrap">
-                                {fmt(Number(it.payable_amount))}
+                                {formatMoney(Number(it.payable_amount), it.currency)}
                               </td>
                             </tr>
                           ))}
                           <tr className="font-semibold">
                             <td colSpan={5} className="py-1.5 pr-2 text-right">Toplam</td>
-                            <td className="py-1.5 pr-2 text-right whitespace-nowrap">{fmt(totalInvoice)}</td>
-                            <td className="py-1.5 text-right whitespace-nowrap">{fmt(totalPayable)}</td>
+                            <td className="py-1.5 pr-2 text-right whitespace-nowrap">{joinCurrencyTotals(currencyTotals, "invoice")}</td>
+                            <td className="py-1.5 text-right whitespace-nowrap">{joinCurrencyTotals(currencyTotals, "payable")}</td>
                           </tr>
                         </tbody>
                       </table>

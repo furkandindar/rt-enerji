@@ -20,6 +20,7 @@ export type Database = {
           capacity_type: Database["public"]["Enums"]["accounting_capacity_type"]
           company_name: string
           created_at: string
+          currency: Database["public"]["Enums"]["payment_currency"]
           id: string
           invoice_amount: number
           item_date: string
@@ -33,6 +34,7 @@ export type Database = {
           capacity_type: Database["public"]["Enums"]["accounting_capacity_type"]
           company_name: string
           created_at?: string
+          currency?: Database["public"]["Enums"]["payment_currency"]
           id?: string
           invoice_amount: number
           item_date: string
@@ -46,6 +48,7 @@ export type Database = {
           capacity_type?: Database["public"]["Enums"]["accounting_capacity_type"]
           company_name?: string
           created_at?: string
+          currency?: Database["public"]["Enums"]["payment_currency"]
           id?: string
           invoice_amount?: number
           item_date?: string
@@ -450,6 +453,7 @@ export type Database = {
         Row: {
           company_name: string
           created_at: string
+          currency: Database["public"]["Enums"]["payment_currency"]
           finance_request_id: string
           id: string
           invoice_amount: number
@@ -462,6 +466,7 @@ export type Database = {
         Insert: {
           company_name: string
           created_at?: string
+          currency?: Database["public"]["Enums"]["payment_currency"]
           finance_request_id: string
           id?: string
           invoice_amount: number
@@ -474,6 +479,7 @@ export type Database = {
         Update: {
           company_name?: string
           created_at?: string
+          currency?: Database["public"]["Enums"]["payment_currency"]
           finance_request_id?: string
           id?: string
           invoice_amount?: number
@@ -496,43 +502,67 @@ export type Database = {
       finance_approval_cover_requests: {
         Row: {
           account_available: boolean
+          agreement_amount: string | null
           cash_flow_recorded: boolean
+          comparison_approval_date: string | null
           created_at: string
           document_no: string
           expense_area: Database["public"]["Enums"]["finance_expense_area"]
           funding_source: Database["public"]["Enums"]["finance_funding_source"]
+          has_contract: boolean | null
+          has_payment_table: boolean | null
           has_rt_enerji_proforma: boolean
           id: string
+          paid_amounts: Json | null
+          remaining_after_payment: string | null
+          remaining_payment: string | null
           request_date: string
           request_id: string
+          requested_payment_amount: string | null
           subject: string
           updated_at: string
         }
         Insert: {
           account_available: boolean
+          agreement_amount?: string | null
           cash_flow_recorded: boolean
+          comparison_approval_date?: string | null
           created_at?: string
           document_no: string
           expense_area: Database["public"]["Enums"]["finance_expense_area"]
           funding_source: Database["public"]["Enums"]["finance_funding_source"]
+          has_contract?: boolean | null
+          has_payment_table?: boolean | null
           has_rt_enerji_proforma: boolean
           id?: string
+          paid_amounts?: Json | null
+          remaining_after_payment?: string | null
+          remaining_payment?: string | null
           request_date?: string
           request_id: string
+          requested_payment_amount?: string | null
           subject: string
           updated_at?: string
         }
         Update: {
           account_available?: boolean
+          agreement_amount?: string | null
           cash_flow_recorded?: boolean
+          comparison_approval_date?: string | null
           created_at?: string
           document_no?: string
           expense_area?: Database["public"]["Enums"]["finance_expense_area"]
           funding_source?: Database["public"]["Enums"]["finance_funding_source"]
+          has_contract?: boolean | null
+          has_payment_table?: boolean | null
           has_rt_enerji_proforma?: boolean
           id?: string
+          paid_amounts?: Json | null
+          remaining_after_payment?: string | null
+          remaining_payment?: string | null
           request_date?: string
           request_id?: string
+          requested_payment_amount?: string | null
           subject?: string
           updated_at?: string
         }
@@ -2491,6 +2521,7 @@ export type Database = {
         | "REPORTING"
         | "ENERGY_PRODUCTION"
       overtime_type: "EMERGENCY" | "STAFF_SHORTAGE"
+      payment_currency: "TRY" | "USD" | "EUR"
       request_status:
         | "DRAFT"
         | "PENDING"
@@ -2666,6 +2697,7 @@ export const Constants = {
         "ENERGY_PRODUCTION",
       ],
       overtime_type: ["EMERGENCY", "STAFF_SHORTAGE"],
+      payment_currency: ["TRY", "USD", "EUR"],
       request_status: [
         "DRAFT",
         "PENDING",

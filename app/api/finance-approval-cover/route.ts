@@ -5,6 +5,7 @@ import type { CreateFinanceApprovalCoverInput } from "@/lib/workflow";
 
 const EXPENSE_AREAS = ['ANA_SAHA', 'ELEKTRIKSEL_KAPASITE_ARTISI', 'YEKA_1', 'YEKA_2'] as const;
 const FUNDING_SOURCES = ['KREDI', 'OZ_KAYNAK', 'NAKIT_FAZLASI', 'DIGER'] as const;
+const CURRENCIES = ['TRY', 'USD', 'EUR'] as const;
 
 const ALLOWED_PAGE_SIZES = [10, 25, 50, 100] as const;
 const DEFAULT_PAGE_SIZE = 10;
@@ -198,6 +199,9 @@ export async function POST(request: Request) {
       if (typeof it.payable_amount !== 'number' || it.payable_amount < 0) {
         return NextResponse.json({ error: `Satır ${i + 1}: geçerli bir ödenecek tutar girin` }, { status: 400 });
       }
+      if (!CURRENCIES.includes(it.currency)) {
+        return NextResponse.json({ error: `Satır ${i + 1}: geçerli bir para birimi seçin` }, { status: 400 });
+      }
     }
 
     // 6. Ana request kaydı oluştur
@@ -231,6 +235,15 @@ export async function POST(request: Request) {
         expense_area: body.expense_area,
         funding_source: body.funding_source,
         has_rt_enerji_proforma: body.has_rt_enerji_proforma,
+        // Opsiyonel ödeme tablosu — toggle kapalıysa alanlar temizlenir (olur yazısıyla aynı davranış)
+        has_payment_table: body.has_payment_table || false,
+        comparison_approval_date: body.has_payment_table ? body.comparison_approval_date || null : null,
+        agreement_amount: body.has_payment_table ? body.agreement_amount || null : null,
+        has_contract: body.has_payment_table ? body.has_contract ?? null : null,
+        paid_amounts: body.has_payment_table ? body.paid_amounts || [] : [],
+        remaining_payment: body.has_payment_table ? body.remaining_payment || null : null,
+        requested_payment_amount: body.has_payment_table ? body.requested_payment_amount || null : null,
+        remaining_after_payment: body.has_payment_table ? body.remaining_after_payment || null : null,
       })
       .select()
       .single();
@@ -251,6 +264,7 @@ export async function POST(request: Request) {
       item_subject: it.item_subject,
       invoice_amount: it.invoice_amount,
       payable_amount: it.payable_amount,
+      currency: it.currency,
     }));
 
     const { error: itemsError } = await supabase

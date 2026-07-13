@@ -4,6 +4,7 @@ import { createApprovalChain, getWorkflowDefinitionByCode, notifyApprover, canSt
 import type { CreateAccountingApprovalCoverInput } from "@/lib/workflow";
 
 const CAPACITY_TYPES = ['KAPASITE', 'ANASAHA', 'YEKA'] as const;
+const CURRENCIES = ['TRY', 'USD', 'EUR'] as const;
 
 const ALLOWED_PAGE_SIZES = [10, 25, 50, 100] as const;
 const DEFAULT_PAGE_SIZE = 10;
@@ -199,6 +200,9 @@ export async function POST(request: Request) {
       if (typeof it.payable_amount !== 'number' || it.payable_amount < 0) {
         return NextResponse.json({ error: `Satır ${i + 1}: geçerli bir ödenecek tutar girin` }, { status: 400 });
       }
+      if (!CURRENCIES.includes(it.currency)) {
+        return NextResponse.json({ error: `Satır ${i + 1}: geçerli bir para birimi seçin` }, { status: 400 });
+      }
     }
 
 
@@ -256,6 +260,7 @@ export async function POST(request: Request) {
       capacity_type: it.capacity_type,
       invoice_amount: it.invoice_amount,
       payable_amount: it.payable_amount,
+      currency: it.currency,
     }));
 
     const { error: itemsError } = await supabase

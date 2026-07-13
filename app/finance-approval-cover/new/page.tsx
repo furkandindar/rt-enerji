@@ -11,6 +11,7 @@ import { createClient } from "@/lib/supabase/client";
 import { SignaturePanel } from "@/components/signature-panel";
 import { SignatureFont } from "@/lib/signature/types";
 import { UserMultiPicker, type UserMultiPickerEmployee } from "@/components/user-multi-picker";
+import { sumItemsByCurrency, joinCurrencyTotals } from "@/lib/currency";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -25,6 +26,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -59,6 +61,7 @@ const itemSchema = z.object({
   item_subject: z.string().min(1, "Konu gerekli"),
   invoice_amount: amountString,
   payable_amount: amountString,
+  currency: z.enum(["TRY", "USD", "EUR"], { message: "Para birimi seçin" }),
 });
 
 const financeCoverSchema = z.object({
@@ -75,6 +78,15 @@ const financeCoverSchema = z.object({
     message: "Niteliği seçin",
   }),
   items: z.array(itemSchema).min(1, "En az bir ödeme satırı zorunludur"),
+  // Opsiyonel ödeme tablosu (olur yazısındaki blokla aynı)
+  has_payment_table: z.boolean(),
+  comparison_approval_date: z.string().optional(),
+  agreement_amount: z.string().optional(),
+  has_contract: z.boolean().optional(),
+  paid_amounts: z.array(z.object({ value: z.string() })).optional(),
+  remaining_payment: z.string().optional(),
+  requested_payment_amount: z.string().optional(),
+  remaining_after_payment: z.string().optional(),
 });
 
 type FinanceCoverFormValues = z.infer<typeof financeCoverSchema>;
@@ -84,8 +96,11 @@ interface SignatureInfo {
   signatureFont: SignatureFont | null;
 }
 
-const formatTRY = (value: number) =>
-  new Intl.NumberFormat("tr-TR", { style: "currency", currency: "TRY" }).format(value);
+const CURRENCY_OPTIONS = [
+  { value: "TRY", label: "TL" },
+  { value: "USD", label: "USD" },
+  { value: "EUR", label: "EUR" },
+] as const;
 
 export default function NewFinanceApprovalCoverPage() {
   const router = useRouter();
@@ -132,8 +147,17 @@ export default function NewFinanceApprovalCoverPage() {
           item_subject: "",
           invoice_amount: "0",
           payable_amount: "0",
+          currency: "TRY",
         },
       ],
+      has_payment_table: false,
+      comparison_approval_date: "",
+      agreement_amount: "",
+      has_contract: false,
+      paid_amounts: [{ value: "" }],
+      remaining_payment: "",
+      requested_payment_amount: "",
+      remaining_after_payment: "",
     },
   });
 
@@ -142,12 +166,22 @@ export default function NewFinanceApprovalCoverPage() {
     name: "items",
   });
 
+  const {
+    fields: paidFields,
+    append: appendPaid,
+    remove: removePaid,
+  } = useFieldArray({
+    control: form.control,
+    name: "paid_amounts",
+  });
+
+  const hasPaymentTable = form.watch("has_payment_table");
+
   const watchedItems = useWatch({ control: form.control, name: "items" });
-  const totals = useMemo(() => {
-    const invoice = (watchedItems || []).reduce((sum, it) => sum + (Number(it?.invoice_amount) || 0), 0);
-    const payable = (watchedItems || []).reduce((sum, it) => sum + (Number(it?.payable_amount) || 0), 0);
-    return { invoice, payable };
-  }, [watchedItems]);
+  const totals = useMemo(
+    () => sumItemsByCurrency(watchedItems || []),
+    [watchedItems]
+  );
 
   // Kullanıcı + imza + çalışan listesi yükle
   useEffect(() => {
@@ -275,6 +309,7 @@ export default function NewFinanceApprovalCoverPage() {
       item_subject: "",
       invoice_amount: "0",
       payable_amount: "0",
+      currency: "TRY",
     });
   };
 
@@ -314,7 +349,18 @@ export default function NewFinanceApprovalCoverPage() {
             item_subject: it.item_subject,
             invoice_amount: Number(it.invoice_amount),
             payable_amount: Number(it.payable_amount),
+            currency: it.currency,
           })),
+          has_payment_table: data.has_payment_table,
+          comparison_approval_date: data.has_payment_table ? data.comparison_approval_date || undefined : undefined,
+          agreement_amount: data.has_payment_table ? data.agreement_amount || undefined : undefined,
+          has_contract: data.has_payment_table ? data.has_contract : undefined,
+          paid_amounts: data.has_payment_table
+            ? (data.paid_amounts || []).map((p) => p.value).filter((v) => v.trim() !== "")
+            : undefined,
+          remaining_payment: data.has_payment_table ? data.remaining_payment || undefined : undefined,
+          requested_payment_amount: data.has_payment_table ? data.requested_payment_amount || undefined : undefined,
+          remaining_after_payment: data.has_payment_table ? data.remaining_after_payment || undefined : undefined,
           dynamic_approvers,
         }),
       });
@@ -453,7 +499,7 @@ export default function NewFinanceApprovalCoverPage() {
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
-                      <div className="grid grid-cols-1 md:grid-cols-6 gap-3">
+                      <div className="grid grid-cols-1 md:grid-cols-7 gap-3">
                         <FormField
                           control={form.control}
                           name={`items.${index}.item_date`}
@@ -511,7 +557,7 @@ export default function NewFinanceApprovalCoverPage() {
                           name={`items.${index}.invoice_amount`}
                           render={({ field }) => (
                             <FormItem className="md:col-span-1">
-                              <FormLabel className="text-xs">Fatura Tutarı (TL)</FormLabel>
+                              <FormLabel className="text-xs">Fatura Tutarı</FormLabel>
                               <FormControl>
                                 <Input type="number" step="0.01" min="0" {...field} />
                               </FormControl>
@@ -524,10 +570,32 @@ export default function NewFinanceApprovalCoverPage() {
                           name={`items.${index}.payable_amount`}
                           render={({ field }) => (
                             <FormItem className="md:col-span-1">
-                              <FormLabel className="text-xs">Ödenecek (TL)</FormLabel>
+                              <FormLabel className="text-xs">Ödenecek</FormLabel>
                               <FormControl>
                                 <Input type="number" step="0.01" min="0" {...field} />
                               </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name={`items.${index}.currency`}
+                          render={({ field }) => (
+                            <FormItem className="md:col-span-1">
+                              <FormLabel className="text-xs">Para Birimi</FormLabel>
+                              <Select value={field.value} onValueChange={field.onChange}>
+                                <FormControl>
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Seçiniz" />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  {CURRENCY_OPTIONS.map((opt) => (
+                                    <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
                               <FormMessage />
                             </FormItem>
                           )}
@@ -539,11 +607,11 @@ export default function NewFinanceApprovalCoverPage() {
                 <div className="flex justify-end gap-6 pt-2 text-sm border-t">
                   <div className="flex items-center gap-2">
                     <span className="text-muted-foreground">Toplam Fatura:</span>
-                    <span className="font-semibold">{formatTRY(totals.invoice)}</span>
+                    <span className="font-semibold">{joinCurrencyTotals(totals, "invoice")}</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-muted-foreground">Toplam Ödenecek:</span>
-                    <span className="font-semibold">{formatTRY(totals.payable)}</span>
+                    <span className="font-semibold">{joinCurrencyTotals(totals, "payable")}</span>
                   </div>
                 </div>
                 {form.formState.errors.items && !Array.isArray(form.formState.errors.items) && (
@@ -668,6 +736,140 @@ export default function NewFinanceApprovalCoverPage() {
                     )}
                   />
                 </div>
+              </section>
+
+              {/* Opsiyonel Ödeme Tablosu (olur yazısındaki blokla aynı) */}
+              <section className="space-y-3">
+                <div className="flex items-center gap-3 rounded-lg border p-4">
+                  <Switch
+                    id="has_payment_table"
+                    checked={hasPaymentTable}
+                    onCheckedChange={(checked) => form.setValue("has_payment_table", checked)}
+                  />
+                  <Label htmlFor="has_payment_table" className="text-sm font-medium cursor-pointer">
+                    Ödeme Tablosu Ekle
+                  </Label>
+                </div>
+
+                {hasPaymentTable && (
+                  <Card className="border-dashed">
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-base">Ödeme Tablosu</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <FormField
+                        control={form.control}
+                        name="comparison_approval_date"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Karşılaştırma Onay Tarihi</FormLabel>
+                            <FormControl>
+                              <Input type="date" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="agreement_amount"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Anlaşma Tutarı</FormLabel>
+                            <FormControl>
+                              <Input placeholder="Örn: 500.000 TL" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <div className="flex items-center gap-3">
+                        <Switch
+                          id="has_contract"
+                          checked={form.watch("has_contract") || false}
+                          onCheckedChange={(checked) => form.setValue("has_contract", checked)}
+                        />
+                        <Label htmlFor="has_contract" className="text-sm font-medium cursor-pointer">
+                          Sözleşme Var
+                        </Label>
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-sm font-medium">Ödenen Tutarlar</Label>
+                        {paidFields.map((field, index) => (
+                          <div key={field.id} className="flex items-center gap-2">
+                            <span className="text-sm text-muted-foreground w-20 shrink-0">
+                              Ödenen ({index + 1}):
+                            </span>
+                            <Input
+                              placeholder="Örn: 100.000 TL"
+                              {...form.register(`paid_amounts.${index}.value`)}
+                            />
+                            {paidFields.length > 1 && (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => removePaid(index)}
+                                className="shrink-0"
+                              >
+                                <Trash2 className="h-4 w-4 text-muted-foreground hover:text-destructive" />
+                              </Button>
+                            )}
+                          </div>
+                        ))}
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => appendPaid({ value: "" })}
+                          className="mt-1"
+                        >
+                          <Plus className="h-4 w-4 mr-1" />
+                          Ödeme Satırı Ekle
+                        </Button>
+                      </div>
+                      <FormField
+                        control={form.control}
+                        name="remaining_payment"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Kalan Ödeme</FormLabel>
+                            <FormControl>
+                              <Input placeholder="Örn: 400.000 TL+KDV" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="requested_payment_amount"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Ödenmesi Talep Edilen Tutar</FormLabel>
+                            <FormControl>
+                              <Input placeholder="Örn: 33.515,93 TL" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="remaining_after_payment"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Bu Ödeme Sonrası Kalan Ödeme</FormLabel>
+                            <FormControl>
+                              <Input placeholder="Örn: 400.000 TL+KDV" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </CardContent>
+                  </Card>
+                )}
               </section>
 
               {/* İlgili Kişiler */}

@@ -1,5 +1,7 @@
 // Workflow Engine Types - V3
 
+import type { PaymentCurrency } from '../currency';
+
 // ============================================================================
 // ENUM Types (Database ile uyumlu)
 // ============================================================================
@@ -722,6 +724,7 @@ export interface FinanceApprovalCoverItem {
   item_subject: string;
   invoice_amount: number;
   payable_amount: number;
+  currency: PaymentCurrency;
   created_at: string;
 }
 
@@ -736,6 +739,15 @@ export interface FinanceApprovalCoverRequest {
   expense_area: FinanceExpenseArea;
   funding_source: FinanceFundingSource;
   has_rt_enerji_proforma: boolean;
+  // Opsiyonel ödeme tablosu (olur yazısındaki blokla aynı yapı)
+  has_payment_table: boolean;
+  comparison_approval_date: string | null;
+  agreement_amount: string | null;
+  has_contract: boolean | null;
+  paid_amounts: string[] | null;
+  remaining_payment: string | null;
+  requested_payment_amount: string | null;
+  remaining_after_payment: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -747,6 +759,7 @@ export interface CreateFinanceApprovalCoverItemInput {
   item_subject: string;
   invoice_amount: number;
   payable_amount: number;
+  currency: PaymentCurrency;
 }
 
 export interface CreateFinanceApprovalCoverInput {
@@ -758,6 +771,15 @@ export interface CreateFinanceApprovalCoverInput {
   expense_area: FinanceExpenseArea;
   funding_source: FinanceFundingSource;
   has_rt_enerji_proforma: boolean;
+  // Opsiyonel ödeme tablosu (olur yazısındaki blokla aynı yapı)
+  has_payment_table?: boolean;
+  comparison_approval_date?: string;
+  agreement_amount?: string;
+  has_contract?: boolean;
+  paid_amounts?: string[];
+  remaining_payment?: string;
+  requested_payment_amount?: string;
+  remaining_after_payment?: string;
   items: CreateFinanceApprovalCoverItemInput[];
   dynamic_approvers?: CreateRequestDynamicApprovers;
 }
@@ -782,6 +804,7 @@ export interface AccountingApprovalCoverItem {
   capacity_type: AccountingCapacityType;
   invoice_amount: number;
   payable_amount: number;
+  currency: PaymentCurrency;
   created_at: string;
 }
 
@@ -810,6 +833,7 @@ export interface CreateAccountingApprovalCoverItemInput {
   capacity_type: AccountingCapacityType;
   invoice_amount: number;
   payable_amount: number;
+  currency: PaymentCurrency;
 }
 
 export interface CreateAccountingApprovalCoverInput {

@@ -3,6 +3,7 @@ import { Document, Page, Text, View, StyleSheet, Font, Image } from '@react-pdf/
 import { format } from 'date-fns';
 import { SignatureFont } from '@/lib/signature/types';
 import type { PdfApproval, SignatureInfo } from './types';
+import { formatMoney, sumItemsByCurrency, joinCurrencyTotals } from '@/lib/currency';
 import path from 'path';
 
 const getLogoPath = () => path.join(process.cwd(), 'public', 'logo.png');
@@ -85,6 +86,14 @@ const styles = StyleSheet.create({
 
   evalSubNote: { fontSize: 7, color: colors.grey, marginLeft: 175, marginTop: -4, marginBottom: 6 },
 
+  // Opsiyonel ödeme tablosu (olur yazısındaki blokla aynı görünüm)
+  payTableSection: { marginTop: 10, marginBottom: 4 },
+  payTableTitle: { fontSize: 10, fontWeight: 700, marginBottom: 4, textAlign: 'center' },
+  payTableRow: { flexDirection: 'row', borderWidth: 1, borderTopWidth: 0, borderColor: colors.black, minHeight: 18 },
+  payTableFirstRow: { borderTopWidth: 1 },
+  payTableLabel: { width: '45%', padding: 4, borderRightWidth: 1, borderColor: colors.black, fontWeight: 500, fontSize: 9 },
+  payTableValue: { flex: 1, padding: 4, fontSize: 9 },
+
   // İlgililer section
   ilgilerSection: { marginTop: 14 },
   ilgilerHeader: { fontSize: 10, fontWeight: 700 },
@@ -130,6 +139,7 @@ interface FinanceItem {
   item_subject: string | null;
   invoice_amount: number | string | null;
   payable_amount: number | string | null;
+  currency?: string | null;
 }
 
 interface FinanceRequest {
@@ -142,6 +152,15 @@ interface FinanceRequest {
   expense_area?: 'ANA_SAHA' | 'ELEKTRIKSEL_KAPASITE_ARTISI' | 'YEKA_1' | 'YEKA_2' | string | null;
   funding_source?: 'KREDI' | 'OZ_KAYNAK' | 'NAKIT_FAZLASI' | 'DIGER' | string | null;
   has_rt_enerji_proforma?: boolean | null;
+  // Opsiyonel ödeme tablosu (olur yazısındaki blokla aynı yapı)
+  has_payment_table?: boolean | null;
+  comparison_approval_date?: string | null;
+  agreement_amount?: string | null;
+  has_contract?: boolean | null;
+  paid_amounts?: string[] | null;
+  remaining_payment?: string | null;
+  requested_payment_amount?: string | null;
+  remaining_after_payment?: string | null;
 }
 
 interface FinanceApprovalCoverPDFTemplateProps {
@@ -149,11 +168,6 @@ interface FinanceApprovalCoverPDFTemplateProps {
   approvals: PdfApproval[];
   signatures?: Record<string, SignatureInfo>;
 }
-
-const formatAmount = (v: number | null | undefined): string => {
-  if (v === null || v === undefined) return '-';
-  return new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v);
-};
 
 const CheckBox: React.FC<{ checked: boolean }> = ({ checked }) => (
   <View style={styles.checkBox}>{checked ? <Text style={styles.checkMark}>X</Text> : null}</View>
@@ -174,7 +188,7 @@ export const FinanceApprovalCoverPDFTemplate: React.FC<FinanceApprovalCoverPDFTe
   };
 
   const items = [...(financeRequest.items || [])].sort((a, b) => (a.row_order ?? 0) - (b.row_order ?? 0));
-  const totalPayable = items.reduce((sum, it) => sum + Number(it.payable_amount || 0), 0);
+  const totalPayableText = joinCurrencyTotals(sumItemsByCurrency(items), 'payable');
 
   // Approval gruplaması: step_order'a göre
   const isYkbSignedPdf = (a: PdfApproval) =>
@@ -215,8 +229,8 @@ export const FinanceApprovalCoverPDFTemplate: React.FC<FinanceApprovalCoverPDFTe
             <View style={[styles.paymentHeaderCell, styles.colCompany]}><Text style={styles.paymentHeaderText}>FİRMA ADI</Text></View>
             <View style={[styles.paymentHeaderCell, styles.colPayee]}><Text style={styles.paymentHeaderText}>Ödeme Yapılacak{'\n'}Firma/Kurum</Text></View>
             <View style={[styles.paymentHeaderCell, styles.colSubject]}><Text style={styles.paymentHeaderText}>Konu</Text></View>
-            <View style={[styles.paymentHeaderCell, styles.colInvoice]}><Text style={styles.paymentHeaderText}>Fatura{'\n'}Tutarı{'\n'}(TL)</Text></View>
-            <View style={[styles.paymentHeaderCell, styles.colPayable, { borderRightWidth: 0 }]}><Text style={styles.paymentHeaderText}>Ödenecek{'\n'}Tutar (TL)</Text></View>
+            <View style={[styles.paymentHeaderCell, styles.colInvoice]}><Text style={styles.paymentHeaderText}>Fatura{'\n'}Tutarı</Text></View>
+            <View style={[styles.paymentHeaderCell, styles.colPayable, { borderRightWidth: 0 }]}><Text style={styles.paymentHeaderText}>Ödenecek{'\n'}Tutar</Text></View>
           </View>
           {items.map((it, idx) => (
             <View key={it.id || idx} style={styles.paymentRow} wrap={false}>
@@ -225,14 +239,14 @@ export const FinanceApprovalCoverPDFTemplate: React.FC<FinanceApprovalCoverPDFTe
               <View style={[styles.paymentCell, styles.colCompany]}><Text style={styles.paymentText}>{it.company_name}</Text></View>
               <View style={[styles.paymentCell, styles.colPayee]}><Text style={styles.paymentText}>{it.payee_name}</Text></View>
               <View style={[styles.paymentCell, styles.colSubject]}><Text style={styles.paymentText}>{it.item_subject}</Text></View>
-              <View style={[styles.paymentCell, styles.colInvoice, { alignItems: 'flex-end' }]}><Text style={styles.paymentText}>{formatAmount(Number(it.invoice_amount))}</Text></View>
-              <View style={[styles.paymentCellLast, styles.colPayable, { alignItems: 'flex-end' }]}><Text style={styles.paymentText}>{formatAmount(Number(it.payable_amount))}</Text></View>
+              <View style={[styles.paymentCell, styles.colInvoice, { alignItems: 'flex-end' }]}><Text style={styles.paymentText}>{formatMoney(Number(it.invoice_amount), it.currency)}</Text></View>
+              <View style={[styles.paymentCellLast, styles.colPayable, { alignItems: 'flex-end' }]}><Text style={styles.paymentText}>{formatMoney(Number(it.payable_amount), it.currency)}</Text></View>
             </View>
           ))}
-          {/* Toplam satırı (sadece Ödenecek Tutar sütununda) */}
+          {/* Toplam satırı — para birimi bazında ("1.000,00 TL + 500,00 EUR") */}
           <View style={styles.paymentTotalRow} wrap={false}>
-            <View style={[styles.paymentCell, { width: '88%', borderRightWidth: 1, alignItems: 'flex-end' }]}><Text style={styles.paymentTotalText}></Text></View>
-            <View style={[styles.paymentTotalCell, styles.colPayable]}><Text style={styles.paymentTotalText}>{formatAmount(totalPayable)}</Text></View>
+            <View style={[styles.paymentCell, { width: '70%', borderRightWidth: 1, alignItems: 'flex-end' }]}><Text style={styles.paymentTotalText}></Text></View>
+            <View style={[styles.paymentTotalCell, { width: '30%' }]}><Text style={styles.paymentTotalText}>{totalPayableText}</Text></View>
           </View>
         </View>
 
@@ -292,6 +306,42 @@ export const FinanceApprovalCoverPDFTemplate: React.FC<FinanceApprovalCoverPDFTe
           <Text style={styles.evalSubNote}>(Taşeron ise)</Text>
         </View>
 
+        {/* Opsiyonel Ödeme Tablosu (olur yazısındaki blokla aynı) */}
+        {financeRequest.has_payment_table && (
+          <View style={styles.payTableSection}>
+            <Text style={styles.payTableTitle}>ÖDEME TABLOSU</Text>
+            <View style={[styles.payTableRow, styles.payTableFirstRow]}>
+              <Text style={styles.payTableLabel}>Karşılaştırma Onay Tarihi</Text>
+              <Text style={styles.payTableValue}>{financeRequest.comparison_approval_date ? format(new Date(financeRequest.comparison_approval_date), 'dd.MM.yyyy') : '-'}</Text>
+            </View>
+            <View style={styles.payTableRow}>
+              <Text style={styles.payTableLabel}>Anlaşma Tutarı</Text>
+              <Text style={styles.payTableValue}>{financeRequest.agreement_amount || '-'}</Text>
+            </View>
+            <View style={styles.payTableRow}>
+              <Text style={styles.payTableLabel}>Sözleşme</Text>
+              <Text style={styles.payTableValue}>{financeRequest.has_contract ? 'VAR' : 'YOK'}</Text>
+            </View>
+            {(financeRequest.paid_amounts || []).map((amount: string, idx: number) => (
+              <View key={idx} style={styles.payTableRow}>
+                <Text style={styles.payTableLabel}>Ödenen ({idx + 1})</Text>
+                <Text style={styles.payTableValue}>{amount || '-'}</Text>
+              </View>
+            ))}
+            <View style={styles.payTableRow}>
+              <Text style={styles.payTableLabel}>Kalan Ödeme</Text>
+              <Text style={styles.payTableValue}>{financeRequest.remaining_payment || '-'}</Text>
+            </View>
+            <View style={styles.payTableRow}>
+              <Text style={styles.payTableLabel}>Ödenmesi Talep Edilen Tutar</Text>
+              <Text style={styles.payTableValue}>{financeRequest.requested_payment_amount || '-'}</Text>
+            </View>
+            <View style={styles.payTableRow}>
+              <Text style={styles.payTableLabel}>Bu Ödeme Sonrası Kalan Ödeme</Text>
+              <Text style={styles.payTableValue}>{financeRequest.remaining_after_payment || '-'}</Text>
+            </View>
+          </View>
+        )}
 
         {/* İLGİLİLER* — dinamik onaycılar */}
         <View style={styles.ilgilerSection}>

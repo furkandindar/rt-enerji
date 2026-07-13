@@ -9,19 +9,12 @@ import { AttachmentList } from "./attachment-list";
 import {
   accountingCapacityTypeLabels,
 } from "@/lib/approvals/constants";
+import { formatMoney, sumItemsByCurrency, joinCurrencyTotals } from "@/lib/currency";
 
 interface AccountingApprovalCoverDetailsProps {
   approval: PendingApproval;
   previousStepAttachments?: PreviousStepAttachment[];
 }
-
-const formatAmount = (value: number | null | undefined): string => {
-  if (value === null || value === undefined) return "-";
-  return new Intl.NumberFormat("tr-TR", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(value);
-};
 
 export function AccountingApprovalCoverDetails({
   approval,
@@ -31,8 +24,7 @@ export function AccountingApprovalCoverDetails({
   if (!accounting) return null;
 
   const items = [...(accounting.items || [])].sort((a, b) => a.row_order - b.row_order);
-  const totalInvoice = items.reduce((sum, it) => sum + Number(it.invoice_amount || 0), 0);
-  const totalPayable = items.reduce((sum, it) => sum + Number(it.payable_amount || 0), 0);
+  const currencyTotals = sumItemsByCurrency(items);
 
   // DYNAMIC_USER_LIST tipindeki onaycıları (İlgililer) filtrele
   const relatedApprovals = (approval.request.approvals || [])
@@ -72,8 +64,8 @@ export function AccountingApprovalCoverDetails({
                   <th className="py-1.5 pr-2 font-medium">Ödenecek</th>
                   <th className="py-1.5 pr-2 font-medium">Konu</th>
                   <th className="py-1.5 pr-2 font-medium">Kapasite</th>
-                  <th className="py-1.5 pr-2 font-medium text-right">Fatura (TL)</th>
-                  <th className="py-1.5 font-medium text-right">Ödenecek (TL)</th>
+                  <th className="py-1.5 pr-2 font-medium text-right">Fatura</th>
+                  <th className="py-1.5 font-medium text-right">Ödenecek</th>
                 </tr>
               </thead>
               <tbody>
@@ -89,20 +81,20 @@ export function AccountingApprovalCoverDetails({
                       {accountingCapacityTypeLabels[it.capacity_type] || it.capacity_type}
                     </td>
                     <td className="py-1.5 pr-2 text-right whitespace-nowrap">
-                      {formatAmount(it.invoice_amount)}
+                      {formatMoney(it.invoice_amount, it.currency)}
                     </td>
                     <td className="py-1.5 text-right whitespace-nowrap">
-                      {formatAmount(it.payable_amount)}
+                      {formatMoney(it.payable_amount, it.currency)}
                     </td>
                   </tr>
                 ))}
                 <tr className="font-semibold">
                   <td colSpan={5} className="py-1.5 pr-2 text-right">Toplam</td>
                   <td className="py-1.5 pr-2 text-right whitespace-nowrap">
-                    {formatAmount(totalInvoice)}
+                    {joinCurrencyTotals(currencyTotals, "invoice")}
                   </td>
                   <td className="py-1.5 text-right whitespace-nowrap">
-                    {formatAmount(totalPayable)}
+                    {joinCurrencyTotals(currencyTotals, "payable")}
                   </td>
                 </tr>
               </tbody>

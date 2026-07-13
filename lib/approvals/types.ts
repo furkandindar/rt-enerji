@@ -230,6 +230,14 @@ export interface PendingApproval {
       expense_area: string;
       funding_source: string;
       has_rt_enerji_proforma: boolean;
+      has_payment_table?: boolean | null;
+      comparison_approval_date?: string | null;
+      agreement_amount?: string | null;
+      has_contract?: boolean | null;
+      paid_amounts?: string[] | null;
+      remaining_payment?: string | null;
+      requested_payment_amount?: string | null;
+      remaining_after_payment?: string | null;
       items?: Array<{
         id: string;
         row_order: number;
@@ -239,6 +247,7 @@ export interface PendingApproval {
         item_subject: string;
         invoice_amount: number;
         payable_amount: number;
+        currency?: string | null;
       }>;
     };
     accounting_approval_cover_request?: {
@@ -263,6 +272,7 @@ export interface PendingApproval {
         capacity_type: string;
         invoice_amount: number;
         payable_amount: number;
+        currency?: string | null;
       }>;
     };
     mukayese_request?: {
