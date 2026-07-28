@@ -275,9 +275,14 @@ function shouldSkipStep(
  * İlk adım auto-approve edildikten sonra, talep edenin ilerideki SIGN_ONLY adımları da
  * otomatik onaylanır (form doldurmaya gerek olmayan mükerrer imzalar).
  *
- * Mükerrer onaycı (aynı kişi birden fazla adımda) durumu oluşturma anında DEĞİL,
- * onay verilme anında (PATCH /api/approvals/[id]) handle edilir. Böylece onaycı
- * gerçekten onay verdikten sonra ilerideki SIGN_ONLY adımları otomatik onaylanır.
+ * Mükerrer onaycı (aynı kişi birden fazla adımda) iki farklı yerde handle edilir:
+ * - UNIT_HEAD adımı: Çözümlenen onaycı zincirin ileriki bir APPROVAL-fazı adımında
+ *   zaten varsa, adım oluşturma anında SKIP edilir (satır yok — escalation ile GM'e
+ *   tırmanan 2. adımların GM'in önüne erken düşmemesi için; kişi tek imzasını asıl
+ *   adımında atar).
+ * - Diğer tipler: Oluşturma anında DEĞİL, onay verilme anında (PATCH
+ *   /api/approvals/[id]) handle edilir. Böylece onaycı gerçekten onay verdikten
+ *   sonra ilerideki SIGN_ONLY adımları otomatik onaylanır.
  *
  * @param formData - Opsiyonel. Koşullu adımlar için süreç-spesifik form verisi.
  * @param dynamicApprovers - Opsiyonel. DYNAMIC_USER_LIST adımları için workflow_step_id → sıralı employee_id listesi eşlemesi.
@@ -339,6 +344,8 @@ export async function createApprovalChain(
           decided_at: null,
           sequence_order: sequenceCounter,
           action_type: step.action_type,
+          approver_type: step.approver_type, // Mükerrer-onaycı skip kontrolü için
+          phase: step.phase,
           revision_cycle: cycle,
         });
       }
@@ -371,9 +378,37 @@ export async function createApprovalChain(
       decided_at: autoApproveThisStep ? new Date().toISOString() : null,
       sequence_order: sequenceCounter,
       action_type: step.action_type, // Forward-approve kontrolü için
+      approver_type: step.approver_type, // Mükerrer-onaycı skip kontrolü için
+      phase: step.phase,
       revision_cycle: cycle,
     });
   }
+
+  // 2b. Mükerrer onaycı skip (yalnız UNIT_HEAD): Escalation ile çözümlenen onaycı,
+  // zincirin İLERİKİ bir APPROVAL-fazı satırında zaten onaycıysa bu adım hiç
+  // oluşturulmaz — koşullu adım skip'iyle aynı desen. Kişi imzasını asıl
+  // (ileriki) adımında atar; PDF'te bu adımın kolonu hiç render edilmez.
+  // İleride satırı OLMAYAN onaycının adımı asla düşürülmez (güvenlik ağı:
+  // GM'in ileride yer almadığı bir süreçte 2. adım ona düşmeye devam eder).
+  // Kontrol, koşullu/dynamic skip'ler çözüldükten SONRAKİ nihai satır setine
+  // karşı yapılır — ileriki adımı da skip edilen onaycının adımı korunur.
+  for (let i = approvals.length - 1; i >= 0; i--) {
+    const current = approvals[i];
+    if (current.approver_type !== 'UNIT_HEAD') continue;
+    const appearsLater = approvals.some(
+      (later, j) =>
+        j > i &&
+        later.phase === 'APPROVAL' &&
+        later.approver_employee_id === current.approver_employee_id
+    );
+    if (appearsLater) approvals.splice(i, 1);
+  }
+
+  // Skip sonrası sequence yeniden atanır: ilerleme motoru (PATCH /api/approvals/[id])
+  // satır sayısı üzerinden yürüdüğü için zincir 1..N sürekli kalmak zorunda.
+  approvals.forEach((a, idx) => {
+    a.sequence_order = idx + 1;
+  });
 
   // 3. İlk adım auto-approve edildiyse, talep edenin ilerideki SIGN_ONLY adımlarını da onayla
   const firstApproval = approvals[0];
@@ -392,10 +427,10 @@ export async function createApprovalChain(
     }
   }
 
-  // 4. action_type alanını çıkar (DB'de yok), sonra tüm approval kayıtlarını ekle
+  // 4. Yardımcı alanları çıkar (DB'de yok), sonra tüm approval kayıtlarını ekle
   const approvalsForInsert = approvals.map((a) => {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { action_type, ...rest } = a;
+    const { action_type, approver_type, phase, ...rest } = a;
     return rest;
   });
 
