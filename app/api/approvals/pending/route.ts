@@ -55,7 +55,7 @@ export async function GET(request: NextRequest) {
     let idQuery = supabase
       .from("v_user_pending_approvals")
       .select("id", { count: "exact" })
-      .order("created_at", { ascending: false })
+      .order("created_at", { ascending: true })
       .range(from, to);
 
     if (workflowCode) {
@@ -92,7 +92,7 @@ export async function GET(request: NextRequest) {
       .from("request_approvals")
       .select(APPROVAL_LIST_SELECT)
       .in("id", ids)
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: true });
 
     if (itemsError) {
       console.error("Error fetching pending approvals:", itemsError);
