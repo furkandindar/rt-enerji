@@ -467,6 +467,7 @@ interface CreateSeparationInput {
 2. **Temel Bilgiler:** 2 sütunlu bilgi tablosu (Section 1 verileri)
 3. **Mali Tablo:** Yıllık İzin / Kıdem / İhbar satırları (Gün/Hafta + TL)
 4. **Checklist Tablosu:** 24 madde düz tablo — Sütunlar: No | İş | DURUM | İMZA | AÇIKLAMA
+   > **Not (2026-08-18):** PDF'teki madde sırası section sırasını takip etmez; İK'nın talep ettiği özel dizilimdedir (İK evrak/bordro işleri → Bilgi İşlem → IT/İdari → Muhasebe → Hukuk → zimmet blokları → kalan İK işleri → takvim → belge tarama). Sıranın kaynağı `separation-pdf-template.tsx` içindeki `checklistItems` dizisidir; numara `index + 1` ile üretilir. Onay ekranındaki bölüm içi sıralama değişmemiştir.
 5. **Onay Footer:** 3 sütun — ZİMMET TUTANAĞI (boş) | FORM İÇERİĞİ KONTROLÜ | ONAY (GM/CEO)
 
 ### İmza Mapping (PDF)

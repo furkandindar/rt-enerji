@@ -1,8 +1,8 @@
 # İşe Giriş Takip Formu Süreci
 
 > **Workflow Code:** `EMPLOYEE_ONBOARDING`  
-> **Versiyon:** 1.0  
-> **Tarih:** 2026-02-25
+> **Versiyon:** 1.1  
+> **Tarih:** 2026-02-25 (son güncelleme: 2026-08-03)
 
 ---
 
@@ -19,7 +19,7 @@
 | Toplam Adım | 7 |
 | Form Dolduran Adımlar | 6 (Adım 1-6: FILL_AND_SIGN) |
 | Son Onay | 1 (Adım 7: SIGN_ONLY) |
-| Toplam Checklist Maddesi | 22 |
+| Toplam Checklist Maddesi | 23 |
 
 ---
 
@@ -70,13 +70,14 @@
 | 12 | Masa / Dolap Tanımı | `desk_cabinet_status` | `desk_cabinet_notes` |
 | 13 | Sabit Telefon Temini ve Tanımı | `phone_setup_status` | `phone_setup_notes` |
 | 14 | İşe Alım Duyurusu | `hiring_announcement_status` | `hiring_announcement_notes` |
-| 15 | Adres Bilgileri ve Mobil Numarası Temini | `contact_info_status` | `contact_info_notes` |
-| 16 | Organizasyon Şemasına Eklenmesi ve Yayımı | `org_chart_status` | `org_chart_notes` |
-| 17 | Yönergelerin Basılı ve Elektronik Olarak Teslimi | `guidelines_delivery_status` | `guidelines_delivery_notes` |
-| 18 | SGK, İşkur ve Emniyet Bildirimlerinin Yapılması | `sgk_iskur_notification_status` | `sgk_iskur_notification_notes` |
-| 19 | İş Kazası Talimatı ve İş Sağlığı Güvenliği Talimatının İmzalatılması | `safety_instructions_status` | `safety_instructions_notes` |
-| 21 | İşe Giriş İşlemleri ve Sicil Numarasının Yapılması | `entry_registration_status` | `entry_registration_notes` |
-| 22 | İşe Giriş Evraklarının Bulut'a Yüklenmesi (İK/Belgeler) | `documents_upload_status` | `documents_upload_notes` |
+| 15 | Anlaşmalı Hastaneye Yeni Personel Bildirimi | `hospital_notification_status` | `hospital_notification_notes` |
+| 16 | Personele, Hastaneye İlişkin Haklarının Bildirimi | `hospital_rights_notification_status` | `hospital_rights_notification_notes` |
+| 17 | Adres Bilgileri ve Mobil Numarası ve Şahsi e-posta bilgisi | `contact_info_status` | `contact_info_notes` |
+| 18 | Organizasyon Şemasına Eklenmesi ve Yayımı | `org_chart_status` | `org_chart_notes` |
+| 19 | SGK, İşkur ve Emniyet Bildirimlerinin Yapılması | `sgk_iskur_notification_status` | `sgk_iskur_notification_notes` |
+| 20 | İş Kazası Talimatı ve İş Sağlığı Güvenliği Talimatının İmzalatılması | `safety_instructions_status` | `safety_instructions_notes` |
+| 22 | İşe Giriş İşlemleri ve Sicil Numarasının Yapılması | `entry_registration_status` | `entry_registration_notes` |
+| 23 | İşe Giriş Evraklarının Bulut'a Yüklenmesi (İK/Belgeler) | `documents_upload_status` | `documents_upload_notes` |
 
 ### 3.4 Section 4: Sözleşme İşlemleri (Muhasebe Müdürü)
 
@@ -97,7 +98,7 @@
 | No | Madde | Status Key | Notes Key |
 |----|-------|------------|-----------|
 | 1 | Sigara Kullanımı | `smoking_info_status` | `smoking_info_notes` |
-| 20 | 2/6/12. Aylarda Değerlendirme Form Tarihlerinin Takvime Kaydedilmesi | `evaluation_calendar_status` | `evaluation_calendar_notes` |
+| 21 | 2/6/12. Aylarda Değerlendirme Form Tarihlerinin Takvime Kaydedilmesi | `evaluation_calendar_status` | `evaluation_calendar_notes` |
 
 ### Checklist Durum Değerleri
 
@@ -419,7 +420,7 @@ const sectionConfig = onboardingSectionConfig[onboardingSectionKey];
 ### Yapı
 1. **Header:** Logo + "İŞE GİRİŞ TAKİP FORMU" başlığı
 2. **Temel Bilgiler:** 2 sütunlu bilgi tablosu (Section 1 verileri)
-3. **Checklist Tablosu:** 22 madde tek düz tablo (section başlıkları yok)
+3. **Checklist Tablosu:** 23 madde tek düz tablo (section başlıkları yok)
    - Sütunlar: No | İş | DURUM | İMZA | AÇIKLAMA
    - İMZA sütunu: Her maddenin ait olduğu section'ı dolduran kişinin imzası
 4. **Onay Footer:** 3 sütun
@@ -472,4 +473,13 @@ rt-enerji-frontend/
 - **UNIQUE Constraint:** `onboarding_requests.request_id` sütununda UNIQUE constraint olmalıdır. Aksi halde Supabase join sorgularında dizi döner ve frontend'de veri gösterilmez.
 - **Requester Tekrarı:** Adım 1 ve Adım 3'te aynı kişi (İK/Requester) form doldurur. Bu, `approver_type: 'REQUESTER'` ile sağlanır.
 - **İşten Çıkış Takip Formu:** Bu sürecin tersi olan işten çıkış takip formu benzer yapıda implement edilebilir. Aynı çok adımlı checklist pattern'i kullanılabilir.
+
+---
+
+## 11. Değişiklik Geçmişi
+
+### v1.1 — 2026-08-03
+- **Madde silindi:** "Yönergelerin Basılı ve Elektronik Olarak Teslimi" (İK İşlemleri, `guidelines_delivery`) formdan kaldırıldı. DB kolonları (`guidelines_delivery_status/notes`) geriye dönük uyumluluk için tabloda duruyor; kod artık okumuyor/yazmıyor. Section 4'teki `s4_guidelines_delivery` (Sözleşme İşlemleri) ayrı bir maddedir ve devam ediyor.
+- **Madde adı değişti:** "Adres Bilgileri ve Mobil Numarası Temini" → "Adres Bilgileri ve Mobil Numarası ve Şahsi e-posta bilgisi" (`contact_info`, key değişmedi).
+- **Dokümana işlendi:** Koda daha önce eklenmiş 2 hastane maddesi (`hospital_notification`, `hospital_rights_notification`) tablolara eklendi. Toplam madde sayısı: 23.
 
