@@ -1,5 +1,6 @@
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
+import { isDepartmentViewer } from "@/lib/workflow/workflow-service";
 
 // GET /api/attachments/[id]/preview - PDF dosyasını inline görüntüle
 export async function GET(
@@ -18,11 +19,13 @@ export async function GET(
 
     const { data: appUser } = await supabase
       .from("app_users")
-      .select("employee_id")
+      .select("employee_id, role")
       .eq("id", user.id)
       .single();
 
-    if (!appUser?.employee_id) {
+    // ORG_ADMIN employee bağı olmadan da erişebilmeli (PDF rotalarıyla tutarlı)
+    const isOrgAdmin = appUser?.role === "ORG_ADMIN";
+    if (!appUser?.employee_id && !isOrgAdmin) {
       return NextResponse.json({ error: "User not linked to employee" }, { status: 400 });
     }
 
@@ -43,10 +46,11 @@ export async function GET(
       return NextResponse.json({ error: "Sadece PDF dosyaları önizlenebilir" }, { status: 400 });
     }
 
-    // 4. Yetki kontrolü: talep sahibi veya onaylayıcı mı?
+    // 4. Yetki kontrolü: talep sahibi, onaylayıcı, ORG_ADMIN veya departman
+    // görüntüleyicisi mi?
     const { data: req } = await supabaseAdmin
       .from("requests")
-      .select("requester_employee_id")
+      .select("requester_employee_id, workflow_definition_id")
       .eq("id", attachment.request_id)
       .single();
 
@@ -54,8 +58,11 @@ export async function GET(
       return NextResponse.json({ error: "Talep bulunamadı" }, { status: 404 });
     }
 
-    const isRequester = req.requester_employee_id === appUser.employee_id;
-    if (!isRequester) {
+    const isRequester =
+      !!appUser.employee_id && req.requester_employee_id === appUser.employee_id;
+    let authorized = isRequester || isOrgAdmin;
+
+    if (!authorized && appUser.employee_id) {
       const { data: approval } = await supabaseAdmin
         .from("request_approvals")
         .select("id")
@@ -63,9 +70,19 @@ export async function GET(
         .eq("approver_employee_id", appUser.employee_id)
         .limit(1);
 
-      if (!approval || approval.length === 0) {
-        return NextResponse.json({ error: "Bu dosyayı görüntüleme yetkiniz yok" }, { status: 403 });
+      authorized = !!approval && approval.length > 0;
+
+      if (!authorized) {
+        authorized = await isDepartmentViewer(
+          supabase,
+          appUser.employee_id,
+          req.workflow_definition_id
+        );
       }
+    }
+
+    if (!authorized) {
+      return NextResponse.json({ error: "Bu dosyayı görüntüleme yetkiniz yok" }, { status: 403 });
     }
 
     // 5. Dosyayı storage'dan indir ve inline olarak sun

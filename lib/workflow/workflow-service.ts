@@ -634,6 +634,65 @@ export async function canStartWorkflow(
 }
 
 /**
+ * Çalışanın bir workflow'un taleplerini departman görünürlüğü kapsamında
+ * görüntüleyip görüntüleyemeyeceğini kontrol eder — RLS'teki
+ * can_view_workflow_requests() fonksiyonunun initiator-kuralı dalının
+ * uygulama katmanı karşılığı (PDF/ek indirme gibi elle yetki kontrolü
+ * yapan uçlar için).
+ *
+ * canStartWorkflow'dan iki bilinçli farkı var:
+ * - Kısıtsız (is_restricted=false) workflow'lar için HER ZAMAN false döner;
+ *   kişisel taleplerin (izin, avans vb.) dosyaları herkese açılmamalı.
+ * - RLS ile aynı şekilde primary şartı aramaz; çalışanın herhangi bir
+ *   aktif pozisyon ataması kurala uyuyorsa yeterlidir.
+ */
+export async function isDepartmentViewer(
+  supabase: SupabaseClient,
+  employeeId: string,
+  workflowDefinitionId: string
+): Promise<boolean> {
+  // 1. Workflow'u al — yalnızca kısıtlı workflow'larda departman görünürlüğü var
+  const { data: workflow } = await supabase
+    .from('workflow_definitions')
+    .select('is_restricted')
+    .eq('id', workflowDefinitionId)
+    .eq('is_active', true)
+    .single();
+
+  if (!workflow?.is_restricted) return false;
+
+  // 2. Initiator kurallarını al
+  const rules = await getWorkflowInitiatorRules(supabase, workflowDefinitionId);
+  if (rules.length === 0) return false;
+
+  // 3. Çalışanın tüm aktif pozisyon atamalarını al (birim bilgisiyle)
+  const { data: assignments } = await supabase
+    .from('employee_positions')
+    .select(`
+      position_id,
+      position:positions (
+        unit_id
+      )
+    `)
+    .eq('employee_id', employeeId)
+    .is('end_date', null); // Aktif atama = bitiş tarihi yok
+
+  if (!assignments || assignments.length === 0) return false;
+
+  // 4. Herhangi bir atama herhangi bir kurala uyuyor mu?
+  return rules.some(rule =>
+    assignments.some(assignment => {
+      if (rule.position_id && rule.position_id === assignment.position_id) return true;
+      const position = Array.isArray(assignment.position)
+        ? assignment.position[0]
+        : assignment.position;
+      if (rule.unit_id && position?.unit_id === rule.unit_id) return true;
+      return false;
+    })
+  );
+}
+
+/**
  * Çalışanın başlatabileceği tüm workflow'ları getirir.
  * ORG_ADMIN rolü tüm aktif workflow'ları görebilir.
  */

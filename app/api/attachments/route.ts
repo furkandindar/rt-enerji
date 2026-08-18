@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
+import { isDepartmentViewer } from "@/lib/workflow/workflow-service";
 
 // GET /api/attachments?request_id=xxx - Talebe ait ek dosyaları listele
 export async function GET(request: NextRequest) {
@@ -19,18 +20,21 @@ export async function GET(request: NextRequest) {
 
     const { data: appUser } = await supabase
       .from("app_users")
-      .select("employee_id")
+      .select("employee_id, role")
       .eq("id", user.id)
       .single();
 
-    if (!appUser?.employee_id) {
+    // ORG_ADMIN employee bağı olmadan da erişebilmeli (PDF rotalarıyla tutarlı)
+    const isOrgAdmin = appUser?.role === "ORG_ADMIN";
+    if (!appUser?.employee_id && !isOrgAdmin) {
       return NextResponse.json({ error: "User not linked to employee" }, { status: 400 });
     }
 
-    // Talebin sahibi veya onaylayıcı olduğunu doğrula
+    // Talebin sahibi, onaylayıcısı, ORG_ADMIN veya departman görüntüleyicisi
+    // olduğunu doğrula
     const { data: req } = await supabase
       .from("requests")
-      .select("requester_employee_id")
+      .select("requester_employee_id, workflow_definition_id")
       .eq("id", requestId)
       .single();
 
@@ -38,9 +42,11 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Talep bulunamadı" }, { status: 404 });
     }
 
-    const isRequester = req.requester_employee_id === appUser.employee_id;
+    const isRequester =
+      !!appUser.employee_id && req.requester_employee_id === appUser.employee_id;
+    let authorized = isRequester || isOrgAdmin;
 
-    if (!isRequester) {
+    if (!authorized && appUser.employee_id) {
       const { data: approval } = await supabase
         .from("request_approvals")
         .select("id")
@@ -48,9 +54,19 @@ export async function GET(request: NextRequest) {
         .eq("approver_employee_id", appUser.employee_id)
         .limit(1);
 
-      if (!approval || approval.length === 0) {
-        return NextResponse.json({ error: "Bu talep için yetkiniz yok" }, { status: 403 });
+      authorized = !!approval && approval.length > 0;
+
+      if (!authorized) {
+        authorized = await isDepartmentViewer(
+          supabase,
+          appUser.employee_id,
+          req.workflow_definition_id
+        );
       }
+    }
+
+    if (!authorized) {
+      return NextResponse.json({ error: "Bu talep için yetkiniz yok" }, { status: 403 });
     }
 
     // Ek dosyaları çek
