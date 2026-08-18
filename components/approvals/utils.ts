@@ -1,4 +1,4 @@
-import type { PendingApproval, Requester } from "@/lib/approvals/types";
+import type { Requester } from "@/lib/approvals/types";
 import { leaveTypeLabels, overtimeTypeLabels } from "@/lib/approvals/constants";
 
 export const getRequesterFullName = (requester?: Requester): string => {
@@ -14,34 +14,65 @@ export const getRequesterPosition = (requester?: Requester): string => {
   return primaryPosition?.position?.title || "-";
 };
 
-export const getRequestSummary = (approval: PendingApproval): string => {
-  if (approval.request.leave_request) {
-    return leaveTypeLabels[approval.request.leave_request.leave_type] || approval.request.leave_request.leave_type;
+// APPROVAL_LIST_SELECT liste satırlarında tipe özel join'lerden yalnız konu
+// alanlarını çeker; parametre tipi o dar şekle göre tanımlı. Detay sayfasının
+// full nested objeleri de bu tipe atanabilir olduğundan her iki kaynakla çalışır.
+export interface RequestSummarySource {
+  leave_request?: { leave_type: string } | null;
+  salary_advance_request?: { amount: number } | null;
+  overtime_request?: { month: string; year: number; overtime_type: 'EMERGENCY' | 'STAFF_SHORTAGE' } | null;
+  onboarding_request?: { employee_name: string | null } | null;
+  separation_request?: { employee_name: string | null } | null;
+  request_form_request?: { subject: string } | null;
+  stamp_request?: { subject: string | null } | null;
+  travel_assignment_request?: { assignment_subject: string; destination_city: string } | null;
+  approval_letter_request?: { subject: string } | null;
+  finance_approval_cover_request?: { subject: string } | null;
+  accounting_approval_cover_request?: { subject: string } | null;
+  mukayese_request?: { subject: string } | null;
+  expense_request?: { project_name: string } | null;
+}
+
+export const getRequestSummary = (request: RequestSummarySource): string => {
+  if (request.leave_request) {
+    return leaveTypeLabels[request.leave_request.leave_type] || request.leave_request.leave_type;
   }
-  if (approval.request.salary_advance_request) {
-    return `${approval.request.salary_advance_request.amount.toLocaleString('tr-TR')} TL`;
+  if (request.salary_advance_request) {
+    return `${request.salary_advance_request.amount.toLocaleString('tr-TR')} TL`;
   }
-  if (approval.request.overtime_request) {
-    const ot = approval.request.overtime_request;
+  if (request.overtime_request) {
+    const ot = request.overtime_request;
     return `${ot.month} ${ot.year} - ${overtimeTypeLabels[ot.overtime_type]}`;
   }
-  if (approval.request.onboarding_request) {
-    return approval.request.onboarding_request.employee_name || "-";
+  if (request.onboarding_request) {
+    return request.onboarding_request.employee_name || "-";
   }
-  if (approval.request.separation_request) {
-    return approval.request.separation_request.employee_name || "-";
+  if (request.separation_request) {
+    return request.separation_request.employee_name || "-";
   }
-  if (approval.request.request_form_request) {
-    return approval.request.request_form_request.subject || "-";
+  if (request.request_form_request) {
+    return request.request_form_request.subject || "-";
   }
-  if (approval.request.stamp_request) {
-    return approval.request.stamp_request.subject || approval.request.stamp_request.stamp?.name || "Kaşeli Belge";
+  if (request.stamp_request) {
+    return request.stamp_request.subject || "Kaşeli Belge";
   }
-  if (approval.request.travel_assignment_request) {
-    return `${approval.request.travel_assignment_request.destination_city} - ${approval.request.travel_assignment_request.assignment_subject}`;
+  if (request.travel_assignment_request) {
+    return `${request.travel_assignment_request.destination_city} - ${request.travel_assignment_request.assignment_subject}`;
   }
-  if (approval.request.approval_letter_request) {
-    return approval.request.approval_letter_request.subject || "-";
+  if (request.approval_letter_request) {
+    return request.approval_letter_request.subject || "-";
+  }
+  if (request.finance_approval_cover_request) {
+    return request.finance_approval_cover_request.subject || "-";
+  }
+  if (request.accounting_approval_cover_request) {
+    return request.accounting_approval_cover_request.subject || "-";
+  }
+  if (request.mukayese_request) {
+    return request.mukayese_request.subject || "-";
+  }
+  if (request.expense_request) {
+    return request.expense_request.project_name || "-";
   }
   return "-";
 };

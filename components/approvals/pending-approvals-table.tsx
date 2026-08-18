@@ -6,6 +6,7 @@ import { Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PaginationControls } from "@/components/ui/pagination-controls";
 import { RequestStatusBadge } from "@/components/approvals/status-badge";
+import { getRequestSummary } from "@/components/approvals/utils";
 import {
   Table,
   TableBody,
@@ -52,9 +53,9 @@ export function PendingApprovalsTable({
                   <TableHead className="w-[130px]">Talep No</TableHead>
                   <TableHead>Talep Sahibi</TableHead>
                   <TableHead>Talep Tipi</TableHead>
+                  <TableHead>Talep Konusu</TableHead>
                   <TableHead className="w-[110px]">Durum</TableHead>
                   <TableHead>Oluşturulma</TableHead>
-                  <TableHead>Güncellenme</TableHead>
                   <TableHead className="w-[70px]">İşlemler</TableHead>
                 </TableRow>
               </TableHeader>
@@ -79,16 +80,19 @@ export function PendingApprovalsTable({
                     <TableCell className="font-medium">
                       {approval.request.workflow_definition?.name || "-"}
                     </TableCell>
+                    <TableCell className="max-w-[280px]">
+                      <span
+                        className="block truncate"
+                        title={getRequestSummary(approval.request)}
+                      >
+                        {getRequestSummary(approval.request)}
+                      </span>
+                    </TableCell>
                     <TableCell>
                       <RequestStatusBadge status={approval.request.status} workflowCode={approval.request.workflow_definition?.code} />
                     </TableCell>
                     <TableCell className="text-muted-foreground">
                       {format(new Date(approval.request.created_at), "d MMM yyyy HH:mm", { locale: tr })}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {approval.request.updated_at
-                        ? format(new Date(approval.request.updated_at), "d MMM yyyy HH:mm", { locale: tr })
-                        : "-"}
                     </TableCell>
                     <TableCell>
                       <Button
