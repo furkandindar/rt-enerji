@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/table";
 import type { PendingApproval } from "@/lib/approvals/types";
 import { ApprovalStatusBadge, RequestStatusBadge } from "./status-badge";
+import { getRequestSummary } from "@/components/approvals/utils";
 
 interface ApprovalHistoryTableProps {
   history: PendingApproval[];
@@ -52,7 +53,7 @@ export function ApprovalHistoryTable({
                   <TableHead className="w-[130px]">Talep No</TableHead>
                   <TableHead>Talep Sahibi</TableHead>
                   <TableHead>Talep Tipi</TableHead>
-                  <TableHead>Güncellenme</TableHead>
+                  <TableHead>Talep Konusu</TableHead>
                   <TableHead>Karar</TableHead>
                   <TableHead>Nihai Karar</TableHead>
                   <TableHead>Karar Tarihi</TableHead>
@@ -80,10 +81,13 @@ export function ApprovalHistoryTable({
                     <TableCell className="font-medium">
                       {approval.request.workflow_definition?.name || "-"}
                     </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {approval.request.updated_at
-                        ? format(new Date(approval.request.updated_at), "d MMM yyyy HH:mm", { locale: tr })
-                        : "-"}
+                    <TableCell className="max-w-[280px]">
+                      <span
+                        className="block truncate"
+                        title={getRequestSummary(approval.request)}
+                      >
+                        {getRequestSummary(approval.request)}
+                      </span>
                     </TableCell>
                     <TableCell>
                       <ApprovalStatusBadge status={approval.status} />
