@@ -1,6 +1,8 @@
-import { createClient } from "@/lib/supabase/server";
-import { NextResponse } from "next/server";
+import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
+import { NextResponse, after } from "next/server";
 import { applyAuditStamp, canCancelRequest, createNotification } from "@/lib/workflow";
+import { buildAndUploadRequestPDF } from "@/lib/pdf/build-and-upload-request-pdf";
+import { enqueueSharePointSyncFromStorage } from "@/lib/sharepoint/enqueue-sync";
 
 // POST /api/requests/[id]/cancel
 // Talep eden veya ORG_ADMIN talebi CANCELLED'a çeker (soft cancel, hard delete yok).
@@ -38,7 +40,7 @@ export async function POST(
         workflow_definition_id,
         current_revision_cycle,
         current_step,
-        workflow_definition:workflow_definitions(name)
+        workflow_definition:workflow_definitions(name, code)
       `)
       .eq("id", requestId)
       .single();
@@ -91,6 +93,44 @@ export async function POST(
 
     // 5. Audit
     await applyAuditStamp(supabase, requestId, "CANCELLED", appUser.employee_id);
+
+    // 5b. İptal edilen talep de arşive düşer (İptal Edilen klasörü). PDF
+    //     response'tan sonra üretilir; hata iptali geri almaz, sadece log'lanır.
+    //     Service-role şart: after() kullanıcı oturumundan bağımsız koşar ve
+    //     genel PDF sorgusu iptal edenin RLS görüşünü aşan join'ler içerir.
+    const workflowCode =
+      (req as unknown as { workflow_definition?: { code?: string } }).workflow_definition?.code ?? null;
+    after(async () => {
+      try {
+        const admin = createServiceRoleClient();
+        if (workflowCode === "STAMP_APPROVAL") {
+          // Kaşe süreci için üretilebilir PDF şablonu yok — orijinal belgeyi
+          // pdf_path'e kopyala ve doğrudan arşivle (reject dalıyla aynı desen).
+          const { data: stampReq } = await admin
+            .from("stamp_requests")
+            .select("original_pdf_path")
+            .eq("request_id", requestId)
+            .single();
+
+          if (stampReq?.original_pdf_path) {
+            await admin
+              .from("requests")
+              .update({ pdf_path: stampReq.original_pdf_path })
+              .eq("id", requestId);
+            await enqueueSharePointSyncFromStorage({
+              requestId,
+              supabasePdfPath: stampReq.original_pdf_path,
+            });
+          } else {
+            console.warn("[cancel] kaşe talebinde original_pdf_path yok:", requestId);
+          }
+        } else {
+          await buildAndUploadRequestPDF({ requestId, supabase: admin });
+        }
+      } catch (pdfErr) {
+        console.error("[cancel] PDF/arşiv üretimi başarısız (non-fatal):", pdfErr);
+      }
+    });
 
     // 6. Daha önce APPROVED veren onaycılara "talep iptal edildi" bildirimi
     //    (aktif cycle'da APPROVED olanlar — distinct, talep edeni hariç tut)

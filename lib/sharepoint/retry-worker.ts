@@ -8,11 +8,6 @@
 // pg_cron + pg_net ile her 5 dakikada bir çağrılması beklenir.
 
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
-import {
-  deriveFileName,
-  deriveFolderPath,
-  fetchRequestUploadContext,
-} from "./request-metadata";
 import { uploadPdfToSharePoint } from "./upload-pdf";
 
 // ============================================================================
@@ -23,6 +18,7 @@ interface QueueEntry {
   id: string;
   request_id: string;
   supabase_pdf_path: string;
+  target_sharepoint_path: string;  // enqueue anında dondurulan hedef (klasör + dosya adı)
   attempt_count: number;
   last_attempt_at: string | null;
 }
@@ -70,7 +66,7 @@ export async function processSharePointRetryQueue(
 
   const { data: rawEntries, error } = await supabaseAdmin
     .from("sharepoint_sync_queue")
-    .select("id, request_id, supabase_pdf_path, attempt_count, last_attempt_at")
+    .select("id, request_id, supabase_pdf_path, target_sharepoint_path, attempt_count, last_attempt_at")
     // 'processing' de dahil: Vercel function timeout sonrası kayıt processing'de
     // takılıp kalır (last_error olmadan). Backoff (last_attempt_at kontrolü) bu
     // yetim kayıtları zaman geçince yakalar.
@@ -132,7 +128,7 @@ export async function retryQueueEntryForRequest(
 
   const { data, error } = await supabaseAdmin
     .from("sharepoint_sync_queue")
-    .select("id, request_id, supabase_pdf_path, attempt_count, last_attempt_at")
+    .select("id, request_id, supabase_pdf_path, target_sharepoint_path, attempt_count, last_attempt_at")
     .eq("request_id", requestId)
     .order("created_at", { ascending: false })
     .limit(1)
@@ -173,15 +169,20 @@ async function processEntry(entry: QueueEntry): Promise<EntryResult> {
   const supabaseAdmin = createServiceRoleClient();
 
   try {
-    const ctx = await fetchRequestUploadContext(entry.request_id);
-    if (!ctx) {
+    // Hedef yol enqueue anında donduruldu — canlı DB'den YENİDEN TÜRETİLMEZ.
+    // Departman/statü/tarih sonradan değişse bile retry hep aynı yere yazar;
+    // yol kayması (= SharePoint'te öksüz kopya) bu sayede oluşamaz.
+    const sep = entry.target_sharepoint_path.lastIndexOf("/");
+    if (sep <= 0 || sep === entry.target_sharepoint_path.length - 1) {
       return {
         queueId: entry.id,
         requestId: entry.request_id,
         outcome: "error",
-        reason: "request metadata bulunamadı",
+        reason: `geçersiz target_sharepoint_path: ${entry.target_sharepoint_path}`,
       };
     }
+    const folderPath = entry.target_sharepoint_path.slice(0, sep);
+    const fileName = entry.target_sharepoint_path.slice(sep + 1);
 
     const { data: blob, error: dlErr } = await supabaseAdmin.storage
       .from("request-documents")
@@ -197,9 +198,6 @@ async function processEntry(entry: QueueEntry): Promise<EntryResult> {
     }
 
     const pdfBuffer = Buffer.from(await blob.arrayBuffer());
-
-    const fileName = deriveFileName(ctx);
-    const folderPath = deriveFolderPath(ctx);
 
     const uploadResult = await uploadPdfToSharePoint({
       queueId: entry.id,

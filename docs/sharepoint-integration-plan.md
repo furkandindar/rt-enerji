@@ -547,3 +547,31 @@ Silmek için: `SELECT cron.unschedule('sharepoint-sync-retry');`
 ### 11.6 Gotcha — `proxy.ts` /api/cron bypass'ı
 
 `lib/supabase/proxy.ts` içindeki `updateSession` tüm `/api/*` isteklerini önce auth'lar; cookie yoksa 401 döner. Bu pg_cron'un yapacağı sunucu-sunucu çağrılarını bloklardı. Çözüm: `/api/cron/` path'leri proxy'den bypass'lanıyor (cron endpoint'i kendi CRON_SECRET auth'unu yapıyor). Yeni cron route eklersen aynı `/api/cron/` prefix'ini kullan ya da bypass listesini güncelle.
+
+---
+
+## 12. Revizyon — Arşiv Yapısı Yeniden Tasarımı (Ağustos 2026)
+
+BT biriminin 04.08.2026 tarihli bilgi notu doğrultusunda arşiv düzeni değişti.
+Bu bölümün üzerindeki plan tarihsel kayıttır; güncel davranış aşağıdaki gibidir
+(detay: [dosya-isimlendirme-standardi.md](dosya-isimlendirme-standardi.md)).
+
+- **Klasör:** `{ROOT}/Yıl/Ay(01-Ocak…12-Aralık)/Belgeler/Belge Türü/Sonuç` —
+  yıl/ay **sonuç tarihine** göre (`requests.completed_at`, Europe/Istanbul).
+  Eski `Kategori/Süreç/Yıl/Ay/Gün` yapısı ve `CATEGORY_MAP` kaldırıldı.
+- **Dosya adı (yalnız arşiv):** `AD-SOYAD_YYYY-AA-GG_DEPTKOD_DEPARTMAN_TALEPNO_DURUM.pdf`
+  (`buildArchiveFileName`). Departman, sonuçlanma anındaki aktif primary pozisyondan
+  (`organizational_units.code/name`) çözülür. Uygulama içi indirme adları değişmedi.
+- **Terminal kapısı:** `enqueueSharePointSync` yalnız APPROVED/COMPLETED/REJECTED/
+  CANCELLED statülerinde kuyruğa yazar; AWAITING_COMPLETION ara PDF'i artık
+  SharePoint'e gitmez (Storage'a gitmeye devam eder).
+- **Dondurulmuş hedef:** retry worker artık canlı DB'den yol türetmez;
+  `sharepoint_sync_queue.target_sharepoint_path` kullanılır.
+- **Çift kayıt temizliği:** başarılı yüklemeden sonra eski `sharepoint_item_id`
+  farklıysa eski öğe Graph `DELETE` ile silinir (silme hatası sync'i düşürmez).
+- **Kapatılan boşluklar:** iptal edilen talepler artık PDF üretip arşivlenir
+  (cancel rotası); ıslak imzalı tarama (`ykb_signed_pdf`) tamamlanınca taramanın
+  kendisi arşivlenir; kaşe reddi/iptali orijinal PDF'i arşivler
+  (`enqueueSharePointSyncFromStorage`).
+- **Rollout:** `SHAREPOINT_ROOT_FOLDER=RTProd` env'i kod deploy'u ile aynı anda
+  değiştirilir; eski `Talepler/…` arşivi yerinde bırakıldı (taşıma ayrı çalışma).

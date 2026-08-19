@@ -4,6 +4,7 @@
 
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import {
+  deleteSharePointItem,
   ensureFolderPath,
   resolveSharePointDrive,
   resolveSharePointSite,
@@ -21,8 +22,8 @@ export interface UploadPdfToSharePointParams {
   queueId: string;          // sharepoint_sync_queue.id (status update'leri için)
   requestId: string;        // requests.id
   pdfBuffer: Buffer;
-  fileName: string;         // buildPdfFileName() çıktısı
-  folderPath: string;       // buildSharePointPath() çıktısı (root dahil)
+  fileName: string;         // arşiv dosya adı (enqueue anında dondurulmuş)
+  folderPath: string;       // arşiv klasör yolu, root dahil (dondurulmuş)
 }
 
 export interface UploadResult {
@@ -46,6 +47,8 @@ export interface UploadResult {
  *  2. Graph: site & drive resolve, klasör ensure, dosya upload
  *  3. requests: sharepoint_path / item_id / web_url / sync_status='success'
  *  4. queue: sync_status='success', completed_at
+ *  5. Yol değiştiyse (statü geçişi) eskiyen SharePoint kopyası silinir —
+ *     "önce yeni yükle, sonra eskiyi temizle"; silme hatası sync'i düşürmez.
  *
  * Başarısızlıkta:
  *  - queue: sync_status='failed', last_error
@@ -78,6 +81,15 @@ export async function uploadPdfToSharePoint(
 
     const fullPath = `${folderPath}/${fileName}`;
 
+    // Önceki item id'yi yeni değer ÜZERİNE YAZILMADAN önce oku — yol
+    // değiştiyse (aynı yola PUT aynı id'yi döndürür, farklı yol yeni id
+    // üretir) eski kopyayı aşağıda temizleyeceğiz.
+    const { data: prev } = await supabaseAdmin
+      .from("requests")
+      .select("sharepoint_item_id")
+      .eq("id", requestId)
+      .maybeSingle();
+
     await supabaseAdmin
       .from("requests")
       .update({
@@ -98,6 +110,23 @@ export async function uploadPdfToSharePoint(
         last_error: null,
       })
       .eq("id", queueId);
+
+    // Eskiyen kopya temizliği — yeni yükleme başarıyla tamamlandıktan SONRA.
+    // Silme başarısız olursa yalnız log'lanır: sync başarılı sayılır, en kötü
+    // ihtimalle eski kopya kalır (yeni belge asla kaybolmaz).
+    if (prev?.sharepoint_item_id && prev.sharepoint_item_id !== item.id) {
+      try {
+        await deleteSharePointItem(driveId, prev.sharepoint_item_id);
+        console.log(
+          `[sharepoint-upload] eskiyen kopya silindi requestId=${requestId} itemId=${prev.sharepoint_item_id}`
+        );
+      } catch (delErr) {
+        console.error(
+          `[sharepoint-upload] eskiyen kopya silinemedi requestId=${requestId} itemId=${prev.sharepoint_item_id}:`,
+          delErr
+        );
+      }
+    }
 
     return {
       success: true,

@@ -12,6 +12,7 @@
 // Authenticated kullanıcı yeterli. Production'da silinecek / kapatılacak.
 
 import { buildAndUploadRequestPDF } from "@/lib/pdf/build-and-upload-request-pdf";
+import { isArchivableStatus } from "@/lib/pdf/file-naming";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -125,6 +126,31 @@ async function runFullSyncTest(requestId: string): Promise<NextResponse> {
   }
 
   const supabaseAdmin = createServiceRoleClient();
+
+  // Terminal kapısı ön kontrolü: enqueue terminal olmayan statüleri sessizce
+  // atlar — guard olmadan poll "pending"de takılır ve test eden nedenini göremez.
+  const { data: reqRow } = await supabaseAdmin
+    .from("requests")
+    .select("status")
+    .eq("id", requestId)
+    .maybeSingle();
+
+  if (!reqRow) {
+    return NextResponse.json(
+      { ok: false, error: "Talep bulunamadı.", requestId },
+      { status: 404 }
+    );
+  }
+  if (!isArchivableStatus(reqRow.status)) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: `Talep statüsü '${reqRow.status}' — arşivlenebilir değil. Yalnız terminal statüler (APPROVED/COMPLETED/REJECTED/CANCELLED) SharePoint'e gider.`,
+        requestId,
+      },
+      { status: 400 }
+    );
+  }
 
   try {
     const pdfPath = await buildAndUploadRequestPDF({

@@ -210,6 +210,31 @@ export async function uploadFileToSharePoint(params: {
 }
 
 // ============================================================================
+// Item delete
+// ============================================================================
+
+/**
+ * Drive item'ını siler. Arşiv yolu değiştiğinde (örn. REDDEDİLDİ → revizyon →
+ * TAMAMLANDI) eskiyen kopyanın temizliği için kullanılır.
+ * 404 başarı sayılır — öğe zaten yok, hedefe ulaşılmış demektir.
+ */
+export async function deleteSharePointItem(
+  driveId: string,
+  itemId: string
+): Promise<void> {
+  const response = await graphAppFetch(`/drives/${driveId}/items/${itemId}`, {
+    method: "DELETE",
+  });
+
+  if (!response.ok && response.status !== 404) {
+    const text = await response.text();
+    throw new Error(
+      `[SharePoint] Öğe silinemedi (${itemId}): ${response.status} ${text}`
+    );
+  }
+}
+
+// ============================================================================
 // Helpers
 // ============================================================================
 

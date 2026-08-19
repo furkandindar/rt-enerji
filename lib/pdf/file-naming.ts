@@ -2,14 +2,16 @@
 // PDF Dosya Adı Üretimi - Single Source of Truth
 // ============================================================================
 //
-// Tüm PDF download endpoint'leri ve ileriki SharePoint sync'i bu helper'ı
-// kullanmalıdır. Format:
+// İki ayrı format üretilir:
 //
-//   {SURECKODU}_{YYYYMMDD}_{TALEPNO}_{AD-SOYAD}_{DURUM}.pdf
+// 1. Uygulama içi download/preview (buildPdfFileName):
+//      {SURECKODU}_{YYYYMMDD}_{TALEPNO}_{AD-SOYAD}_{DURUM}.pdf
+//      IZIN_20260508_2026-000142_AHMET-YILMAZ_ONAYLI.pdf
 //
-// Örnek:
-//   IZIN_20260508_2026-000142_AHMET-YILMAZ_ONAYLI.pdf
-//   MUKAYESE_20260315_2026-000098_AYSE-KAYA_REDDEDILDI.pdf
+// 2. SharePoint arşivi (buildArchiveFileName — yalnız terminal statüler):
+//      {AD-SOYAD}_{YYYY-MM-DD}_{DEPTKOD}_{DEPARTMAN}_{TALEPNO}_{DURUM}.pdf
+//      SINEM-ALDOGAN-DEMIRKAN_2026-07-31_IL-01_IZIN-ISLERI_2026-000401_TAMAMLANDI.pdf
+//      (tarih = talebin sonuçlandığı gün, Europe/Istanbul)
 //
 // Sadece [A-Z0-9_-.] karakterleri içerir; cross-OS, SharePoint ve Storage
 // uyumlu kalır.
@@ -97,18 +99,34 @@ export function slugifyTr(input: string): string {
 }
 
 // ----------------------------------------------------------------------------
-// Tarih → YYYYMMDD (alfabetik = kronolojik sıralama için)
+// Tarih → Türkiye saatine göre yıl/ay/gün parçaları
 // ----------------------------------------------------------------------------
-export function formatYYYYMMDD(input: string | Date): string {
+/**
+ * Timestamp'i Europe/Istanbul gününe çevirip parçalarını döner.
+ * Geçersiz tarih → null. Klasör yolu (folder-mapper) ve dosya adı aynı
+ * kaynağı kullansın diye export edildi.
+ */
+export function istanbulDateParts(
+  input: string | Date
+): { year: string; month: string; day: string } | null {
   const d = typeof input === 'string' ? new Date(input) : input;
-  if (isNaN(d.getTime())) return '00000000';
+  if (isNaN(d.getTime())) return null;
   // Dosya adı, Türkiye saatine göre günü yansıtsın (sunucu UTC olsa bile).
   const parts = new Intl.DateTimeFormat('en-CA', {
     timeZone: APP_TZ,
     year: 'numeric', month: '2-digit', day: '2-digit',
   }).formatToParts(d);
   const get = (t: string) => parts.find((p) => p.type === t)?.value ?? '';
-  return `${get('year')}${get('month')}${get('day')}`;
+  return { year: get('year'), month: get('month'), day: get('day') };
+}
+
+// ----------------------------------------------------------------------------
+// Tarih → YYYYMMDD (alfabetik = kronolojik sıralama için)
+// ----------------------------------------------------------------------------
+export function formatYYYYMMDD(input: string | Date, separator = ''): string {
+  const parts = istanbulDateParts(input);
+  if (!parts) return ['0000', '00', '00'].join(separator);
+  return [parts.year, parts.month, parts.day].join(separator);
 }
 
 // ----------------------------------------------------------------------------
@@ -138,6 +156,73 @@ export function buildPdfFileName(input: BuildPdfFileNameInput): string {
   const status = STATUS_TO_FILENAME[input.status] || 'BILINMIYOR';
 
   return `${processCode}_${date}_${input.request_no}_${name}_${status}.pdf`;
+}
+
+// ----------------------------------------------------------------------------
+// SharePoint arşivi — yalnız terminal (kesin sonuçlu) statüler arşivlenir
+// ----------------------------------------------------------------------------
+export const ARCHIVABLE_STATUSES = [
+  'APPROVED',
+  'COMPLETED',
+  'REJECTED',
+  'CANCELLED',
+] as const;
+
+export type ArchivableStatus = (typeof ARCHIVABLE_STATUSES)[number];
+
+export function isArchivableStatus(status: string): status is ArchivableStatus {
+  return (ARCHIVABLE_STATUSES as readonly string[]).includes(status);
+}
+
+// Arşiv dosya adındaki DURUM parçası. APPROVED ve COMPLETED ikisi de başarılı
+// sonuçtur (COMPLETION fazı olmayan süreçler APPROVED'da biter) → tek token.
+// Klasör karşılıkları folder-mapper.ts RESULT_FOLDERS'ta; ikisi hep eşleşmeli.
+export const ARCHIVE_STATUS_TOKEN: Record<ArchivableStatus, string> = {
+  APPROVED:  'TAMAMLANDI',
+  COMPLETED: 'TAMAMLANDI',
+  REJECTED:  'REDDEDILDI',
+  CANCELLED: 'IPTAL',
+};
+
+// Departman kodu boşken addan türetilen kısaltmanın üst sınırı
+const DEPT_CODE_MAX_LEN = 12;
+
+export interface BuildArchiveFileNameInput {
+  request_no: string;                        // 2026-000401
+  requester_first_name: string | null | undefined;
+  requester_last_name: string | null | undefined;
+  finalized_at: string;                      // completed_at ?? last_action_at ?? created_at (caller çözer)
+  department_code: string | null;            // organizational_units.code (nullable)
+  department_name: string | null;            // organizational_units.name
+  status: ArchivableStatus;
+}
+
+/**
+ * SharePoint arşiv dosya adı:
+ *   {AD-SOYAD}_{YYYY-MM-DD}_{DEPTKOD}_{DEPARTMAN}_{TALEPNO}_{DURUM}.pdf
+ *
+ * Departman, talebin sonuçlandığı anda çözülüp kuyruğa dondurulur — çalışanın
+ * departmanı sonradan değişse bile geçmiş belgelerin yeri değişmez.
+ */
+export function buildArchiveFileName(input: BuildArchiveFileNameInput): string {
+  const fullName = [input.requester_first_name, input.requester_last_name]
+    .filter(Boolean)
+    .join(' ');
+  const name = slugifyTr(fullName) || 'ISIMSIZ';
+
+  const date = formatYYYYMMDD(input.finalized_at, '-');
+
+  const deptName = slugifyTr(input.department_name ?? '') || 'BILINMEYEN';
+  const derivedCode = input.department_code
+    ? slugifyTr(input.department_code)
+    : slugifyTr(input.department_name ?? '')
+        .slice(0, DEPT_CODE_MAX_LEN)
+        .replace(/-+$/, '');
+  const deptCode = derivedCode || 'GENEL';
+
+  const status = ARCHIVE_STATUS_TOKEN[input.status];
+
+  return `${name}_${date}_${deptCode}_${deptName}_${input.request_no}_${status}.pdf`;
 }
 
 // ----------------------------------------------------------------------------

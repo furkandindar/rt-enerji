@@ -8,7 +8,10 @@ import {
 } from "@/lib/workflow";
 import { after } from "next/server";
 import { buildAndUploadRequestPDF } from "@/lib/pdf/build-and-upload-request-pdf";
-import { enqueueSharePointSync } from "@/lib/sharepoint/enqueue-sync";
+import {
+  enqueueSharePointSync,
+  enqueueSharePointSyncFromStorage,
+} from "@/lib/sharepoint/enqueue-sync";
 import { stampPDF, type StampPositionOverrides } from "@/lib/pdf/stamp-pdf";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { StampPosition } from "@/lib/workflow/types";
@@ -546,6 +549,16 @@ export async function PATCH(
               .update({ pdf_path: stampReq.original_pdf_path })
               .eq("id", requestData.id);
             console.log('Rejected stamp request: original PDF path copied to pdf_path:', stampReq.original_pdf_path);
+
+            // Reddedilen kaşe talebi de arşive düşer (Reddedilen klasörü) —
+            // kaşeli akış buildAndUploadRequestPDF kullanmadığı için manuel.
+            const rejectedStampPdfPath = stampReq.original_pdf_path;
+            after(() =>
+              enqueueSharePointSyncFromStorage({
+                requestId: requestData.id,
+                supabasePdfPath: rejectedStampPdfPath,
+              })
+            );
           } else {
             console.warn('Rejected stamp request has no original_pdf_path:', requestData.id);
           }
@@ -867,8 +880,10 @@ export async function PATCH(
           .eq("id", requestData.id);
 
         // Onay PDF'i oluştur (gerçekleşen tarihler henüz boş)
-        // buildAndUploadRequestPDF: generate + merge + Storage upload + pdf_path UPDATE
-        // + fire-and-forget SharePoint sync (env'le killswitch'li).
+        // buildAndUploadRequestPDF: generate + merge + Storage upload + pdf_path UPDATE.
+        // SharePoint sync ARTIK BURADA GERÇEKLEŞMEZ: enqueue terminal olmayan
+        // statüleri (AWAITING_COMPLETION dahil) atlar — arşive yalnız kesin
+        // sonuçlu belge gider. Storage'daki ara PDF imza/tarama akışı için gerekli.
         try {
           const pdfPath = await buildAndUploadRequestPDF({
             requestId: requestData.id,
@@ -947,6 +962,36 @@ export async function PATCH(
           } catch (pdfError) {
             console.error('Error generating final PDF:', pdfError);
           }
+        } else {
+          // ykb_signed_pdf adımı: pdf_path'te asistanın yüklediği ıslak imzalı
+          // tarama duruyor. Taslağı yeniden üretmek yerine O TARAMAYI arşivle
+          // ("ilk taslak değil, imzalı son belge arşivlenir"). pdf_path taze
+          // okunur — tarama önceki bir karar adımında yazılmış olabilir.
+          const signedPdfRequestId = requestData.id;
+          after(async () => {
+            try {
+              const admin = createServiceRoleClient();
+              const { data: reqRow } = await admin
+                .from("requests")
+                .select("pdf_path")
+                .eq("id", signedPdfRequestId)
+                .maybeSingle();
+
+              if (reqRow?.pdf_path) {
+                await enqueueSharePointSyncFromStorage({
+                  requestId: signedPdfRequestId,
+                  supabasePdfPath: reqRow.pdf_path,
+                });
+              } else {
+                console.warn(
+                  '[approvals] imzalı tarama arşivlenemedi — pdf_path boş:',
+                  signedPdfRequestId
+                );
+              }
+            } catch (err) {
+              console.error('[sharepoint-enqueue signed-pdf]', err);
+            }
+          });
         }
 
         // Talep edene "tamamlandı" bildirimi gönder

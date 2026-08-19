@@ -1,125 +1,155 @@
 # RT Enerji – SharePoint Dosya İsimlendirme Standardı
 
-### Onaylanan her belgenin SharePoint arşivine nasıl, hangi isimle ve hangi klasöre kaydedildiğini açıklar
+### Süreç sonunda kesinleşen her belgenin SharePoint arşivine nasıl, hangi isimle ve hangi klasöre kaydedildiğini açıklar
+
+> **Revizyon (Ağustos 2026):** BT biriminin 04.08.2026 tarihli bilgi notu doğrultusunda
+> arşiv yapısı yeniden tasarlandı. Eski `Talepler/Kategori/Süreç/Yıl/Ay/Gün` yapısı ve
+> eski arşiv dosya adı bu tarihten itibaren YENİ kayıtlar için kullanılmaz; geçmiş arşiv
+> yerinde bırakılmıştır (taşıma ayrı bir çalışma).
 
 ---
 
 ## Neden bir standart?
 
-Süreç sonunda üretilen her imzalı/kaşeli PDF, SharePoint arşivine **otomatik** olarak yüklenir. İsimlendirme ve klasörleme elle değil, sistemin uyguladığı **tek bir kurala** göre yapılır. Bunun faydaları:
+Süreç sonunda kesin sonuca ulaşan (tamamlanan, reddedilen veya iptal edilen) her PDF,
+SharePoint arşivine **otomatik** yüklenir. İsimlendirme ve klasörleme elle değil, sistemin
+uyguladığı **tek bir kurala** göre yapılır:
 
-- 🔎 **Aranabilirlik** — dosya adına bakarak süreç tipini, talep sahibini, tarihi ve onay durumunu tek bakışta görürsünüz; dosyayı açmaya gerek kalmaz.
-- 📁 **Düzenli arşiv** — belgeler kategori → tip → yıl → ay → gün hiyerarşisinde dağılır; binlerce dosya birbirine karışmaz.
-- 📅 **Kronolojik sıralama** — tarih formatı sayesinde dosyalar alfabetik sıralandığında otomatik olarak tarih sırasına girer.
-- 💻 **Uyumluluk** — Türkçe karakter ve boşluk içermez; Windows, SharePoint ve diğer sistemlerde sorunsuz açılır.
-- 🤝 **Tutarlılık** — kuralı sistem uygular; kişiden kişiye, günden güne değişmez.
-
----
-
-## 1) Dosya adı formatı
-
-Her dosya şu kalıba göre adlandırılır:
-
-```
-SÜREÇKODU_YYYYAYGÜN_TALEPNO_AD-SOYAD_DURUM.pdf
-```
-
-**Örnekler:**
-
-```
-IZIN_20260508_2026-000142_AHMET-YILMAZ_ONAYLI.pdf
-MUKAYESE_20260315_2026-000098_AYSE-KAYA_REDDEDILDI.pdf
-FAZLA-MESAI_20260512_2026-000201_ALI-SAHIN-OZ_TAMAMLANDI.pdf
-```
-
-Dosya adı beş parçadan oluşur:
-
-| Sıra | Parça | Açıklama | Örnek |
-|---|---|---|---|
-| 1 | **Süreç kodu** | Belgenin hangi sürece ait olduğu | `IZIN` |
-| 2 | **Tarih (YYYYAYGÜN)** | Talebin oluşturulduğu tarih | `20260508` (8 Mayıs 2026) |
-| 3 | **Talep no** | Talebin sistemdeki benzersiz numarası | `2026-000142` |
-| 4 | **Ad-Soyad** | Talep sahibinin adı (büyük harf, tireli) | `AHMET-YILMAZ` |
-| 5 | **Durum** | Belgenin onay durumu | `ONAYLI` |
-
-> Parçalar alt çizgi (`_`) ile ayrılır. Ad-soyad içindeki boşluklar tire (`-`) olur, Türkçe karakterler İngilizce karşılığına çevrilir (ör. *Şahin Öz → SAHIN-OZ*). Tüm dosya adı büyük harftir.
+- 🔎 **Aranabilirlik** — belirli bir ayda tamamlanan/reddedilen/iptal edilen belgeler doğrudan bulunur; dosya adından çalışan, tarih, departman, talep no ve sonuç tek bakışta okunur.
+- 📁 **Düzenli arşiv** — yıl → ay → belge türü → sonuç hiyerarşisi; gün klasörü yok, daha az tıklama.
+- 📅 **Kronolojik sıralama** — tarih `YYYY-AA-GG` formatında; alfabetik sıralama = tarih sırası.
+- 💻 **Uyumluluk** — Türkçe karakter ve boşluk dosya adında yoktur (klasör adlarında serbesttir).
+- 🤝 **Tutarlılık** — kural sistemde kodludur; kişiden kişiye değişmez.
 
 ---
 
-## 2) Süreç kodları
-
-Her süreç tipinin kısa, sabit bir kodu vardır:
-
-| Süreç | Dosya kodu |
-|---|---|
-| Yıllık İzin | `IZIN` |
-| Kısa Süreli İzin | `KISA-IZIN` |
-| Maaş Avansı | `MAAS-AVANS` |
-| Fazla Mesai | `FAZLA-MESAI` |
-| İşe Giriş | `ISE-GIRIS` |
-| İşten Çıkış | `ISTEN-CIKIS` |
-| Talep Formu | `TALEP-FORMU` |
-| Görev / Seyahat Formu | `GOREV-FORMU` |
-| Olur Yazısı | `OLUR-YAZISI` |
-| Onay Kapağı (Finans) | `ONAY-KAPAGI-FIN` |
-| Onay Kapağı (Muhasebe) | `ONAY-KAPAGI-MUH` |
-| Mukayese Formu | `MUKAYESE` |
-| Harcama Formu | `HARCAMA` |
-| Kaşe Onayı | `KASE-ONAY` |
-
----
-
-## 3) Durum etiketleri
-
-Dosya adının son parçası, belgenin o anki onay durumunu gösterir:
-
-| Durum | Dosya etiketi |
-|---|---|
-| Taslak | `TASLAK` |
-| Beklemede | `BEKLEMEDE` |
-| Onaylı | `ONAYLI` |
-| Tamamlanma Bekliyor | `TAMAMLANMA-BEKLIYOR` |
-| Tamamlandı | `TAMAMLANDI` |
-| Reddedildi | `REDDEDILDI` |
-| İptal | `IPTAL` |
-| Revize İstendi | `REVIZE-ISTENDI` |
-
----
-
-## 4) Klasör yapısı
-
-Dosyalar SharePoint'te düz bir listede değil, anlamlı bir **klasör hiyerarşisinde** saklanır:
+## 1) Arşiv klasör yapısı
 
 ```
-Talepler / Kategori / Süreç Tipi / Yıl / Ay / Gün
+{KÖK} / Yıl / Ay / Belgeler / Belge Türü / Sonuç
 ```
 
 **Örnek:**
 
 ```
-Talepler / 01_Insan_Kaynaklari / Yillik_Izin / 2026 / 05 / 17
+RTProd / 2026 / 07-Temmuz / Belgeler / Yıllık İzin / Tamamlanan
 ```
 
-Kategoriler:
+- **Kök klasör** `SHAREPOINT_ROOT_FOLDER` env değişkeninden gelir (prod hedefi: `RTProd`).
+- **Yıl ve ay**, talebin açıldığı tarihe göre DEĞİL, belgenin **kesin sonuca ulaştığı** tarihe
+  göre belirlenir (`requests.completed_at`, Europe/Istanbul saat diliminde).
+- **Ay klasörleri:** `01-Ocak, 02-Şubat, 03-Mart, 04-Nisan, 05-Mayıs, 06-Haziran, 07-Temmuz,
+  08-Ağustos, 09-Eylül, 10-Ekim, 11-Kasım, 12-Aralık`.
 
-| Kategori klasörü | İçerdiği süreçler |
+**Belge Türü klasörleri** (süreç başına bir klasör):
+
+| Süreç kodu | Klasör |
 |---|---|
-| `01_Insan_Kaynaklari` | İzinler, maaş avansı, fazla mesai, işe giriş/çıkış, talep formu |
-| `02_Finans` | Onay kapağı (finans), mukayese |
-| `03_Muhasebe` | Onay kapağı (muhasebe), harcama |
-| `04_Idari_Isler` | Görev formu, olur yazısı, kaşeli belge onayı |
+| ANNUAL_LEAVE | Yıllık İzin |
+| SHORT_LEAVE | Kısa Süreli İzin |
+| SALARY_ADVANCE | Maaş Avansı |
+| OVERTIME | Fazla Mesai |
+| EMPLOYEE_ONBOARDING | İşe Giriş |
+| EMPLOYEE_SEPARATION | İşten Çıkış |
+| REQUEST_FORM | Talep Formu |
+| TRAVEL_ASSIGNMENT | Görev Formu |
+| APPROVAL_LETTER | Olur Yazısı |
+| STAMP_APPROVAL | Kaşeli Belge |
+| FINANCE_APPROVAL_COVER | Onay Kapağı Finans |
+| ACCOUNTING_APPROVAL_COVER | Onay Kapağı Muhasebe |
+| COMPARISON_FORM | Mukayese Formu |
+| EXPENSE_FORM | Harcama Formu |
 
-> Tanımlı olmayan bir süreç tipi gelirse, belge kaybolmaması için `99_Diger` klasörüne yedeklenir.
+> Tanımlı olmayan bir süreç tipi gelirse belge kaybolmaması için **`Diğer`** klasörüne düşer.
+
+**Sonuç klasörleri:**
+
+| Talep statüsü | Klasör |
+|---|---|
+| APPROVED, COMPLETED | Tamamlanan |
+| REJECTED | Reddedilen |
+| CANCELLED | İptal Edilen |
+
+> Yalnız bu **terminal** statüler arşivlenir. Beklemedeki, taslak veya ara aşamadaki
+> (örn. görev dönüşü bekleyen) belgeler SharePoint'e **gitmez**; kesin sonuç çıkınca
+> nihai belge yüklenir. Islak imzalı tarama yüklenen süreçlerde de taslak değil,
+> **imzalı son belge** arşivlenir.
+
+---
+
+## 2) Arşiv dosya adı formatı
+
+```
+AD-SOYAD_YYYY-AA-GG_DEPTKOD_DEPARTMAN_TALEPNO_DURUM.pdf
+```
+
+**Örnek:**
+
+```
+SINEM-ALDOGAN-DEMIRKAN_2026-07-31_IL-01_IZIN-ISLERI_2026-000401_TAMAMLANDI.pdf
+```
+
+| Sıra | Parça | Açıklama | Örnek |
+|---|---|---|---|
+| 1 | **Ad-Soyad** | Talep sahibi (büyük harf, tireli) | `SINEM-ALDOGAN-DEMIRKAN` |
+| 2 | **Sonuç tarihi** | Belgenin tamamlandığı/reddedildiği/iptal edildiği gün | `2026-07-31` |
+| 3 | **Departman kodu** | Birimin kısa kodu (`organizational_units.code`) | `IL-01` |
+| 4 | **Departman adı** | Kodu bilmeyen kullanıcı için birimin adı | `IZIN-ISLERI` |
+| 5 | **Talep no** | Talebin sistemdeki benzersiz numarası | `2026-000401` |
+| 6 | **Durum** | `TAMAMLANDI` / `REDDEDILDI` / `IPTAL` | `TAMAMLANDI` |
+
+Kurallar:
+
+- Parçalar alt çizgi (`_`) ile ayrılır; Türkçe karakterler İngilizce karşılığına çevrilir,
+  boşluklar tire (`-`) olur, tümü büyük harftir.
+- **Departman kodu** organizasyon yönetimindeki birim kodundan gelir. Kod tanımlı değilse
+  birim adından türetilmiş en fazla 12 karakterlik kısaltma kullanılır; talep sahibinin
+  aktif birimi hiç yoksa `GENEL` + `BILINMEYEN` yazılır.
+- **Departman, talebin sonuçlandığı anda** çözülür ve kuyruğa dondurulur — çalışanın
+  departmanı sonradan değişse bile geçmiş belgelerin adı ve yeri değişmez.
+- `APPROVED` ve `COMPLETED` ikisi de başarılı sonuçtur (tamamlama fazı olmayan süreçler
+  `APPROVED`'da biter) → ikisi de `TAMAMLANDI` etiketi alır.
+
+---
+
+## 3) Tekrar arşivleme kuralı (çift kayıt önleme)
+
+Aynı talep yeniden işlendiğinde ikinci bir kopya **açılmaz**:
+
+- Hedef yol (klasör + dosya adı) kuyruğa alındığı anda dondurulur; tekrar denemeler
+  (retry) hep aynı yola yazar ve SharePoint aynı dosyanın üzerine yeni sürüm koyar.
+- Talebin sonucu değişirse (örn. reddedilen talep revizyon sonrası tamamlanırsa) **önce
+  yeni dosya başarıyla yüklenir, sonra** eski SharePoint kaydı otomatik temizlenir.
+  İşlem yarıda kalırsa eski dosya korunur — belge asla kaybolmaz.
+
+---
+
+## 4) Uygulama içi indirme adları (değişmedi)
+
+Uygulama içinden yapılan PDF indirme ve önizlemeleri arşivden bağımsızdır ve eski
+formatı kullanmaya devam eder:
+
+```
+SÜREÇKODU_YYYYAAGG_TALEPNO_AD-SOYAD_DURUM.pdf
+IZIN_20260508_2026-000142_AHMET-YILMAZ_ONAYLI.pdf
+```
+
+Süreç kodları: `IZIN, KISA-IZIN, MAAS-AVANS, FAZLA-MESAI, ISE-GIRIS, ISTEN-CIKIS,
+TALEP-FORMU, GOREV-FORMU, OLUR-YAZISI, ONAY-KAPAGI-FIN, ONAY-KAPAGI-MUH, MUKAYESE,
+HARCAMA, KASE-ONAY`. Durum etiketleri statü tablosunun tamamını kapsar
+(`TASLAK, BEKLEMEDE, ONAYLI, TAMAMLANMA-BEKLIYOR, TAMAMLANDI, REDDEDILDI, IPTAL,
+REVIZE-ISTENDI`).
 
 ---
 
 ## Özet
 
-Birinci ve dördüncü bölümü birleştirince, örnek bir yıllık izin belgesinin SharePoint'teki tam yeri şöyle görünür:
+Örnek bir yıllık izin belgesinin SharePoint'teki tam yeri:
 
 ```
-Talepler / 01_Insan_Kaynaklari / Yillik_Izin / 2026 / 05 / 08 /
-        └── IZIN_20260508_2026-000142_AHMET-YILMAZ_ONAYLI.pdf
+RTProd / 2026 / 07-Temmuz / Belgeler / Yıllık İzin / Tamamlanan /
+        └── SINEM-ALDOGAN-DEMIRKAN_2026-07-31_IL-01_IZIN-ISLERI_2026-000401_TAMAMLANDI.pdf
 ```
 
-Bu standart sayesinde, herhangi bir belge **açılmadan önce** dosya adından ve bulunduğu klasörden; süreç tipini, tarihini, talep sahibini, talep numarasını ve onay durumunu doğru ve eksiksiz okuyabilirsiniz.
+Belge **açılmadan önce**; kimin talebi olduğu, hangi departmandan geldiği, ne zaman ve
+hangi sonuçla kapandığı, klasöründen ve adından eksiksiz okunur.

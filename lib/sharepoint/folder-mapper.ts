@@ -1,62 +1,97 @@
-// Workflow code → SharePoint klasör yolu eşleştirmesi.
+// Workflow code + sonuç durumu → SharePoint arşiv klasör yolu eşleştirmesi.
 // Saf fonksiyon — runtime ortamından bağımsız, kolay test edilir.
 //
-// Hedef yapı:
-//   {ROOT}/Kategori/Talep_Tipi/YYYY/MM/DD
+// Hedef yapı (BT bilgi notu, 04.08.2026):
+//   {ROOT}/{YYYY}/{AA-Ay}/Belgeler/{Belge Türü}/{Sonuç}
 //
 // Örnek:
-//   Talepler/01_Insan_Kaynaklari/Yillik_Izin/2026/05/17
+//   RTProd/2026/07-Temmuz/Belgeler/Yıllık İzin/Tamamlanan
+//
+// Yıl ve ay talebin OLUŞTURULMA tarihine göre değil, kesin sonuca ulaştığı
+// tarihe göre (Europe/Istanbul) belirlenir. Türkçe karakterli segmentler
+// güvenlidir — msgraph katmanı segment bazlı percent-encode eder.
+
+import {
+  istanbulDateParts,
+  type ArchivableStatus,
+} from "@/lib/pdf/file-naming";
 
 // ============================================================================
-// Workflow code → [Kategori, Talep tipi klasörü]
+// Workflow code → Belge Türü klasörü (kullanıcıların tanıdığı Türkçe adlar)
 // ============================================================================
 
-const CATEGORY_MAP: Record<string, [string, string]> = {
-  // İnsan Kaynakları
-  ANNUAL_LEAVE:              ["01_Insan_Kaynaklari", "Yillik_Izin"],
-  SHORT_LEAVE:               ["01_Insan_Kaynaklari", "Kisa_Sureli_Izin"],
-  SALARY_ADVANCE:            ["01_Insan_Kaynaklari", "Maas_Avans"],
-  OVERTIME:                  ["01_Insan_Kaynaklari", "Fazla_Mesai"],
-  EMPLOYEE_ONBOARDING:       ["01_Insan_Kaynaklari", "Ise_Giris"],
-  EMPLOYEE_SEPARATION:       ["01_Insan_Kaynaklari", "Isten_Cikis"],
-  REQUEST_FORM:              ["01_Insan_Kaynaklari", "Talep_Formu"],
+export const DOCUMENT_TYPE_FOLDERS: Record<string, string> = {
+  ANNUAL_LEAVE:              "Yıllık İzin",
+  SHORT_LEAVE:               "Kısa Süreli İzin",
+  SALARY_ADVANCE:            "Maaş Avansı",
+  OVERTIME:                  "Fazla Mesai",
+  EMPLOYEE_ONBOARDING:       "İşe Giriş",
+  EMPLOYEE_SEPARATION:       "İşten Çıkış",
+  REQUEST_FORM:              "Talep Formu",
+  TRAVEL_ASSIGNMENT:         "Görev Formu",
+  APPROVAL_LETTER:           "Olur Yazısı",
+  STAMP_APPROVAL:            "Kaşeli Belge",
+  FINANCE_APPROVAL_COVER:    "Onay Kapağı Finans",
+  ACCOUNTING_APPROVAL_COVER: "Onay Kapağı Muhasebe",
+  COMPARISON_FORM:           "Mukayese Formu",
+  EXPENSE_FORM:              "Harcama Formu",
+};
 
-  // Finans
-  FINANCE_APPROVAL_COVER:    ["02_Finans", "Onay_Kapagi_Finans"],
-  COMPARISON_FORM:           ["02_Finans", "Mukayese"],
+// Tanımlanmamış süreç kodu buraya düşer — belge kaybolmaz (99_Diger'in devamı)
+export const FALLBACK_TYPE_FOLDER = "Diğer";
 
-  // Muhasebe (Harcama muhasebe onay zincirinde yer alıyor)
-  ACCOUNTING_APPROVAL_COVER: ["03_Muhasebe", "Onay_Kapagi_Muhasebe"],
-  EXPENSE_FORM:              ["03_Muhasebe", "Harcama"],
+// ============================================================================
+// Ay klasörleri (index = ay - 1)
+// ============================================================================
 
-  // İdari İşler
-  TRAVEL_ASSIGNMENT:         ["04_Idari_Isler", "Gorev_Formu"],
-  APPROVAL_LETTER:           ["04_Idari_Isler", "Olur_Yazisi"],
-  STAMP_APPROVAL:            ["04_Idari_Isler", "Kaseli_Belge_Onayi"],
+export const MONTH_FOLDERS = [
+  "01-Ocak", "02-Şubat", "03-Mart", "04-Nisan", "05-Mayıs", "06-Haziran",
+  "07-Temmuz", "08-Ağustos", "09-Eylül", "10-Ekim", "11-Kasım", "12-Aralık",
+] as const;
+
+// ============================================================================
+// Sonuç klasörleri — file-naming.ts ARCHIVE_STATUS_TOKEN ile hep eşleşmeli
+// ============================================================================
+
+export const RESULT_FOLDERS: Record<ArchivableStatus, string> = {
+  APPROVED:  "Tamamlanan",
+  COMPLETED: "Tamamlanan",
+  REJECTED:  "Reddedilen",
+  CANCELLED: "İptal Edilen",
 };
 
 // ============================================================================
 // Public API
 // ============================================================================
 
-/**
- * Workflow code ve tarih bilgisinden SharePoint folder yolunu üretir.
- *
- * - Bilinmeyen workflow code'ları "99_Diger" altına gider (defansif default).
- * - rootFolder parametresi env'den (SHAREPOINT_ROOT_FOLDER) gelmesi beklenir;
- *   ezilebilir olması test edilebilirliği artırır.
- */
-export function buildSharePointPath(
-  workflowCode: string | null | undefined,
-  date: Date,
-  rootFolder: string = "Talepler"
-): string {
-  const code = workflowCode ?? "";
-  const segments = CATEGORY_MAP[code] ?? ["99_Diger", code || "Bilinmeyen"];
-
-  const year = date.getFullYear().toString();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-
-  return `${rootFolder}/${segments.join("/")}/${year}/${month}/${day}`;
+export interface BuildArchiveFolderPathParams {
+  workflowCode: string | null | undefined;
+  status: ArchivableStatus;
+  finalizedAt: string | Date;  // requests.completed_at (fallback zinciri caller'da)
+  rootFolder: string;          // env SHAREPOINT_ROOT_FOLDER'dan gelir
 }
+
+/**
+ * Arşiv klasör yolunu üretir:
+ *   {rootFolder}/{YYYY}/{AA-Ay}/Belgeler/{Belge Türü}/{Sonuç}
+ */
+export function buildArchiveFolderPath(
+  params: BuildArchiveFolderPathParams
+): string {
+  const typeFolder =
+    (params.workflowCode && DOCUMENT_TYPE_FOLDERS[params.workflowCode]) ||
+    FALLBACK_TYPE_FOLDER;
+
+  // Terminal statülerde finalizedAt her zaman dolu; bozuk tarih gelse bile
+  // belge kaybolmasın diye defansif bucket kullanılır.
+  const parts = istanbulDateParts(params.finalizedAt);
+  const year = parts?.year ?? "0000";
+  const monthFolder = parts
+    ? MONTH_FOLDERS[Number(parts.month) - 1] ?? "00-Bilinmeyen"
+    : "00-Bilinmeyen";
+
+  const resultFolder = RESULT_FOLDERS[params.status];
+
+  return `${params.rootFolder}/${year}/${monthFolder}/Belgeler/${typeFolder}/${resultFolder}`;
+}
+

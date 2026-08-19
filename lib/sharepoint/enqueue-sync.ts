@@ -4,8 +4,7 @@
 
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import {
-  deriveFileName,
-  deriveFolderPath,
+  deriveArchiveTarget,
   fetchRequestUploadContext,
 } from "./request-metadata";
 import { uploadPdfToSharePoint } from "./upload-pdf";
@@ -28,7 +27,11 @@ export interface EnqueueSharePointSyncParams {
  * Talep PDF'i için SharePoint sync kaydı oluşturur ve hemen upload tetikler.
  *
  * - Killswitch: SHAREPOINT_SYNC_ENABLED=true değilse no-op.
- * - Metadata'yı DB'den okur (workflow code, request_no, requester adı, status).
+ * - Terminal kapısı: yalnız kesin sonuca ulaşmış talepler (APPROVED/COMPLETED/
+ *   REJECTED/CANCELLED) arşivlenir; ara statüler (AWAITING_COMPLETION vb.)
+ *   Storage'a yazılsa bile SharePoint'e GİTMEZ.
+ * - Metadata'yı DB'den okur; hedef yol (klasör + dosya adı) bu anda çözülüp
+ *   kuyruğa DONDURULUR — retry'lar hep aynı yere yazar.
  * - Queue insert + fire-and-forget upload. Hata yutulur, log'lanır.
  *
  * Fire-and-forget: caller `await` etse bile sadece queue insert beklenir;
@@ -52,9 +55,14 @@ export async function enqueueSharePointSync(
     return;
   }
 
-  const fileName = deriveFileName(ctx);
-  const folderPath = deriveFolderPath(ctx);
-  const targetSharepointPath = `${folderPath}/${fileName}`;
+  const target = deriveArchiveTarget(ctx);
+  if (!target) {
+    console.log(
+      `[sharepoint-enqueue] skip — terminal olmayan statü=${ctx.status} requestId=${requestId}`
+    );
+    return;
+  }
+  const { folderPath, fileName, fullPath: targetSharepointPath } = target;
 
   // Idempotency guard — aynı (request, status, pdf path) için success ya da
   // henüz biten/işleyen bir kayıt varsa yeni enqueue yapma. Yalnızca 'failed'
@@ -111,4 +119,44 @@ export async function enqueueSharePointSync(
       err
     );
   });
+}
+
+/**
+ * Storage'da hazır duran nihai PDF'i (ıslak imzalı tarama, kaşeli belgenin
+ * orijinali vb.) indirip arşiv kuyruğuna verir. PDF'i yeniden ÜRETMEYEN
+ * akışların ortak giriş noktası — buildAndUploadRequestPDF'ten geçmeyen
+ * her arşivleme buradan yapılmalı. Hata yutulur, log'lanır.
+ */
+export async function enqueueSharePointSyncFromStorage(params: {
+  requestId: string;
+  supabasePdfPath: string;
+}): Promise<void> {
+  if (process.env.SHAREPOINT_SYNC_ENABLED !== "true") {
+    return;
+  }
+
+  const { requestId, supabasePdfPath } = params;
+
+  try {
+    const supabaseAdmin = createServiceRoleClient();
+    const { data: blob, error } = await supabaseAdmin.storage
+      .from("request-documents")
+      .download(supabasePdfPath);
+
+    if (error || !blob) {
+      console.error(
+        `[sharepoint-enqueue] Storage PDF indirilemedi requestId=${requestId} path=${supabasePdfPath}:`,
+        error?.message ?? "boş yanıt"
+      );
+      return;
+    }
+
+    const pdfBuffer = Buffer.from(await blob.arrayBuffer());
+    await enqueueSharePointSync({ requestId, pdfBuffer, supabasePdfPath });
+  } catch (err) {
+    console.error(
+      `[sharepoint-enqueue] storage-enqueue hatası requestId=${requestId}:`,
+      err
+    );
+  }
 }

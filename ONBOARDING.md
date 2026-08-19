@@ -223,7 +223,7 @@ TR etiketleri `lib/approvals/constants.ts`'te (Taslak/Beklemede/Onaylandı/…).
 
 ### 6.5 Belge hattı
 
-Onay/red/tamamlanma → `generateRequestPDF()` (form tipine özel @react-pdf şablonu) → imzalar işlenir (font tabanlı `signature_text`+`signature_font` veya çizim PNG'si) → ekler PDF'e birleştirilir → Supabase Storage `request-documents` bucket'ına yüklenir → SharePoint kuyruğuna düşer (`sharepoint_sync_queue`, prod'da 5 dk'lık cron retry). Dosya adı standardı: `KOD_YYYYAAGG_TALEPNO_AD-SOYAD_DURUM.pdf` ([docs/dosya-isimlendirme-standardi.md](docs/dosya-isimlendirme-standardi.md)).
+Onay/red/tamamlanma/iptal → `generateRequestPDF()` (form tipine özel @react-pdf şablonu) → imzalar işlenir (font tabanlı `signature_text`+`signature_font` veya çizim PNG'si) → ekler PDF'e birleştirilir → Supabase Storage `request-documents` bucket'ına yüklenir → SharePoint kuyruğuna düşer (`sharepoint_sync_queue`, prod'da 5 dk'lık cron retry). **Yalnız terminal statüler (APPROVED/COMPLETED/REJECTED/CANCELLED) arşivlenir**; hedef yol enqueue anında dondurulur, sonuç değişirse eski SharePoint kopyası yeni yükleme başarılı olduktan sonra otomatik silinir. Arşiv yapısı: `{ROOT}/Yıl/Ay/Belgeler/Belge Türü/Sonuç` + `AD-SOYAD_YYYY-AA-GG_DEPTKOD_DEPARTMAN_TALEPNO_DURUM.pdf`; uygulama içi indirme adları eski `KOD_YYYYAAGG_TALEPNO_AD-SOYAD_DURUM.pdf` formatında kalır ([docs/dosya-isimlendirme-standardi.md](docs/dosya-isimlendirme-standardi.md)).
 
 Kaşe süreci (`STAMP_APPROVAL`) farklıdır: kullanıcı PDF yükler, kaşe pozisyonu seçer (hazır 5 konum veya sayfa-bazlı özel konum), onay sonunda `stampPDF()` kaşeyi + imzayı basar.
 
