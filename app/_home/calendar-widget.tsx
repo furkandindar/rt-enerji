@@ -3,9 +3,11 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   addDays,
+  eachDayOfInterval,
+  endOfDay,
   endOfMonth,
   format,
-  isSameDay,
+  startOfDay,
   startOfMonth,
 } from "date-fns";
 import { tr } from "date-fns/locale";
@@ -79,20 +81,23 @@ export function CalendarWidget() {
 
   const eventDays = useMemo(() => {
     const dates = new Map<string, Date>();
-    for (const ev of events) {
-      const d = new Date(ev.startUtc);
-      const key = format(d, "yyyy-MM-dd");
-      if (!dates.has(key)) {
-        dates.set(key, new Date(d.getFullYear(), d.getMonth(), d.getDate()));
+    const monthDays = eachDayOfInterval({
+      start: startOfMonth(month),
+      end: endOfMonth(month),
+    });
+
+    for (const day of monthDays) {
+      if (events.some((event) => eventOverlapsDay(event, day))) {
+        dates.set(format(day, "yyyy-MM-dd"), day);
       }
     }
     return Array.from(dates.values());
-  }, [events]);
+  }, [events, month]);
 
   const selectedDayEvents = useMemo(() => {
     if (!selected) return [];
     return events
-      .filter((ev) => isSameDay(new Date(ev.startUtc), selected))
+      .filter((event) => eventOverlapsDay(event, selected))
       .sort((a, b) => a.startUtc.localeCompare(b.startUtc));
   }, [events, selected]);
 
@@ -170,4 +175,12 @@ export function CalendarWidget() {
       </CardContent>
     </Card>
   );
+}
+
+function eventOverlapsDay(event: CalendarEvent, day: Date): boolean {
+
+  const eventStart = new Date(event.startUtc);
+  const eventEnd = new Date(event.endUtc);
+
+  return eventStart <= endOfDay(day) && eventEnd > startOfDay(day);
 }

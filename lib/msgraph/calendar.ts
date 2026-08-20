@@ -20,6 +20,7 @@ export interface CalendarEvent {
 }
 
 interface GraphEventResponse {
+  "@odata.nextLink"?: string;
   value: Array<{
     id: string;
     subject: string | null;
@@ -58,16 +59,27 @@ export async function getEventsInRange(
   // ham bekliyor. Bu yüzden encoding'i geri çevirmemiz gerek.
   const query = params.toString().replace(/%24/g, "$");
 
-  const response = await graphUserFetch(userId, `/me/calendarView?${query}`);
+  let nextPath: string | null = `/me/calendarView?${query}`;
+  const allEvents: GraphEventResponse["value"] = [];
 
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`[MsCalendar] getEventsInRange failed: ${response.status} ${text}`);
+  while (nextPath) {
+    const response = await graphUserFetch(userId, nextPath, {
+      headers: { Prefer: 'outlook.timezone="UTC"' },
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`[MsCalendar] getEventsInRange failed: ${response.status} ${text}`);
+    }
+
+    const data = (await response.json()) as GraphEventResponse;
+    allEvents.push(...data.value);
+    nextPath = data["@odata.nextLink"]
+      ? getGraphPath(data["@odata.nextLink"])
+      : null;
   }
 
-  const data = (await response.json()) as GraphEventResponse;
-
-  return data.value.map((ev) => ({
+  return allEvents.map((ev) => ({
     id: ev.id,
     subject: ev.subject ?? "(başlıksız)",
     startUtc: toUtcIso8601(ev.start),
@@ -97,4 +109,8 @@ function toUtcIso8601(t: { dateTime: string; timeZone: string }): string {
   }
   // Bilinmeyen TZ: olduğu gibi parse et (browser bunu local kabul eder; nadir durum)
   return new Date(t.dateTime).toISOString();
+}
+function getGraphPath(nextLink: string): string {
+  const url = new URL(nextLink);
+  return `${url.pathname.replace(/^\/v1\.0/, "")}${url.search}`;
 }
