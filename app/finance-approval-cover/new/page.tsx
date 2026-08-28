@@ -24,6 +24,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Switch } from "@/components/ui/switch";
@@ -499,7 +500,7 @@ export default function NewFinanceApprovalCoverPage() {
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
-                      <div className="grid grid-cols-1 md:grid-cols-7 gap-3">
+                      <div className="grid grid-cols-1 md:grid-cols-6 gap-3">
                         <FormField
                           control={form.control}
                           name={`items.${index}.item_date`}
@@ -534,19 +535,6 @@ export default function NewFinanceApprovalCoverPage() {
                               <FormLabel className="text-xs">Ödeme Yapılacak</FormLabel>
                               <FormControl>
                                 <Input placeholder="Firma/Kurum" {...field} />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        <FormField
-                          control={form.control}
-                          name={`items.${index}.item_subject`}
-                          render={({ field }) => (
-                            <FormItem className="md:col-span-1">
-                              <FormLabel className="text-xs">Konu</FormLabel>
-                              <FormControl>
-                                <Input placeholder="Kalem konusu" {...field} />
                               </FormControl>
                               <FormMessage />
                             </FormItem>
@@ -601,6 +589,24 @@ export default function NewFinanceApprovalCoverPage() {
                           )}
                         />
                       </div>
+                      <FormField
+                        control={form.control}
+                        name={`items.${index}.item_subject`}
+                        render={({ field }) => (
+                          <FormItem className="mt-3">
+                            <FormLabel className="text-xs">Konu</FormLabel>
+                            <FormControl>
+                              <Textarea
+                                placeholder="Kalem konusu (ör. poliçe no, taksit, dönem, fatura açıklaması…)"
+                                rows={2}
+                                className="min-h-[60px] resize-y"
+                                {...field}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
                     </div>
                   ))}
                 </div>

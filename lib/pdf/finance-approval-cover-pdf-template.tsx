@@ -4,7 +4,7 @@ import { format } from 'date-fns';
 import { SignatureFont } from '@/lib/signature/types';
 import type { PdfApproval, SignatureInfo } from './types';
 import { formatMoney, sumItemsByCurrency, joinCurrencyTotals } from '@/lib/currency';
-import { CoverHeader, CoverTitleBlock, CoverEvalGrid, CoverFooter, FOOTER_RESERVED_BOTTOM, yesNo } from './approval-cover-shared';
+import { CoverHeader, CoverTitleBlock, CoverEvalGrid, CoverFooter, FOOTER_RESERVED_BOTTOM, yesNo, breakLongTokens } from './approval-cover-shared';
 
 Font.register({
   family: 'Roboto',
@@ -211,9 +211,9 @@ export const FinanceApprovalCoverPDFTemplate: React.FC<FinanceApprovalCoverPDFTe
             <View key={it.id || idx} style={styles.paymentRow} wrap={false}>
               <View style={[styles.paymentCell, styles.colIdx]}><Text style={styles.paymentText}>{idx + 1}</Text></View>
               <View style={[styles.paymentCell, styles.colDate]}><Text style={styles.paymentText}>{format(new Date(it.item_date), 'dd.MM.yyyy')}</Text></View>
-              <View style={[styles.paymentCell, styles.colCompany]}><Text style={styles.paymentText}>{it.company_name}</Text></View>
-              <View style={[styles.paymentCell, styles.colPayee]}><Text style={styles.paymentText}>{it.payee_name}</Text></View>
-              <View style={[styles.paymentCell, styles.colSubject]}><Text style={styles.paymentText}>{it.item_subject}</Text></View>
+              <View style={[styles.paymentCell, styles.colCompany]}><Text style={styles.paymentText}>{breakLongTokens(it.company_name)}</Text></View>
+              <View style={[styles.paymentCell, styles.colPayee]}><Text style={styles.paymentText}>{breakLongTokens(it.payee_name)}</Text></View>
+              <View style={[styles.paymentCell, styles.colSubject]}><Text style={styles.paymentText}>{breakLongTokens(it.item_subject)}</Text></View>
               <View style={[styles.paymentCell, styles.colInvoice, { alignItems: 'flex-end' }]}><Text style={styles.paymentText}>{formatMoney(Number(it.invoice_amount), it.currency)}</Text></View>
               <View style={[styles.paymentCellLast, styles.colPayable, { alignItems: 'flex-end' }]}><Text style={styles.paymentText}>{formatMoney(Number(it.payable_amount), it.currency)}</Text></View>
             </View>

@@ -143,3 +143,20 @@ export const CoverFooter: React.FC = () => (
     <Text style={styles.footerText}>www.rtenerji.com</Text>
   </View>
 );
+
+/**
+ * Tablo hücreleri için kırılabilir metin. react-pdf boşluksuz uzun tokenları
+ * (ör. "MAD.İNŞ.PET.TUR.SAN.TİC.LTD.ŞTİ") kelime içinde kıramaz ve hücre dışına
+ * taşırır. 12 karakterden uzun tokenlarda, arkasından HARF gelen "." ve "/"
+ * sonrasına boşluk ekleyerek doğal kırılma noktası verir. Kısa kısaltmalar
+ * ("A.Ş.", "LTD.ŞTİ.") ve rakam dizileri (tarih "01/08/2026", poliçe no) olduğu gibi kalır.
+ */
+const SEPARATOR_BEFORE_LETTER = /([./])(?=[A-Za-zÇĞİÖŞÜçğıöşü])/g;
+
+export const breakLongTokens = (text: string | null | undefined): string => {
+  if (!text) return '';
+  return text
+    .split(/(\s+)/)
+    .map((tok) => (tok.length > 12 ? tok.replace(SEPARATOR_BEFORE_LETTER, '$1 ') : tok))
+    .join('');
+};
