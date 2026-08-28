@@ -1,12 +1,10 @@
 import React from 'react';
-import { Document, Page, Text, View, StyleSheet, Font, Image } from '@react-pdf/renderer';
+import { Document, Page, Text, View, StyleSheet, Font } from '@react-pdf/renderer';
 import { format } from 'date-fns';
 import { SignatureFont } from '@/lib/signature/types';
 import type { PdfApproval, SignatureInfo } from './types';
 import { formatMoney, sumItemsByCurrency, joinCurrencyTotals } from '@/lib/currency';
-import path from 'path';
-
-const getLogoPath = () => path.join(process.cwd(), 'public', 'logo.png');
+import { CoverHeader, CoverTitleBlock, CoverEvalGrid, yesNo } from './approval-cover-shared';
 
 Font.register({
   family: 'Roboto',
@@ -36,55 +34,48 @@ const colors = {
   borderGrey: '#B0B0B0',
 };
 
+const expenseAreaLabels: Record<string, string> = {
+  ANA_SAHA: 'ANA SAHA',
+  ELEKTRIKSEL_KAPASITE_ARTISI: 'ELEKTRİKSEL KAPASİTE ARTIŞI',
+  YEKA_1: 'YEKA 1',
+  YEKA_2: 'YEKA 2',
+};
+
+const fundingSourceLabels: Record<string, string> = {
+  KREDI: 'KREDİ',
+  OZ_KAYNAK: 'ÖZ KAYNAK',
+  NAKIT_FAZLASI: 'NAKİT FAZLASI',
+  DIGER: 'DİĞER',
+};
+
 // Şirket kurucusu — sistem üzerinden onay vermiyor, PDF çıktısı alınıp fiziksel olarak imzalanıyor.
 const FOUNDER_NAME = 'RAMAZAN TAŞ';
 
 const styles = StyleSheet.create({
   page: { padding: 30, fontSize: 9, fontFamily: 'Roboto', backgroundColor: colors.white },
 
-  // Header
-  logoContainer: { alignItems: 'center', marginBottom: 8 },
-  logoImage: { width: 120, height: 40, objectFit: 'contain' },
-  headerLine: { borderBottomWidth: 1.5, borderColor: colors.black, marginBottom: 14 },
-
-  // Title block (Konu / Tarih / Sayı)
-  titleRow: { flexDirection: 'row', marginBottom: 6 },
-  titleLabel: { fontSize: 10, fontWeight: 700 },
-  titleValue: { fontSize: 10 },
-
   // Payment table
   paymentTable: { marginTop: 8, borderWidth: 1, borderColor: colors.black },
-  paymentHeaderRow: { flexDirection: 'row', backgroundColor: colors.greenHeader, minHeight: 32 },
-  paymentHeaderCell: { padding: 4, borderRightWidth: 1, borderColor: colors.black, justifyContent: 'center', alignItems: 'center' },
-  paymentHeaderText: { fontSize: 8, fontWeight: 700, textAlign: 'center' },
-  paymentRow: { flexDirection: 'row', borderTopWidth: 1, borderColor: colors.black, minHeight: 22 },
-  paymentCell: { padding: 4, borderRightWidth: 1, borderColor: colors.black, justifyContent: 'center' },
-  paymentCellLast: { padding: 4, justifyContent: 'center' },
-  paymentText: { fontSize: 8 },
-  paymentTotalRow: { flexDirection: 'row', borderTopWidth: 1, borderColor: colors.black, minHeight: 22 },
-  paymentTotalCell: { padding: 4, justifyContent: 'center', alignItems: 'flex-end' },
+  paymentHeaderRow: { flexDirection: 'row', backgroundColor: colors.greenHeader, minHeight: 26 },
+  paymentHeaderCell: { paddingVertical: 2, paddingHorizontal: 3, borderRightWidth: 1, borderColor: colors.black, justifyContent: 'center', alignItems: 'center' },
+  paymentHeaderText: { fontSize: 7.5, fontWeight: 700, textAlign: 'center' },
+  paymentRow: { flexDirection: 'row', borderTopWidth: 1, borderColor: colors.black, minHeight: 18 },
+  paymentCell: { paddingVertical: 2, paddingHorizontal: 3, borderRightWidth: 1, borderColor: colors.black, justifyContent: 'center' },
+  paymentCellLast: { paddingVertical: 2, paddingHorizontal: 3, justifyContent: 'center' },
+  paymentText: { fontSize: 7.5 },
+  paymentTotalRow: { flexDirection: 'row', borderTopWidth: 1, borderColor: colors.black, minHeight: 18 },
+  paymentTotalCell: { paddingVertical: 2, paddingHorizontal: 3, justifyContent: 'center', alignItems: 'flex-end' },
   paymentTotalText: { fontSize: 9, fontWeight: 700 },
 
-  // Column widths — sum must equal 100%
-  colIdx:    { width: '5%' },
+  // Column widths — sum must equal 100% (Konu en geniş: uzun poliçe/fatura açıklamaları sarmasın)
+  colIdx:    { width: '4%' },
   colDate:   { width: '10%' },
-  colCompany:{ width: '20%' },
-  colPayee:  { width: '22%' },
-  colSubject:{ width: '19%' },
+  colCompany:{ width: '16%' },
+  colPayee:  { width: '18%' },
+  colSubject:{ width: '28%' },
   colInvoice:{ width: '12%' },
   colPayable:{ width: '12%' },
 
-  // Evaluation rows
-  evalBlock: { marginTop: 16 },
-  evalRow: { flexDirection: 'row', marginBottom: 6, alignItems: 'center' },
-  evalLabel: { fontSize: 9, fontWeight: 700, width: 175 },
-  evalValue: { fontSize: 9, flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' },
-  evalItem: { flexDirection: 'row', alignItems: 'center', marginRight: 10 },
-  evalItemText: { fontSize: 9, marginRight: 3 },
-  checkBox: { width: 11, height: 11, borderWidth: 1, borderColor: colors.black, marginRight: 3, marginLeft: 2, position: 'relative' },
-  checkMark: { position: 'absolute', top: -2, left: 1, fontSize: 11, fontWeight: 700, lineHeight: 1, color: colors.black },
-
-  evalSubNote: { fontSize: 7, color: colors.grey, marginLeft: 175, marginTop: -4, marginBottom: 6 },
 
   // Opsiyonel ödeme tablosu (olur yazısındaki blokla aynı görünüm)
   payTableSection: { marginTop: 10, marginBottom: 4 },
@@ -103,31 +94,30 @@ const styles = StyleSheet.create({
   ilgilerName: { fontSize: 7, textAlign: 'center', marginTop: 2 },
   ilgilerNote: { fontSize: 6, color: colors.grey, textAlign: 'center', marginTop: 1 },
 
-  // Right-aligned static approver (Finans Müdürü)
-  staticApproverRight: { marginTop: 18, alignItems: 'flex-end', paddingRight: 20 },
+  // İmza bandı: Genel Müdür (sol) / ONAY (orta) / Müdür (sağ) tek satırda
+  signatureBand: { flexDirection: 'row', alignItems: 'flex-end', marginTop: 20 },
+  bandLeft: { width: '33%', alignItems: 'flex-start' },
+  bandCenter: { width: '34%', alignItems: 'center' },
+  bandRight: { width: '33%', alignItems: 'flex-end' },
+
+  // Sağ: statik onaycı (Müdür)
   staticTitleRight: { fontSize: 8, fontWeight: 700, textAlign: 'right', marginBottom: 2 },
   staticSubtitleRight: { fontSize: 8, fontWeight: 700, textAlign: 'right', marginBottom: 4 },
   staticNameRight: { fontSize: 9, fontWeight: 700, textAlign: 'right', marginTop: 2 },
-  staticCommentRight: { fontSize: 7, color: colors.grey, textAlign: 'right', marginTop: 2, maxWidth: 220 },
+  staticCommentRight: { fontSize: 7, color: colors.grey, textAlign: 'right', marginTop: 2 },
 
-  // Genel Müdür (sola yaslı, dinamik imza)
-  genelMudurBlock: { marginTop: 18, alignItems: 'flex-start' },
+  // Sol: Genel Müdür (dinamik imza)
   genelMudurName: { fontSize: 9, fontWeight: 700, marginTop: 2 },
-  genelMudurComment: { fontSize: 7, color: colors.grey, marginTop: 2, maxWidth: 220 },
+  genelMudurComment: { fontSize: 7, color: colors.grey, marginTop: 2 },
 
-  // ONAY center (statik — şirket kurucusu, fiziksel olarak imzalanacak)
-  onayCenter: { marginTop: 36, alignItems: 'center' },
-  onayHeader: { fontSize: 11, fontWeight: 700, marginBottom: 22 },
+  // Orta: ONAY (şirket kurucusu, fiziksel olarak imzalanacak — ıslak imza için boşluk)
+  onayHeader: { fontSize: 11, fontWeight: 700, marginBottom: 26 },
   onayName: { fontSize: 10, fontWeight: 700 },
 
   // Signatures
   signatureText: { fontSize: 16, color: '#1a365d' },
   signaturePending: { fontSize: 7, color: colors.grey },
 
-  // Footer
-  footer: { position: 'absolute', bottom: 18, left: 30, right: 30, borderTopWidth: 1, borderColor: colors.black, paddingTop: 4, alignItems: 'center' },
-  footerTitle: { fontSize: 7, fontWeight: 700 },
-  footerText: { fontSize: 6, color: colors.grey, textAlign: 'center' },
 });
 
 interface FinanceItem {
@@ -169,10 +159,6 @@ interface FinanceApprovalCoverPDFTemplateProps {
   signatures?: Record<string, SignatureInfo>;
 }
 
-const CheckBox: React.FC<{ checked: boolean }> = ({ checked }) => (
-  <View style={styles.checkBox}>{checked ? <Text style={styles.checkMark}>X</Text> : null}</View>
-);
-
 export const FinanceApprovalCoverPDFTemplate: React.FC<FinanceApprovalCoverPDFTemplateProps> = ({
   financeRequest,
   approvals,
@@ -203,23 +189,12 @@ export const FinanceApprovalCoverPDFTemplate: React.FC<FinanceApprovalCoverPDFTe
   return (
     <Document>
       <Page size="A4" style={styles.page} wrap>
-        {/* Logo + horizontal line */}
-        <View style={styles.logoContainer}><Image src={getLogoPath()} style={styles.logoImage} /></View>
-        <View style={styles.headerLine} />
-
-        {/* Başlık: Konu / Tarih / Sayı */}
-        <View style={styles.titleRow}>
-          <Text style={styles.titleLabel}>Konu: </Text>
-          <Text style={styles.titleValue}>{financeRequest.subject}</Text>
-        </View>
-        <View style={styles.titleRow}>
-          <Text style={styles.titleLabel}>Tarih: </Text>
-          <Text style={styles.titleValue}>{format(new Date(financeRequest.request_date), 'dd.MM.yyyy')}</Text>
-        </View>
-        <View style={styles.titleRow}>
-          <Text style={styles.titleLabel}>Sayı: </Text>
-          <Text style={styles.titleValue}>{financeRequest.document_no}</Text>
-        </View>
+        <CoverHeader title="FİNANS ONAY KAPAĞI" />
+        <CoverTitleBlock
+          subject={financeRequest.subject}
+          documentNo={financeRequest.document_no}
+          requestDate={financeRequest.request_date}
+        />
 
         {/* Ödeme Kalemleri Tablosu */}
         <View style={styles.paymentTable}>
@@ -250,61 +225,16 @@ export const FinanceApprovalCoverPDFTemplate: React.FC<FinanceApprovalCoverPDFTe
           </View>
         </View>
 
-        {/* Değerlendirme satırları */}
-        <View style={styles.evalBlock}>
-          <View style={styles.evalRow}>
-            <Text style={styles.evalLabel}>HESAP MÜSAİT Mİ?</Text>
-            <View style={styles.evalValue}>
-              <Text style={styles.evalItemText}>: EVET</Text>
-              <CheckBox checked={financeRequest.account_available === true} />
-              <Text style={styles.evalItemText}>/ HAYIR</Text>
-              <CheckBox checked={financeRequest.account_available === false} />
-            </View>
-          </View>
-          <View style={styles.evalRow}>
-            <Text style={styles.evalLabel}>NAKİT GİRİŞ / ÇIKIŞ KAYDI:</Text>
-            <View style={styles.evalValue}>
-              <Text style={styles.evalItemText}>YAPILDI</Text>
-              <CheckBox checked={financeRequest.cash_flow_recorded === true} />
-            </View>
-          </View>
-          <View style={styles.evalRow}>
-            <Text style={styles.evalLabel}>HARCAMA ALANI</Text>
-            <View style={styles.evalValue}>
-              <Text style={styles.evalItemText}>: ANA SAHA</Text>
-              <CheckBox checked={financeRequest.expense_area === 'ANA_SAHA'} />
-              <Text style={styles.evalItemText}>/ ELEKTRİKSEL KAPASİTE ARTIŞI</Text>
-              <CheckBox checked={financeRequest.expense_area === 'ELEKTRIKSEL_KAPASITE_ARTISI'} />
-              <Text style={styles.evalItemText}>/ YEKA 1</Text>
-              <CheckBox checked={financeRequest.expense_area === 'YEKA_1'} />
-              <Text style={styles.evalItemText}>/ YEKA 2</Text>
-              <CheckBox checked={financeRequest.expense_area === 'YEKA_2'} />
-            </View>
-          </View>
-          <View style={styles.evalRow}>
-            <Text style={styles.evalLabel}>NİTELİĞİ</Text>
-            <View style={styles.evalValue}>
-              <Text style={styles.evalItemText}>: KREDİ</Text>
-              <CheckBox checked={financeRequest.funding_source === 'KREDI'} />
-              <Text style={styles.evalItemText}>ÖZ KAYNAK</Text>
-              <CheckBox checked={financeRequest.funding_source === 'OZ_KAYNAK'} />
-              <Text style={styles.evalItemText}>NAKİT FAZLASI</Text>
-              <CheckBox checked={financeRequest.funding_source === 'NAKIT_FAZLASI'} />
-              <Text style={styles.evalItemText}>DİĞER</Text>
-              <CheckBox checked={financeRequest.funding_source === 'DIGER'} />
-            </View>
-          </View>
-          <View style={styles.evalRow}>
-            <Text style={styles.evalLabel}>RT ENERJİ PROFORMA</Text>
-            <View style={styles.evalValue}>
-              <Text style={styles.evalItemText}>: VAR</Text>
-              <CheckBox checked={financeRequest.has_rt_enerji_proforma === true} />
-              <Text style={styles.evalItemText}>YOK</Text>
-              <CheckBox checked={financeRequest.has_rt_enerji_proforma === false} />
-            </View>
-          </View>
-          <Text style={styles.evalSubNote}>(Taşeron ise)</Text>
-        </View>
+        {/* Değerlendirme — sadece verilen cevaplar, satır başına 3 kalem */}
+        <CoverEvalGrid
+          items={[
+            { label: 'HESAP MÜSAİT Mİ?', value: yesNo(financeRequest.account_available, 'EVET', 'HAYIR') },
+            { label: 'NAKİT GİRİŞ / ÇIKIŞ KAYDI', value: yesNo(financeRequest.cash_flow_recorded, 'YAPILDI', 'YAPILMADI') },
+            { label: 'RT ENERJİ PROFORMA', value: yesNo(financeRequest.has_rt_enerji_proforma, 'VAR', 'YOK'), note: '(Taşeron ise)' },
+            { label: 'NİTELİĞİ', value: fundingSourceLabels[financeRequest.funding_source ?? ''] ?? financeRequest.funding_source },
+            { label: 'HARCAMA ALANI', value: expenseAreaLabels[financeRequest.expense_area ?? ''] ?? financeRequest.expense_area },
+          ]}
+        />
 
         {/* Opsiyonel Ödeme Tablosu (olur yazısındaki blokla aynı) */}
         {financeRequest.has_payment_table && (
@@ -362,57 +292,40 @@ export const FinanceApprovalCoverPDFTemplate: React.FC<FinanceApprovalCoverPDFTe
           ) : null}
         </View>
 
-        {/* Finans Müdürü (sağa yaslı) */}
-        {finansMuduru ? (
-          <View style={styles.staticApproverRight} wrap={false}>
-            <Text style={styles.staticTitleRight}>Onaylı dayanak belge kontrol edilmiştir.</Text>
-            <Text style={styles.staticSubtitleRight}>
-              {finansMuduru.workflow_step?.name || finansMuduru.workflow_step?.static_position?.title || 'İlgili Birim Yetkilisi / Müdürü'}
-            </Text>
-            {renderSignature(finansMuduru.approver?.id, finansMuduru.status)}
-            <Text style={styles.staticNameRight}>
-              {finansMuduru.approver?.first_name} {finansMuduru.approver?.last_name}
-            </Text>
-            {finansMuduru.comment ? (
-              <Text style={styles.staticCommentRight}>{finansMuduru.comment}</Text>
+        {/* İmza bandı: Genel Müdür (sol) / ONAY (orta) / Finans Müdürü (sağ) */}
+        <View style={styles.signatureBand} wrap={false}>
+          <View style={styles.bandLeft}>
+            {genelMudur && genelMudur !== finansMuduru ? (
+              <>
+                {renderSignature(genelMudur.approver?.id, genelMudur.status)}
+                <Text style={styles.genelMudurName}>
+                  {genelMudur.approver?.first_name} {genelMudur.approver?.last_name}
+                </Text>
+                {genelMudur.comment ? <Text style={styles.genelMudurComment}>{genelMudur.comment}</Text> : null}
+              </>
             ) : null}
           </View>
-        ) : null}
-
-        {/* Genel Müdür (sola yaslı, dinamik imza) */}
-        {genelMudur && genelMudur !== finansMuduru ? (
-          <View style={styles.genelMudurBlock} wrap={false}>
-            {renderSignature(genelMudur.approver?.id, genelMudur.status)}
-            <Text style={styles.genelMudurName}>
-              {genelMudur.approver?.first_name} {genelMudur.approver?.last_name}
-            </Text>
-            {genelMudur.comment ? (
-              <Text style={styles.genelMudurComment}>{genelMudur.comment}</Text>
+          <View style={styles.bandCenter}>
+            <Text style={styles.onayHeader}>ONAY</Text>
+            <Text style={styles.onayName}>{FOUNDER_NAME}</Text>
+          </View>
+          <View style={styles.bandRight}>
+            {finansMuduru ? (
+              <>
+                <Text style={styles.staticTitleRight}>Onaylı dayanak belge kontrol edilmiştir.</Text>
+                <Text style={styles.staticSubtitleRight}>
+                  {finansMuduru.workflow_step?.name || finansMuduru.workflow_step?.static_position?.title || 'İlgili Birim Yetkilisi / Müdürü'}
+                </Text>
+                {renderSignature(finansMuduru.approver?.id, finansMuduru.status)}
+                <Text style={styles.staticNameRight}>
+                  {finansMuduru.approver?.first_name} {finansMuduru.approver?.last_name}
+                </Text>
+                {finansMuduru.comment ? <Text style={styles.staticCommentRight}>{finansMuduru.comment}</Text> : null}
+              </>
             ) : null}
           </View>
-        ) : null}
-
-        {/* ONAY — şirket kurucusu, sisteme giriş yapmıyor, fiziksel olarak imzalanacak */}
-        <View style={styles.onayCenter} wrap={false}>
-          <Text style={styles.onayHeader}>ONAY</Text>
-          <Text style={styles.onayName}>{FOUNDER_NAME}</Text>
         </View>
 
-        {/* Footer */}
-        <View style={styles.footer} fixed>
-          <Text style={styles.footerTitle}>RT ENERJİ TURİZM SANAYİ VE TİCARET ANONİM ŞİRKETİ</Text>
-          <Text style={styles.footerText}>Kemerağzı Mahallesi, Yaşar Sobutay Bulvarı, No:70, Aksu - Antalya</Text>
-          <Text style={styles.footerText}>
-            Antalya Kurumlar V.D.: 735 126 22 01 - Mersis No: 0-7351-2622-0100001 - Tic. Sic. No: 101091
-          </Text>
-          <Text style={styles.footerText}>
-            Tlf. Merkez (Antalya): +90 (535) 456 26 07 - Ankara Şube: +90 (535) 456 25 98
-          </Text>
-          <Text style={styles.footerText}>
-            Faks: +90 (242) 999 2605 / E-Posta: info@rtenerji.com / KEP Adresi: rtenerji@hs01.kep.tr
-          </Text>
-          <Text style={styles.footerText}>www.rtenerji.com</Text>
-        </View>
       </Page>
     </Document>
   );
