@@ -15,6 +15,10 @@ const colors = {
 
 const LOGO_WIDTH = 100;
 
+// Footer sayfanın altına absolute konumlanır (bottom 18 + ~50pt yükseklik). İçeriğin
+// footer'a binmemesi için Page.paddingBottom EN AZ bu değer olmalı.
+export const FOOTER_RESERVED_BOTTOM = 76;
+
 const getLogoPath = () => path.join(process.cwd(), 'public', 'logo.png');
 
 const styles = StyleSheet.create({
@@ -40,6 +44,11 @@ const styles = StyleSheet.create({
   evalText: { fontSize: 9 },
   evalLabel: { fontWeight: 700 },
   evalNote: { fontSize: 7, color: colors.grey, marginTop: 1 },
+
+  // Footer (şirket künyesi) — her sayfada sabit
+  footer: { position: 'absolute', bottom: 18, left: 30, right: 30, borderTopWidth: 1, borderColor: colors.black, paddingTop: 4, alignItems: 'center' },
+  footerTitle: { fontSize: 7, fontWeight: 700 },
+  footerText: { fontSize: 6, color: colors.grey, textAlign: 'center' },
 });
 
 export const CoverHeader: React.FC<{ title: string }> = ({ title }) => (
@@ -116,3 +125,21 @@ export const CoverEvalGrid: React.FC<{ items: CoverEvalItem[] }> = ({ items }) =
 /** true/false/null → etiket eşlemesi (ör. yesNo(v, 'VAR', 'YOK')) */
 export const yesNo = (v: boolean | null | undefined, yes: string, no: string): string | null =>
   v === true ? yes : v === false ? no : null;
+
+/** Şirket künyesi footer'ı. Page style'ında paddingBottom >= FOOTER_RESERVED_BOTTOM olmalı. */
+export const CoverFooter: React.FC = () => (
+  <View style={styles.footer} fixed>
+    <Text style={styles.footerTitle}>RT ENERJİ TURİZM SANAYİ VE TİCARET ANONİM ŞİRKETİ</Text>
+    <Text style={styles.footerText}>Kemerağzı Mahallesi, Yaşar Sobutay Bulvarı, No:70, Aksu - Antalya</Text>
+    <Text style={styles.footerText}>
+      Antalya Kurumlar V.D.: 735 126 22 01 - Mersis No: 0-7351-2622-0100001 - Tic. Sic. No: 101091
+    </Text>
+    <Text style={styles.footerText}>
+      Tlf. Merkez (Antalya): +90 (535) 456 26 07 - Ankara Şube: +90 (535) 456 25 98
+    </Text>
+    <Text style={styles.footerText}>
+      Faks: +90 (242) 999 2605 / E-Posta: info@rtenerji.com / KEP Adresi: rtenerji@hs01.kep.tr
+    </Text>
+    <Text style={styles.footerText}>www.rtenerji.com</Text>
+  </View>
+);

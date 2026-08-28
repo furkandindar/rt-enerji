@@ -4,7 +4,7 @@ import { format } from 'date-fns';
 import { SignatureFont } from '@/lib/signature/types';
 import type { PdfApproval, SignatureInfo } from './types';
 import { formatMoney, sumItemsByCurrency, joinCurrencyTotals } from '@/lib/currency';
-import { CoverHeader, CoverTitleBlock, CoverEvalGrid, yesNo } from './approval-cover-shared';
+import { CoverHeader, CoverTitleBlock, CoverEvalGrid, CoverFooter, FOOTER_RESERVED_BOTTOM, yesNo } from './approval-cover-shared';
 
 Font.register({
   family: 'Roboto',
@@ -44,7 +44,7 @@ const capacityShortLabel: Record<string, string> = {
 };
 
 const styles = StyleSheet.create({
-  page: { padding: 30, fontSize: 9, fontFamily: 'Roboto', backgroundColor: colors.white },
+  page: { paddingTop: 30, paddingHorizontal: 30, paddingBottom: FOOTER_RESERVED_BOTTOM, fontSize: 9, fontFamily: 'Roboto', backgroundColor: colors.white },
 
   // Payment table
   paymentTable: { marginTop: 8, borderWidth: 1, borderColor: colors.black },
@@ -276,6 +276,7 @@ export const AccountingApprovalCoverPDFTemplate: React.FC<AccountingApprovalCove
           </View>
         </View>
 
+        <CoverFooter />
       </Page>
     </Document>
   );
