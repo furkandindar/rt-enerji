@@ -37,7 +37,36 @@ export type DepartmentProcessListConfig = {
   newButtonLabel: string;
   newRoute: string;
   apiPath: string;
+  /**
+   * Tablo kolonlarını süreç bazında özelleştirme. Belirtilmezse varsayılan
+   * kolonlar: Talep No / Talep Sahibi / Oluşturulma / Güncellenme / Durum / İşlemler.
+   */
+  columns?: {
+    /** Talep Sahibi kolonu (default: true) */
+    requester?: boolean;
+    /** Güncellenme kolonu (default: true) */
+    updatedAt?: boolean;
+    /**
+     * Talep No'dan hemen sonra gelen ek kolon (ör. onay kapaklarında "Sayı").
+     * `path` API satırında nokta ile ayrılmış alan yolu (ör. "finance_request.document_no").
+     * Fonksiyon değil string: sayfa Server Component olduğundan config serileştirilebilir olmalı.
+     */
+    documentNo?: {
+      header: string;
+      path: string;
+    };
+  };
 };
+
+/** "a.b.c" yolunu nesne üzerinde yürütür; ara değer yoksa null döner. */
+function readPath(obj: unknown, path: string): string | null {
+  let cur: unknown = obj;
+  for (const key of path.split(".")) {
+    if (cur === null || cur === undefined || typeof cur !== "object") return null;
+    cur = (cur as Record<string, unknown>)[key];
+  }
+  return cur === null || cur === undefined ? null : String(cur);
+}
 
 type DepartmentRequest = {
   id: string;
@@ -52,6 +81,8 @@ type DepartmentRequest = {
     last_name: string;
     employee_no: string | null;
   } | null;
+  /** Tipe özgü ilişkiler (finance_request, accounting_request, ...) — API `*` ile döner */
+  [key: string]: unknown;
 };
 
 export function DepartmentProcessListPage(props: { config: DepartmentProcessListConfig }) {
@@ -80,6 +111,9 @@ function DepartmentProcessListInner({ config }: { config: DepartmentProcessListC
   const totalPages = Math.max(Math.ceil(total / pageSize), 1);
 
   const hasAccess = !!user && user.availableWorkflowCodes.includes(config.workflowCode);
+  const showRequester = config.columns?.requester ?? true;
+  const showUpdatedAt = config.columns?.updatedAt ?? true;
+  const documentNoColumn = config.columns?.documentNo;
 
   const updateParams = useCallback(
     (updates: Record<string, string | null>) => {
@@ -218,9 +252,10 @@ function DepartmentProcessListInner({ config }: { config: DepartmentProcessListC
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-[130px]">Talep No</TableHead>
-                  <TableHead>Talep Sahibi</TableHead>
+                  {documentNoColumn && <TableHead>{documentNoColumn.header}</TableHead>}
+                  {showRequester && <TableHead>Talep Sahibi</TableHead>}
                   <TableHead>Oluşturulma</TableHead>
-                  <TableHead>Güncellenme</TableHead>
+                  {showUpdatedAt && <TableHead>Güncellenme</TableHead>}
                   <TableHead>Durum</TableHead>
                   <TableHead className="w-[70px]">İşlemler</TableHead>
                 </TableRow>
@@ -233,6 +268,12 @@ function DepartmentProcessListInner({ config }: { config: DepartmentProcessListC
                         {request.request_no || "-"}
                       </span>
                     </TableCell>
+                    {documentNoColumn && (
+                      <TableCell className="font-medium">
+                        {readPath(request, documentNoColumn.path) || "-"}
+                      </TableCell>
+                    )}
+                    {showRequester && (
                     <TableCell className="font-medium">
                       {request.requester ? (
                         <div className="flex flex-col">
@@ -249,14 +290,17 @@ function DepartmentProcessListInner({ config }: { config: DepartmentProcessListC
                         "-"
                       )}
                     </TableCell>
+                    )}
                     <TableCell className="text-muted-foreground">
                       {format(new Date(request.created_at), "d MMM yyyy HH:mm", { locale: tr })}
                     </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {request.updated_at
-                        ? format(new Date(request.updated_at), "d MMM yyyy HH:mm", { locale: tr })
-                        : "-"}
-                    </TableCell>
+                    {showUpdatedAt && (
+                      <TableCell className="text-muted-foreground">
+                        {request.updated_at
+                          ? format(new Date(request.updated_at), "d MMM yyyy HH:mm", { locale: tr })
+                          : "-"}
+                      </TableCell>
+                    )}
                     <TableCell>
                       <RequestStatusBadge status={request.status} workflowCode={request.workflow_definition?.code} />
                     </TableCell>
