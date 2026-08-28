@@ -10,9 +10,9 @@ export default function FinanceApprovalCoverListPage() {
         newButtonLabel: "Yeni Onay Kapağı",
         newRoute: "/finance-approval-cover/new",
         apiPath: "/api/finance-approval-cover",
-        // Talep No / Sayı / Oluşturulma / Durum / İşlemler
+        // Talep No / Sayı / Hazırlayan / Oluşturulma / Durum / İşlemler
         columns: {
-          requester: false,
+          requesterHeader: "Hazırlayan",
           updatedAt: false,
           documentNo: { header: "Sayı", path: "finance_request.document_no" },
         },

@@ -44,6 +44,8 @@ export type DepartmentProcessListConfig = {
   columns?: {
     /** Talep Sahibi kolonu (default: true) */
     requester?: boolean;
+    /** Talep Sahibi kolonunun başlığı (default: "Talep Sahibi"; departman belgelerinde ör. "Hazırlayan") */
+    requesterHeader?: string;
     /** Güncellenme kolonu (default: true) */
     updatedAt?: boolean;
     /**
@@ -112,6 +114,7 @@ function DepartmentProcessListInner({ config }: { config: DepartmentProcessListC
 
   const hasAccess = !!user && user.availableWorkflowCodes.includes(config.workflowCode);
   const showRequester = config.columns?.requester ?? true;
+  const requesterHeader = config.columns?.requesterHeader ?? "Talep Sahibi";
   const showUpdatedAt = config.columns?.updatedAt ?? true;
   const documentNoColumn = config.columns?.documentNo;
 
@@ -253,7 +256,7 @@ function DepartmentProcessListInner({ config }: { config: DepartmentProcessListC
                 <TableRow>
                   <TableHead className="w-[130px]">Talep No</TableHead>
                   {documentNoColumn && <TableHead>{documentNoColumn.header}</TableHead>}
-                  {showRequester && <TableHead>Talep Sahibi</TableHead>}
+                  {showRequester && <TableHead>{requesterHeader}</TableHead>}
                   <TableHead>Oluşturulma</TableHead>
                   {showUpdatedAt && <TableHead>Güncellenme</TableHead>}
                   <TableHead>Durum</TableHead>

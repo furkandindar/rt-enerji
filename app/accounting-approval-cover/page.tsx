@@ -10,6 +10,12 @@ export default function AccountingApprovalCoverListPage() {
         newButtonLabel: "Yeni Onay Kapağı",
         newRoute: "/accounting-approval-cover/new",
         apiPath: "/api/accounting-approval-cover",
+        // Talep No / Sayı / Hazırlayan / Oluşturulma / Durum / İşlemler
+        columns: {
+          requesterHeader: "Hazırlayan",
+          updatedAt: false,
+          documentNo: { header: "Sayı", path: "accounting_request.document_no" },
+        },
       }}
     />
   );
