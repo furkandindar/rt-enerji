@@ -41,6 +41,15 @@ const CAPACITY_TYPE_OPTIONS = [
   { value: "YEKA", label: "YEKA" },
 ] as const;
 
+/** Sözlükteki şirket adı ("Kiraz Enerji") kalemde büyük harfle saklanır ("KİRAZ ENERJİ") —
+ *  eski serbest metin kayıtları ve PDF görünümüyle tutarlı olsun diye. */
+const toTrUpper = (s: string) => s.toLocaleUpperCase("tr-TR");
+
+interface CompanyOption {
+  id: string;
+  name: string;
+}
+
 const CURRENCY_OPTIONS = [
   { value: "TRY", label: "TL" },
   { value: "USD", label: "USD" },
@@ -54,7 +63,7 @@ const amountString = z
 
 const itemSchema = z.object({
   item_date: z.string().min(1, "Tarih gerekli"),
-  company_name: z.string().min(1, "Firma adı gerekli"),
+  company_name: z.string().min(1, "Firma seçimi gerekli"),
   payee_name: z.string().min(1, "Ödeme yapılacak firma/kurum gerekli"),
   item_subject: z.string().min(1, "Konu gerekli"),
   capacity_type: z.enum(["KAPASITE", "ANASAHA", "YEKA"], { message: "Kapasite tipi seçin" }),
@@ -101,6 +110,7 @@ export default function NewAccountingApprovalCoverPage() {
   const [dynamicStepId, setDynamicStepId] = useState<string | null>(null);
   const [relatedPersonIds, setRelatedPersonIds] = useState<string[]>([]);
   const [employees, setEmployees] = useState<UserMultiPickerEmployee[]>([]);
+  const [companies, setCompanies] = useState<CompanyOption[]>([]);
 
   // Ek dosya
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
@@ -184,6 +194,18 @@ export default function NewAccountingApprovalCoverPage() {
 
         if (allEmployees) {
           setEmployees(allEmployees as UserMultiPickerEmployee[]);
+        }
+
+        // Grup şirketleri (companies sözlüğü) — ödeme kalemi "Firma" seçimi
+        const { data: companiesData } = await supabase
+          .from("companies")
+          .select("id, name")
+          .eq("is_active", true)
+          .order("display_order", { ascending: true })
+          .order("name", { ascending: true });
+
+        if (companiesData) {
+          setCompanies(companiesData);
         }
       } catch (error) {
         console.error("Error loading user data:", error);
@@ -481,9 +503,18 @@ export default function NewAccountingApprovalCoverPage() {
                           render={({ field }) => (
                             <FormItem className="min-w-0">
                               <FormLabel className="text-xs">Firma</FormLabel>
-                              <FormControl>
-                                <Input placeholder="Firma adı" className="w-full" {...field} />
-                              </FormControl>
+                              <Select value={field.value} onValueChange={field.onChange}>
+                                <FormControl>
+                                  <SelectTrigger className="w-full">
+                                    <SelectValue placeholder="Firma seçiniz" />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  {companies.map((c) => (
+                                    <SelectItem key={c.id} value={toTrUpper(c.name)}>{c.name}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
                               <FormMessage />
                             </FormItem>
                           )}

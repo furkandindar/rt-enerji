@@ -5,6 +5,11 @@ import {
   canRequestRevision,
   notifyRevisionRequested,
 } from "@/lib/workflow";
+import {
+  resolveActingRights,
+  getEmployeeFullName,
+  formatActingName,
+} from "@/lib/workflow/delegation";
 
 // POST /api/approvals/[id]/request-revision
 // Onaycı, sırası gelmiş PENDING onay kaydında "revize iste" der.
@@ -80,6 +85,14 @@ export async function POST(
       return NextResponse.json({ error: "Linked request not found" }, { status: 404 });
     }
 
+    // Vekalet (B2): işlem yetkisi DB'den (kendisi VEYA aktif vekil)
+    const acting = await resolveActingRights(
+      supabase,
+      approvalId,
+      approval.approver_employee_id,
+      appUser.employee_id
+    );
+
     // 3. Eligibility
     const ok = canRequestRevision(
       {
@@ -88,7 +101,8 @@ export async function POST(
         approver_employee_id: approval.approver_employee_id,
       },
       { status: req.status as "PENDING", current_step: req.current_step },
-      { employeeId: appUser.employee_id, role: appUser.role }
+      { employeeId: appUser.employee_id, role: appUser.role },
+      acting
     );
 
     if (!ok) {
@@ -106,10 +120,10 @@ export async function POST(
         status: "REVISION_REQUESTED",
         comment,
         decided_at: now,
+        acted_by_employee_id: acting.isDelegate ? appUser.employee_id : null, // Vekalet (B2)
       })
       .eq("id", approvalId)
-      .eq("status", "PENDING") // race-safe
-      .eq("approver_employee_id", appUser.employee_id);
+      .eq("status", "PENDING"); // race-safe; onaycı/vekil kısıtı RLS update politikasında
 
     if (aUpdateError) {
       console.error("[request-revision] approval update failed:", aUpdateError);
@@ -141,7 +155,12 @@ export async function POST(
         req.requester_employee_id,
         req.id,
         workflowName,
-        requestedByName,
+        acting.isDelegate && acting.onBehalfOfEmployeeId
+          ? formatActingName(
+              requestedByName || "Onaycı",
+              await getEmployeeFullName(supabase, acting.onBehalfOfEmployeeId)
+            )
+          : requestedByName,
         comment
       );
     } catch (notifErr) {

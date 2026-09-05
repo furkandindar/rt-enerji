@@ -52,6 +52,7 @@ const BREADCRUMB_LABELS: Record<string, string> = {
   employees: "Çalışanlar",
   positions: "Pozisyonlar",
   "position-assignments": "Pozisyon Atamaları",
+  delegations: "Vekaletler",
   "organizational-units": "Organizasyonel Birimler",
   "org-chart": "Organizasyon Şeması",
   // Diğer

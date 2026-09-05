@@ -22,24 +22,14 @@ export async function GET() {
       return NextResponse.json({ error: "User not linked to employee" }, { status: 400 });
     }
 
-    // 1. Bekleyen onaylar sayısı (current_step'i kontrol et — sequence_order ile)
-    const { data: pendingApprovals } = await supabase
-      .from("request_approvals")
-      .select(`
-        id,
-        sequence_order,
-        request:requests(current_step, status)
-      `)
-      .eq("approver_employee_id", appUser.employee_id)
-      .eq("status", "PENDING");
-
-    // Sadece sırası gelenleri say
-    const activePendingCount = pendingApprovals?.filter(a => {
-      const request = Array.isArray(a.request) ? a.request[0] : a.request;
-      return request &&
-             request.status === 'PENDING' &&
-             request.current_step === a.sequence_order;
-    }).length || 0;
+    // 1. Bekleyen onaylar sayısı — Bekleyen Onaylar sayfasıyla aynı kaynak (view):
+    // sırası gelmiş + aktif cycle + kendi satırları VE vekaleten işleyebildiği
+    // satırlar (Faz B). Eski elle sayım AWAITING_COMPLETION'daki tamamlama
+    // adımlarını saymıyordu; artık sayfa ile tutarlı.
+    const { count: pendingCount } = await supabase
+      .from("v_user_pending_approvals")
+      .select("id", { count: "exact", head: true });
+    const activePendingCount = pendingCount ?? 0;
 
     // 2. Kullanıcının talepleri (status'a göre grupla)
     const { data: myRequests } = await supabase

@@ -25,6 +25,8 @@ const notificationTypeColors: Record<string, string> = {
   REQUEST_CANCELLED: "bg-gray-500",
   REQUEST_UPDATED: "bg-blue-500",
   REVISION_REQUESTED: "bg-orange-500",
+  DELEGATION_ASSIGNED: "bg-violet-500",
+  DELEGATION_CANCELLED: "bg-gray-500",
 };
 
 export function NotificationPopover() {
@@ -98,6 +100,12 @@ export function NotificationPopover() {
     ];
     if (referenceId && requesterTypes.includes(type)) {
       router.push(`/my-requests/${referenceId}`);
+      return;
+    }
+
+    // Vekalet bildirimleri: vekalet kartı profil sayfasında
+    if (type === "DELEGATION_ASSIGNED" || type === "DELEGATION_CANCELLED") {
+      router.push("/profile");
       return;
     }
 

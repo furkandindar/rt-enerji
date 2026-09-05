@@ -206,6 +206,25 @@ export function ApprovalDetailView({
       </div>
 
       <div className="grid grid-cols-1 gap-4 p-4">
+        {/* Vekalet (Faz B): görüntüleyen bu satırı vekaleten işliyor */}
+        {selectedApproval.viewer?.is_delegate && (
+          <div className="rounded-md border border-violet-300 bg-violet-50 px-4 py-3 text-sm text-violet-900 dark:border-violet-800 dark:bg-violet-950/40 dark:text-violet-100">
+            <span className="font-semibold">Vekaleten işlem yapıyorsunuz.</span>{" "}
+            Bu onay{" "}
+            <span className="font-semibold">
+              {selectedApproval.viewer.on_behalf_of
+                ? `${selectedApproval.viewer.on_behalf_of.first_name} ${selectedApproval.viewer.on_behalf_of.last_name}`
+                : "onaycı"}
+            </span>{" "}
+            adına size düşüyor. Kendi imzanız atılır ve belgede &quot;vekaleten&quot; olarak görünür.
+          </div>
+        )}
+        {selectedApproval.viewer && !selectedApproval.viewer.can_act && selectedApproval.status === "PENDING" && (
+          <div className="rounded-md border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
+            Bu onay adımı size atanmamış; yalnızca görüntüleyebilirsiniz.
+          </div>
+        )}
+
         {/* Kompakt ortak alanlar — 4 sütunlu responsive grid.
             Status !== PENDING ise "Kararınız" + "Karar Tarihi" hücreleri eklenir. */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-6 gap-y-3">
@@ -332,8 +351,9 @@ export function ApprovalDetailView({
           <ApprovalHistoryAccordion approvals={selectedApproval.request.approvals} />
         )}
 
-        {/* Onay İşlemleri - Sadece bekleyen onaylar için */}
-        {selectedApproval.status === "PENDING" && (
+        {/* Onay İşlemleri - Sadece bekleyen onaylar için; vekalet (Faz B):
+            GET viewer.can_act=false ise (atanmamış görüntüleyici) aksiyonlar gizli */}
+        {selectedApproval.status === "PENDING" && selectedApproval.viewer?.can_act !== false && (
           <ApprovalActions
             isHrForm={isHrForm}
             remainingDays={remainingDays}

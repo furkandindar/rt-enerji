@@ -41,17 +41,27 @@ export interface Approval {
   revision_cycle?: number | null;
   workflow_step: WorkflowStep;
   approver: Approver;
+  // Vekalet (Faz B): işlemi fiilen yapan kişi; null = approver'ın kendisi
+  acted_by_employee_id?: string | null;
+  acted_by?: Approver | null;
 }
 
 // COMPLETION/ykb_signed_pdf adımında PDF'i yükleyen kişi (asistan) sadece teknik
 // vekildir; sürecin son onayı şirket sahibi RAMAZAN TAŞ'a aittir. UI'da bu adım
 // için onaylayan adı olarak RAMAZAN TAŞ gösterilmelidir.
-export function getApproverDisplayName(approval: Pick<Approval, 'workflow_step' | 'approver'>): string {
+export function getApproverDisplayName(
+  approval: Pick<Approval, 'workflow_step' | 'approver'> & { acted_by?: Approver | null }
+): string {
   const step = approval.workflow_step;
   if (step?.phase === 'COMPLETION' && step?.form_section_key === 'ykb_signed_pdf') {
     return 'RAMAZAN TAŞ';
   }
-  return `${approval.approver.first_name} ${approval.approver.last_name}`;
+  const base = `${approval.approver.first_name} ${approval.approver.last_name}`;
+  // Vekalet (Faz B): işlemi fiilen yapan farklıysa "Vekil (Onaycı adına vekaleten)"
+  if (approval.acted_by && approval.acted_by.id !== approval.approver.id) {
+    return `${approval.acted_by.first_name} ${approval.acted_by.last_name} (${base} adına vekaleten)`;
+  }
+  return base;
 }
 
 export interface SalaryAdvanceRequest {
@@ -94,6 +104,16 @@ export interface PendingApproval {
   id: string;
   status: string;
   decided_at: string | null;
+  // Vekalet (Faz B): liste select'i `*` ile gelir; detay GET'i `viewer` ekler.
+  approver_employee_id?: string;
+  acted_by_employee_id?: string | null;
+  acted_by?: Approver | null;
+  viewer?: {
+    employee_id: string | null;
+    can_act: boolean;
+    is_delegate: boolean;
+    on_behalf_of: Approver | null;
+  };
   workflow_step: {
     id: string;
     name: string;

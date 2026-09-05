@@ -1,5 +1,6 @@
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
+import { resolveActingRights } from "@/lib/workflow/delegation";
 
 const MAX_PDF_BYTES = 25 * 1024 * 1024; // 25MB
 
@@ -63,21 +64,33 @@ export async function POST(request: Request) {
     // V5: revize edilen taleplerde eski cycle'ın PENDING satırları audit için
     // duruyor — cycle + sıra filtresi olmadan aynı onaycıya birden fazla satır
     // döner ve .single() patlar (revize edilmiş taleplerde YKB yükleme 403'ü).
+    // Vekalet (B2): approver filtresi kaldırıldı — satır RLS ile onaycıya VE aktif
+    // vekile görünür; işlem yetkisi resolveActingRights (DB can_act_on_approval) ile.
     const { data: completionApproval } = await supabase
       .from("request_approvals")
       .select(`
         id,
         status,
+        approver_employee_id,
         workflow_step:workflow_steps!inner(phase, form_section_key)
       `)
       .eq("request_id", requestId)
-      .eq("approver_employee_id", appUser.employee_id)
       .eq("status", "PENDING")
       .eq("revision_cycle", targetRequest.current_revision_cycle ?? 0)
       .eq("sequence_order", targetRequest.current_step)
       .maybeSingle();
 
     if (!completionApproval) {
+      return NextResponse.json({ error: "Bu adımda yükleme yapma yetkiniz yok" }, { status: 403 });
+    }
+
+    const acting = await resolveActingRights(
+      supabase,
+      completionApproval.id,
+      completionApproval.approver_employee_id,
+      appUser.employee_id
+    );
+    if (!acting.canAct) {
       return NextResponse.json({ error: "Bu adımda yükleme yapma yetkiniz yok" }, { status: 403 });
     }
 

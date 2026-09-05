@@ -3,6 +3,7 @@
 import { format } from "date-fns";
 import { tr } from "date-fns/locale";
 import { Eye } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { PaginationControls } from "@/components/ui/pagination-controls";
 import {
@@ -19,6 +20,8 @@ import { getRequestSummary } from "@/components/approvals/utils";
 
 interface ApprovalHistoryTableProps {
   history: PendingApproval[];
+  /** Vekalet (Faz B): kararı vekaleten verdiyse rozet */
+  viewerEmployeeId?: string | null;
   totalCount: number;
   currentPage: number;
   pageSize: number;
@@ -30,6 +33,7 @@ interface ApprovalHistoryTableProps {
 
 export function ApprovalHistoryTable({
   history,
+  viewerEmployeeId,
   totalCount,
   currentPage,
   pageSize,
@@ -90,7 +94,16 @@ export function ApprovalHistoryTable({
                       </span>
                     </TableCell>
                     <TableCell>
-                      <ApprovalStatusBadge status={approval.status} />
+                      <div className="flex flex-col gap-1">
+                        <ApprovalStatusBadge status={approval.status} />
+                        {viewerEmployeeId &&
+                          approval.acted_by_employee_id === viewerEmployeeId &&
+                          approval.approver_employee_id !== viewerEmployeeId && (
+                            <Badge variant="outline" className="w-fit text-[11px]">
+                              Vekaleten
+                            </Badge>
+                          )}
+                      </div>
                     </TableCell>
                     <TableCell>
                       <RequestStatusBadge status={approval.request.status} workflowCode={approval.request.workflow_definition?.code} />

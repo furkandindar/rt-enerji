@@ -27,8 +27,8 @@ export interface RequestSummarySource {
   stamp_request?: { subject: string | null } | null;
   travel_assignment_request?: { assignment_subject: string; destination_city: string } | null;
   approval_letter_request?: { subject: string } | null;
-  finance_approval_cover_request?: { subject: string } | null;
-  accounting_approval_cover_request?: { subject: string } | null;
+  finance_approval_cover_request?: { subject: string; document_no?: string | null } | null;
+  accounting_approval_cover_request?: { subject: string; document_no?: string | null } | null;
   mukayese_request?: { subject: string } | null;
   expense_request?: { project_name: string } | null;
 }
@@ -62,11 +62,15 @@ export const getRequestSummary = (request: RequestSummarySource): string => {
   if (request.approval_letter_request) {
     return request.approval_letter_request.subject || "-";
   }
+  // Onay kapaklarında konu hep aynı kalıp ("... ÖDEME ONAYIDIR") olduğundan
+  // listede ayırt edici olan Sayı (document_no) gösterilir.
   if (request.finance_approval_cover_request) {
-    return request.finance_approval_cover_request.subject || "-";
+    const fin = request.finance_approval_cover_request;
+    return fin.document_no || fin.subject || "-";
   }
   if (request.accounting_approval_cover_request) {
-    return request.accounting_approval_cover_request.subject || "-";
+    const acc = request.accounting_approval_cover_request;
+    return acc.document_no || acc.subject || "-";
   }
   if (request.mukayese_request) {
     return request.mukayese_request.subject || "-";

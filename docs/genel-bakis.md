@@ -123,6 +123,8 @@ flowchart TB
 
 **Kim başlatabilir?** `canStartWorkflow()` — `ORG_ADMIN` her şeyi başlatabilir; kısıtlı (`is_restricted`) süreçlerde kullanıcının pozisyonu/birimi `workflow_initiators` kurallarıyla eşleşmelidir. Kullanıcıya görünen workflow listesi `getAvailableWorkflows()` ile filtrelenir (sidebar buna göre öğe gizler).
 
+**Vekalet (Faz B):** Onaycı izindeyken tanımladığı vekil, onun bekleyen adımlarını vekalet penceresi içinde işler; satır taşınmaz, yetki DB'deki `can_act_on_approval()` ile işlem anında çözülür (RLS, bekleyen onaylar view'ı ve route'lar aynı fonksiyonu kullanır — `lib/workflow/delegation.ts`). İşlemi fiilen yapan `request_approvals.acted_by_employee_id`'ye yazılır; PDF'te vekilin kendi imzası ve "Vekaleten" etiketi görünür. Kapsam şimdilik yalnız Finans Onay Kapağı. Tasarım: [onay-havuzu-ve-vekalet-plan.md](onay-havuzu-ve-vekalet-plan.md).
+
 Süreç → onaycı eşlemelerinin tamamı: [workflow-approvers-prod.md](workflow-approvers-prod.md) / [workflow-approvers-dev.md](workflow-approvers-dev.md). Motorun evrim dokümanları: [v4-workflow-engine-conditional.md](v4-workflow-engine-conditional.md), [v5-workflow-engine-lifecycle.md](v5-workflow-engine-lifecycle.md).
 
 ---

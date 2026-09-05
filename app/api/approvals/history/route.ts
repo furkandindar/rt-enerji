@@ -94,6 +94,7 @@ export async function GET(request: NextRequest) {
         page,
         page_size: pageSize,
         workflowDefinitions: workflowDefinitions ?? [],
+        viewer_employee_id: appUser.employee_id, // Vekalet (B2): satır approver ≠ ben ise \"vekaleten\"
       });
     }
 
@@ -122,6 +123,7 @@ export async function GET(request: NextRequest) {
       page,
       page_size: pageSize,
       workflowDefinitions: workflowDefinitions ?? [],
+      viewer_employee_id: appUser.employee_id, // Vekalet (B2): satır approver ≠ ben ise \"vekaleten\"
     });
   } catch (error) {
     console.error("Unexpected error:", error);

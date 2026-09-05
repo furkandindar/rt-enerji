@@ -113,7 +113,7 @@ Sistemde tanımlı olan onay süreçleri ve her bir adımda görevli kişiler a�
 | 2 | İlgili Kişiler | Talep sırasında seçilen kullanıcılar |
 | 3 | Finans Müdürü | Elvan Kavas |
 | 4 | Genel Müdür | Bekir Korkmaz |
-| 5 | Yönetim Kurulu Başkanı | Elvan Kavas |
+| 5 | Yönetim Kurulu Başkanı (YKB imzalı tarama yükleme) | Talep eden kullanıcı — 2026-09-05 itibarıyla (önceki: Elvan Kavas) |
 
 ### Onay Kapağı Muhasebe
 | Sıra | Adım | Onaylayan Kişi |
@@ -122,7 +122,7 @@ Sistemde tanımlı olan onay süreçleri ve her bir adımda görevli kişiler a�
 | 2 | İlgili Kişiler | Talep sırasında seçilen kullanıcılar |
 | 3 | Muhasebe Müdürü | Sevda Çal |
 | 4 | Genel Müdür | Bekir Korkmaz |
-| 5 | Yönetim Kurulu Başkanı | Sevda Çal |
+| 5 | Yönetim Kurulu Başkanı (YKB imzalı tarama yükleme) | Talep eden kullanıcı — 2026-09-05 itibarıyla (önceki: Sevda Çal) |
 
 ### Şehir İçi/Dışı Görev Formu
 | Sıra | Adım | Onaylayan Kişi |
@@ -132,7 +132,7 @@ Sistemde tanımlı olan onay süreçleri ve her bir adımda görevli kişiler a�
 | 3 | İdari İşler Uzmanı | Samet Battal |
 | 4 | Muhasebe | Sevda Çal |
 | 5 | Genel Koordinatör | Bekir Korkmaz |
-| 6 | Asistan | Burcu Akdoğan |
+| 6 | Göreve Giden (Tamamlama) | Talep eden kullanıcı — 2026-07-05 itibarıyla (önceki: Burcu Akdoğan) |
 
 ### Talep Formu
 | Sıra | Adım | Onaylayan Kişi |

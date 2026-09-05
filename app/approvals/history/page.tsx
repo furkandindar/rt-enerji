@@ -27,6 +27,7 @@ function ApprovalsHistoryPageInner() {
   const router = useRouter();
   const {
     approvalHistory,
+    viewerEmployeeId,
     isLoading,
     historyPage,
     historyPageSize,
@@ -89,6 +90,7 @@ function ApprovalsHistoryPageInner() {
 
       <ApprovalHistoryTable
         history={approvalHistory}
+        viewerEmployeeId={viewerEmployeeId}
         onSelect={(approval) => router.push(`/approvals/${approval.id}`)}
         totalCount={historyTotal}
         currentPage={historyPage}

@@ -5,6 +5,8 @@ import { SupabaseClient } from '@supabase/supabase-js';
 import { NotificationType } from './types';
 import { sendNotificationEmail, type SendNotificationEmailParams } from '@/lib/email/email-service';
 import { buildRequestEmailContext } from '@/lib/email/request-summary';
+import { formatTrDateTime } from '@/lib/timezone';
+import { getActiveDelegateIdsForRequest, getEmployeeFullName } from './delegation';
 
 // ============================================================================
 // Types
@@ -127,34 +129,72 @@ export async function notifyApprover(
   workflowName: string,
   subject?: string
 ): Promise<void> {
-  const userInfo = await getUserInfoByEmployeeId(supabase, approverEmployeeId);
-  if (!userInfo) return;
-
   const title = 'Onay Bekleyen Talep';
   const subjectLine = subject ? `\nKonu: ${subject}` : '';
   const message = `${requesterName} tarafından oluşturulan ${workflowName} süreci onayınızı bekliyor.${subjectLine}`;
   const type = 'APPROVAL_REQUIRED';
 
-  // In-app bildirim — kısa metin
-  await createNotification(supabase, {
-    userId: userInfo.id,
-    title,
-    message,
-    type,
-    referenceId: requestId,
-  });
-
-  // Email — zengin payload (helper hata verirse minimal payload ile fallback).
   // V5: Onaycının bu request'teki aktif PENDING approval id'sini bulup deep-link'e ekle.
+  // Vekil için de aynı link geçerli: /approvals/[id] satırı RLS ile vekile açık.
   const ctaPath = await buildApproverCtaPath(supabase, approverEmployeeId, requestId, 'PENDING');
-  if (userInfo.email) {
-    const payload = await enrichEmailPayload(
-      supabase,
-      requestId,
-      { to: userInfo.email, title, message, type, ctaPath },
-      userInfo.fullName
-    );
-    await sendNotificationEmail(payload);
+
+  const userInfo = await getUserInfoByEmployeeId(supabase, approverEmployeeId);
+  if (userInfo) {
+    // In-app bildirim — kısa metin
+    await createNotification(supabase, {
+      userId: userInfo.id,
+      title,
+      message,
+      type,
+      referenceId: requestId,
+    });
+
+    // Email — zengin payload (helper hata verirse minimal payload ile fallback).
+    if (userInfo.email) {
+      const payload = await enrichEmailPayload(
+        supabase,
+        requestId,
+        { to: userInfo.email, title, message, type, ctaPath },
+        userInfo.fullName
+      );
+      await sendNotificationEmail(payload);
+    }
+  }
+
+  // Vekalet (Faz B): onaycının bu süreçte aktif vekili varsa aynı bildirim ona da
+  // gider (onaycıya da gitmeye devam eder — döndüğünde görsün). Hata ana akışı
+  // engellemesin.
+  try {
+    const delegateIds = await getActiveDelegateIdsForRequest(approverEmployeeId, requestId);
+    if (delegateIds.length === 0) return;
+
+    const approverName =
+      userInfo?.fullName ?? (await getEmployeeFullName(supabase, approverEmployeeId));
+    const onBehalf = approverName ? `${approverName} adına vekaleten` : 'vekaleten';
+    const delegateMessage = `${requesterName} tarafından oluşturulan ${workflowName} süreci onayınızı bekliyor (${onBehalf}).${subjectLine}`;
+
+    for (const delegateId of delegateIds) {
+      const delegateInfo = await getUserInfoByEmployeeId(supabase, delegateId);
+      if (!delegateInfo) continue;
+      await createNotification(supabase, {
+        userId: delegateInfo.id,
+        title,
+        message: delegateMessage,
+        type,
+        referenceId: requestId,
+      });
+      if (delegateInfo.email) {
+        const payload = await enrichEmailPayload(
+          supabase,
+          requestId,
+          { to: delegateInfo.email, title, message: delegateMessage, type, ctaPath },
+          delegateInfo.fullName
+        );
+        await sendNotificationEmail(payload);
+      }
+    }
+  } catch (err) {
+    console.error('[notification] delegate fan-out failed:', err);
   }
 }
 
@@ -376,3 +416,120 @@ export async function notifyRevisionRequested(
   }
 }
 
+// ============================================================================
+// Vekalet (Faz B) bildirimleri
+// ============================================================================
+
+export interface DelegationAssignedInfo {
+  delegateEmployeeId: string;
+  delegatorEmployeeId: string;
+  delegatorName: string;
+  delegateName: string;
+  workflowName: string;
+  startsAt: string; // ISO (UTC)
+  endsAt: string;   // ISO (UTC)
+  reason?: string | null;
+  /** Delegator'ın şu an sırası gelmiş bekleyen onay sayısı (vekile bilgi) */
+  pendingCount?: number;
+  /** Admin başkası adına tanımladıysa delegator'a da bilgi gider */
+  createdByOther?: boolean;
+}
+
+/**
+ * Vekil atandı: vekile (in-app + e-posta) ve — admin tanımladıysa — delegator'a.
+ */
+export async function notifyDelegationAssigned(
+  supabase: SupabaseClient,
+  info: DelegationAssignedInfo
+): Promise<void> {
+  const type: NotificationType = 'DELEGATION_ASSIGNED';
+  const range = `${formatTrDateTime(info.startsAt)} – ${formatTrDateTime(info.endsAt)}`;
+
+  const delegate = await getUserInfoByEmployeeId(supabase, info.delegateEmployeeId);
+  if (delegate) {
+    const pendingLine = info.pendingCount
+      ? ` Şu an sırası gelmiş ${info.pendingCount} bekleyen onay var.`
+      : '';
+    const title = 'Vekil Olarak Tanımlandınız';
+    const message = `${info.delegatorName} sizi ${range} tarihleri arasında "${info.workflowName}" süreci için vekil olarak tanımladı.${pendingLine}`;
+
+    await createNotification(supabase, { userId: delegate.id, title, message, type });
+
+    if (delegate.email) {
+      await sendNotificationEmail({
+        to: delegate.email,
+        title,
+        message,
+        type,
+        recipientName: delegate.fullName ?? undefined,
+        details: [
+          { label: 'Adına', value: info.delegatorName },
+          { label: 'Süreç', value: info.workflowName },
+          { label: 'Başlangıç', value: formatTrDateTime(info.startsAt) },
+          { label: 'Bitiş', value: formatTrDateTime(info.endsAt) },
+          ...(info.reason ? [{ label: 'Gerekçe', value: info.reason }] : []),
+        ],
+        ctaPath: '/approvals',
+        ctaLabel: 'Bekleyen Onayları Gör',
+      });
+    }
+  }
+
+  if (info.createdByOther) {
+    const delegator = await getUserInfoByEmployeeId(supabase, info.delegatorEmployeeId);
+    if (delegator) {
+      const title = 'Adınıza Vekalet Tanımlandı';
+      const message = `${range} tarihleri arasında "${info.workflowName}" süreci için ${info.delegateName} adınıza vekil olarak tanımlandı.`;
+      await createNotification(supabase, { userId: delegator.id, title, message, type });
+      if (delegator.email) {
+        await sendNotificationEmail({
+          to: delegator.email,
+          title,
+          message,
+          type,
+          recipientName: delegator.fullName ?? undefined,
+          ctaPath: '/profile',
+          ctaLabel: 'Vekaletlerimi Gör',
+        });
+      }
+    }
+  }
+}
+
+export interface DelegationCancelledInfo {
+  delegateEmployeeId: string;
+  delegatorName: string;
+  workflowName: string;
+  /** true: iptal edildi; false: bitiş tarihi erkene çekildi */
+  cancelled: boolean;
+  newEndsAt?: string | null;
+}
+
+/** Vekalet iptal edildi / kısaltıldı: vekile bilgi. */
+export async function notifyDelegationCancelled(
+  supabase: SupabaseClient,
+  info: DelegationCancelledInfo
+): Promise<void> {
+  const delegate = await getUserInfoByEmployeeId(supabase, info.delegateEmployeeId);
+  if (!delegate) return;
+
+  const type: NotificationType = 'DELEGATION_CANCELLED';
+  const title = info.cancelled ? 'Vekalet İptal Edildi' : 'Vekalet Süresi Kısaltıldı';
+  const message = info.cancelled
+    ? `${info.delegatorName} adına "${info.workflowName}" süreci için tanımlı vekaletiniz iptal edildi.`
+    : `${info.delegatorName} adına "${info.workflowName}" süreci için vekaletinizin bitişi ${formatTrDateTime(info.newEndsAt)} olarak güncellendi.`;
+
+  await createNotification(supabase, { userId: delegate.id, title, message, type });
+
+  if (delegate.email) {
+    await sendNotificationEmail({
+      to: delegate.email,
+      title,
+      message,
+      type,
+      recipientName: delegate.fullName ?? undefined,
+      ctaPath: '/profile',
+      ctaLabel: 'Vekaletlerimi Gör',
+    });
+  }
+}

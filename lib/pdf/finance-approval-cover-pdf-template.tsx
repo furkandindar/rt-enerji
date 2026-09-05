@@ -117,6 +117,7 @@ const styles = StyleSheet.create({
   // Signatures
   signatureText: { fontSize: 16, color: '#1a365d' },
   signaturePending: { fontSize: 7, color: colors.grey },
+  onBehalfNote: { fontSize: 6.5, color: colors.grey, marginTop: 1 },
 
 });
 
@@ -169,7 +170,15 @@ export const FinanceApprovalCoverPDFTemplate: React.FC<FinanceApprovalCoverPDFTe
       return <Text style={{ fontSize: 9, fontWeight: 700, color: '#DC2626' }}>Reddedildi</Text>;
     }
     const sig = signatures[employeeId];
-    if (sig) return <Text style={[styles.signatureText, { fontFamily: signatureFontMap[sig.font] }]}>{sig.text}</Text>;
+    if (sig) {
+      return (
+        <>
+          <Text style={[styles.signatureText, { fontFamily: signatureFontMap[sig.font] }]}>{sig.text}</Text>
+          {/* Vekalet (Faz B): imza vekile aitse etiket — ad/ünvan kolonu onaycınındır */}
+          {sig.onBehalfNote ? <Text style={styles.onBehalfNote}>{sig.onBehalfNote}</Text> : null}
+        </>
+      );
+    }
     return <Text style={styles.signaturePending}>İmza</Text>;
   };
 

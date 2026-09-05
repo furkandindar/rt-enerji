@@ -27,6 +27,7 @@ function ApprovalsPageInner() {
   const router = useRouter();
   const {
     pendingApprovals,
+    viewerEmployeeId,
     isLoading,
     pendingPage,
     pendingPageSize,
@@ -76,6 +77,7 @@ function ApprovalsPageInner() {
 
       <PendingApprovalsTable
         approvals={pendingApprovals}
+        viewerEmployeeId={viewerEmployeeId}
         onSelect={(approval) => router.push(`/approvals/${approval.id}`)}
         totalCount={pendingTotal}
         currentPage={pendingPage}

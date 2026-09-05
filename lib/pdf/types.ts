@@ -7,6 +7,12 @@ import type { SignatureFont } from '@/lib/signature/types';
 export interface SignatureInfo {
   text: string;
   font: SignatureFont;
+  /**
+   * Vekalet (Faz B): imza atanan onaycıya değil vekile aitse, imzanın altına
+   * basılacak küçük etiket (örn. "Vekaleten: Ümmühan Oğuz"). Kolon başlığı ve
+   * ad yine atanan onaycınındır; imza ve etiket vekilindir.
+   */
+  onBehalfNote?: string;
 }
 
 export interface PdfRequest {
@@ -56,4 +62,6 @@ export interface PdfApproval {
   decided_at?: string | null;
   workflow_step: PdfWorkflowStep;
   approver: PdfApprover;
+  // Vekalet (Faz B): işlemi fiilen yapan (vekil); null = onaycının kendisi
+  acted_by?: PdfApprover | null;
 }

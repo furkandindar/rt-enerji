@@ -209,6 +209,8 @@ Bir adımın (`workflow_steps`) dört önemli özelliği:
 
 **Kim başlatabilir:** `canStartWorkflow()` — ORG_ADMIN her şeyi; kısıtlı (`is_restricted`) süreçlerde pozisyon/birim `workflow_initiators` kurallarıyla eşleşmeli. Sidebar bu listeye göre öğe gizler.
 
+**Vekalet (Faz B, 2026-09):** Onaycı izindeyken tanımladığı vekil onun PENDING satırlarını işler; satır taşınmaz, yetki işlem anında DB'deki `can_act_on_approval()` ile çözülür (RLS + view + route aynı kaynak: `lib/workflow/delegation.ts`). İşlemi yapan `request_approvals.acted_by_employee_id`'ye yazılır; PDF'te vekilin kendi imzası + "Vekaleten" etiketi çıkar. Kapsam şimdilik yalnız Finans Onay Kapağı (`DELEGATION_ALLOWED_WORKFLOW_CODES`). **Route yazarken `approver_employee_id === ben` karşılaştırması yapma — `resolveActingRights()` kullan.** Detay: `docs/workflows/README.md` → Vekalet.
+
 ### 6.4 Talep yaşam döngüsü (v5)
 
 ```
@@ -231,6 +233,7 @@ Kaşe süreci (`STAMP_APPROVAL`) farklıdır: kullanıcı PDF yükler, kaşe poz
 
 - **Uygulama içi:** `notifications` tablosu + Supabase **Realtime** aboneliği (zil ikonu; Zustand store).
 - **E-posta:** Graph `sendMail` ile renk kodlu HTML şablon; onay zinciri durumu + CTA linki içerir.
+- **Vekalet:** "onay bekliyor" bildirimi, onaycının aktif vekili varsa vekile de gider (`(X adına vekaleten)` notuyla); vekil atama/iptal için `DELEGATION_ASSIGNED` / `DELEGATION_CANCELLED` tipleri.
 
 ---
 
@@ -309,6 +312,8 @@ Sistemi tanımanın en iyi yolu uçtan uca senaryolar koşmak (hepsi dev'de serb
 | 2026-07-05 | **Görev tamamlama devri:** travel'ın son adımını artık asistan değil **göreve giden kişi** dolduruyor (+ zorunlu görev özeti). | Canlıda. Değişiklik öncesi bekleyen eski talepler bilinçli olarak eski davranışta. |
 | 2026-07-08 | **`app_users` self-escalation kapatıldı:** kullanıcılar kendi `role`'lerini `ORG_ADMIN` yapabiliyordu (RLS satır bazlı olduğundan kolon korumasızdı). Tablo-geneli UPDATE yetkisi kaldırıldı; `authenticated` yalnız `privacy_accepted_at` kolonunu güncelleyebilir. | Uygulandı (dev+prod doğrulandı). `sql/security_app_users_update_column_lockdown.sql` |
 | 2026-07-08 | **PDF erişimi:** 3 PDF rotasına ORG_ADMIN muafiyeti eklendi (admin her talebin PDF'ini görebilir — `authorize-pdf-access.ts`). | Canlıda. |
+| 2026-09-05 | **Kapak tamamlama adımı talep edene:** Finans + Muhasebe Onay Kapağı'nın YKB imzalı tarama yükleme adımı (COMPLETION) `STATIC_POSITION` (müdür) yerine `REQUESTER` oldu — müdür izindeyken 30 talep takılmıştı. Config-only (`sql/feature_cover_completion_by_requester.sql`); yalnız yeni/yeniden gönderilen talepler. | Canlıda (dev+prod). Eski bekleyen talepler bilinçli olarak müdürde. |
+| 2026-09-05 | **Vekalet sistemi (Faz B):** `approval_delegations` + `acted_by_employee_id` + `can_act_on_approval()`; profil kartı, admin sayfası, PDF "Vekaleten" etiketi. Kapsam yalnız Finans Onay Kapağı. | Dev'de; prod'a deploy ile birlikte (`sql/feature_approval_delegation_v1.sql` + `_v1b`). Plan: `docs/onay-havuzu-ve-vekalet-plan.md` |
 | Faz 2 | **`reports_to_position_id` routing'de kullanılmıyor:** motor birim amirini `is_unit_head` + üst-birim tırmanmasıyla bulur; `reports_to` alanı dolu ama onay zincirine etkisi yok. Lokasyon-bazlı `MANAGER` onaycı tipi Faz 2 tasarımında. | Tasarım aşaması — davranışı değiştirme. |
 
 ---

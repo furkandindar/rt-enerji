@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { SignatureManager } from "./_components/signature-manager";
+import { DelegationManager } from "./_components/delegation-manager";
 import { ThemeSwitcher } from "@/components/theme-switcher";
 import { SignatureFont } from "@/lib/signature/types";
 
@@ -101,6 +102,12 @@ export default async function ProfilePage() {
           currentSignatureText={employee.signature_text}
           currentSignatureFont={employee.signature_font}
         />
+      </div>
+
+      {/* Vekalet (Faz B) */}
+      <div className="rounded-lg border bg-card p-6">
+        <h2 className="text-lg font-semibold mb-4">Vekalet</h2>
+        <DelegationManager employeeId={employee.id} />
       </div>
 
       {/* Tema Tercihi */}

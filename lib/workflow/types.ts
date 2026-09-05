@@ -24,7 +24,10 @@ export type NotificationType =
   | 'REQUEST_REJECTED'
   | 'REQUEST_CANCELLED'
   | 'REQUEST_UPDATED'
-  | 'REVISION_REQUESTED';
+  | 'REVISION_REQUESTED'
+  // Vekalet (Faz B)
+  | 'DELEGATION_ASSIGNED'
+  | 'DELEGATION_CANCELLED';
 
 // V3: Yeni action type
 export type ActionType = 'FILL_AND_SIGN' | 'SIGN_ONLY';
@@ -105,6 +108,8 @@ export interface RequestApproval {
   created_at: string;
   // V5: bu kayıt hangi revize turuna ait
   revision_cycle: number;
+  // Vekalet (Faz B): işlemi fiilen yapan kişi (vekil). NULL/undefined = onaycının kendisi.
+  acted_by_employee_id?: string | null;
 }
 
 export interface LeaveRequest {

@@ -18,7 +18,9 @@ export interface Notification {
     | 'REQUEST_REJECTED'
     | 'REQUEST_CANCELLED'
     | 'REQUEST_UPDATED'
-    | 'REVISION_REQUESTED';
+    | 'REVISION_REQUESTED'
+    | 'DELEGATION_ASSIGNED'
+    | 'DELEGATION_CANCELLED';
   reference_id: string | null;
   is_read: boolean;
   created_at: string;

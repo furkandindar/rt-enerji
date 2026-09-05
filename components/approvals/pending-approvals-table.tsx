@@ -3,6 +3,7 @@
 import { format } from "date-fns";
 import { tr } from "date-fns/locale";
 import { Eye } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { PaginationControls } from "@/components/ui/pagination-controls";
 import { RequestStatusBadge } from "@/components/approvals/status-badge";
@@ -19,6 +20,8 @@ import type { PendingApproval } from "@/lib/approvals/types";
 
 interface PendingApprovalsTableProps {
   approvals: PendingApproval[];
+  /** Vekalet (Faz B): satırın onaycısı görüntüleyen değilse "Vekaleten" rozeti */
+  viewerEmployeeId?: string | null;
   onSelect: (approval: PendingApproval) => void;
   totalCount: number;
   currentPage: number;
@@ -30,6 +33,7 @@ interface PendingApprovalsTableProps {
 
 export function PendingApprovalsTable({
   approvals,
+  viewerEmployeeId,
   onSelect,
   totalCount,
   currentPage,
@@ -78,7 +82,16 @@ export function PendingApprovalsTable({
                       </div>
                     </TableCell>
                     <TableCell className="font-medium">
-                      {approval.request.workflow_definition?.name || "-"}
+                      <div className="flex flex-col gap-1">
+                        <span>{approval.request.workflow_definition?.name || "-"}</span>
+                        {viewerEmployeeId &&
+                          approval.approver_employee_id &&
+                          approval.approver_employee_id !== viewerEmployeeId && (
+                            <Badge variant="outline" className="w-fit text-[11px]" title="Bu onay size vekaleten düşüyor">
+                              Vekaleten
+                            </Badge>
+                          )}
+                      </div>
                     </TableCell>
                     <TableCell className="max-w-[280px]">
                       <span

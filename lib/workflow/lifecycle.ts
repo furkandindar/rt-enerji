@@ -95,9 +95,13 @@ export function canCancelRequest(
 export function canRequestRevision(
   approval: Pick<RequestApproval, 'status' | 'sequence_order' | 'approver_employee_id'>,
   req: Pick<Request, 'status' | 'current_step'>,
-  user: LifecycleUser
+  user: LifecycleUser,
+  // Vekalet (B2): verilirse "kendisi mi" karşılaştırması yerine DB'den çözülmüş
+  // işlem yetkisi (resolveActingRights → can_act_on_approval) kullanılır.
+  acting?: { canAct: boolean }
 ): boolean {
-  if (approval.approver_employee_id !== user.employeeId) return false;
+  const isActor = acting ? acting.canAct : approval.approver_employee_id === user.employeeId;
+  if (!isActor) return false;
   if (approval.status !== 'PENDING') return false;
   if (req.status !== 'PENDING') return false;
   return approval.sequence_order === req.current_step;

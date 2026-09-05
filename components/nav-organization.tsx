@@ -1,6 +1,6 @@
 "use client";
 
-import { Network, Briefcase, Users, UserCheck, GitBranch, type LucideIcon } from "lucide-react";
+import { Network, Briefcase, Users, UserCheck, GitBranch, Handshake, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -42,6 +42,11 @@ export function NavOrganization() {
         title: "Pozisyon Atamaları",
         url: "/position-assignments",
         icon: UserCheck,
+      },
+      {
+        title: "Vekaletler",
+        url: "/delegations",
+        icon: Handshake,
       },
     ];
 

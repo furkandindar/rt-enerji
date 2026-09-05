@@ -44,6 +44,12 @@ export interface ActivityApproval {
     first_name?: string | null;
     last_name?: string | null;
   } | null;
+  // Vekalet (Faz B): işlemi fiilen yapan (vekil); null = onaycının kendisi
+  acted_by_employee_id?: string | null;
+  acted_by?: {
+    first_name?: string | null;
+    last_name?: string | null;
+  } | null;
 }
 
 export interface ActivityRequest {
@@ -82,8 +88,12 @@ function getApproverName(a: ActivityApproval): string {
   }
   const first = a.approver?.first_name ?? "";
   const last = a.approver?.last_name ?? "";
-  const name = `${first} ${last}`.trim();
-  return name || "Bilinmiyor";
+  const name = `${first} ${last}`.trim() || "Bilinmiyor";
+  if (a.acted_by) {
+    const actor = `${a.acted_by.first_name ?? ""} ${a.acted_by.last_name ?? ""}`.trim();
+    if (actor) return `${actor} (${name} adına vekaleten)`;
+  }
+  return name;
 }
 
 function getRequesterName(req: ActivityRequest): string {

@@ -106,6 +106,13 @@ export async function generateRequestPDF(
           last_name,
           signature_text,
           signature_font
+        ),
+        acted_by:employees!request_approvals_acted_by_employee_id_fkey(
+          id,
+          first_name,
+          last_name,
+          signature_text,
+          signature_font
         )
       )
     `)
@@ -168,19 +175,34 @@ export async function generateRequestPDF(
   // Sadece APPROVED durumundaki adımlar için imza üret. REJECTED/PENDING
   // adımlarda imza yerine template'in placeholder'ı (veya "Reddedildi" yazısı)
   // görünmeli — aksi halde reddeden kişi imzalı görünür.
+  //
+  // Vekalet (Faz B, karar 3): onayı vekil verdiyse (acted_by ≠ approver) imza
+  // VEKİLİN kendi imzasıdır; delegator'ın imza metni ASLA basılmaz (sahte imza).
+  // Map yine approver.id ile anahtarlanır (şablonlar kolonu onaycıya göre bulur);
+  // onBehalfNote şablonda imzanın altına "Vekaleten: <vekil>" etiketi olarak düşer.
   for (const approval of approvals) {
     if (approval.status !== 'APPROVED') continue;
     if (approval.approver.id === FOUNDER_PSEUDO_ID) continue;
-    if (approval.approver.signature_text && approval.approver.signature_font) {
+
+    const actedBy = approval.acted_by;
+    const isDelegated = !!actedBy && actedBy.id !== approval.approver.id;
+    const signer = isDelegated && actedBy ? actedBy : approval.approver;
+    const signerFullName =
+      signer.first_name && signer.last_name ? `${signer.first_name} ${signer.last_name}` : null;
+    const onBehalfNote = isDelegated && signerFullName ? `Vekaleten: ${signerFullName}` : undefined;
+
+    if (signer.signature_text && signer.signature_font) {
       signatures[approval.approver.id] = {
-        text: approval.approver.signature_text,
-        font: approval.approver.signature_font as SignatureFont,
+        text: signer.signature_text,
+        font: signer.signature_font as SignatureFont,
+        onBehalfNote,
       };
-    } else if (approval.approver.first_name && approval.approver.last_name) {
+    } else if (signerFullName) {
       // Fallback: İsim soyisim ile default font
       signatures[approval.approver.id] = {
-        text: `${approval.approver.first_name} ${approval.approver.last_name}`,
+        text: signerFullName,
         font: DEFAULT_SIGNATURE_FONT,
+        onBehalfNote,
       };
     }
   }

@@ -21,6 +21,8 @@ const notificationTypeColors: Record<string, string> = {
   REQUEST_APPROVED: "bg-green-500",
   REQUEST_REJECTED: "bg-red-500",
   REQUEST_CANCELLED: "bg-gray-500",
+  DELEGATION_ASSIGNED: "bg-violet-500",
+  DELEGATION_CANCELLED: "bg-gray-500",
 };
 
 export default function NotificationsPage() {

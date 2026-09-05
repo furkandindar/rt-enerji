@@ -54,6 +54,8 @@ const TYPE_COLORS: Record<string, string> = {
   REQUEST_REJECTED: '#ef4444',
   REQUEST_CANCELLED: '#6b7280',
   INFO: '#3b82f6',
+  DELEGATION_ASSIGNED: '#8b5cf6',
+  DELEGATION_CANCELLED: '#6b7280',
 };
 
 const TYPE_PREFIXES: Record<string, string> = {
@@ -62,6 +64,8 @@ const TYPE_PREFIXES: Record<string, string> = {
   REQUEST_REJECTED: '❌ Reddedildi',
   REQUEST_CANCELLED: '🚫 İptal Edildi',
   INFO: 'ℹ️ Bilgi',
+  DELEGATION_ASSIGNED: '🤝 Vekalet',
+  DELEGATION_CANCELLED: '🚫 Vekalet Sona Erdi',
 };
 
 function escapeHtml(value: string): string {

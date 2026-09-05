@@ -44,8 +44,8 @@ export const APPROVAL_LIST_SELECT = `
     stamp_request:stamp_requests(subject),
     travel_assignment_request:travel_assignment_requests(assignment_subject, destination_city),
     approval_letter_request:approval_letter_requests(subject),
-    finance_approval_cover_request:finance_approval_cover_requests(subject),
-    accounting_approval_cover_request:accounting_approval_cover_requests(subject),
+    finance_approval_cover_request:finance_approval_cover_requests(subject, document_no),
+    accounting_approval_cover_request:accounting_approval_cover_requests(subject, document_no),
     mukayese_request:mukayese_requests(subject),
     expense_request:expense_requests(project_name)
   )

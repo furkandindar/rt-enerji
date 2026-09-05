@@ -27,6 +27,7 @@ RT Enerji'nin kurumsal onay süreçleri (14 workflow) + organizasyon yönetimi p
 - Veri modeli hub-and-spoke: merkez `requests` + tipe özel 1:1 detay tablosu + `request_approvals` (adım × onaycı × revizyon döngüsü).
 - Onaycı tipleri: `REQUESTER` (oto-onay), `UNIT_HEAD` (üst birime tırmanır), `STATIC_POSITION`, `DYNAMIC_USER_LIST`. Adım özellikleri: `action_type` (SIGN_ONLY ileri oto-onay), `phase` (APPROVAL/COMPLETION), `condition` (tutmazsa adım hiç oluşmaz).
 - Roller: `ORG_ADMIN` / `ORG_VIEWER` (`app_users.role`); son savunma hattı RLS ("sahibi VEYA onaycısı VEYA admin").
+- Vekalet: onay satırında **kimin işlem yapabileceği** tek kaynaktan çözülür — DB `can_act_on_approval()` ↔ kod `lib/workflow/delegation.ts` (`resolveActingRights`). Route'larda `approver_employee_id === ben` karşılaştırması yazma; `acted_by_employee_id` yaz. Kapsam listesi `DELEGATION_ALLOWED_WORKFLOW_CODES`.
 - PDF hattı: `lib/pdf/generate-request-pdf.ts` → imza/kaşe (`pdf-lib`) → Storage → SharePoint kuyruğu (cron yalnız prod'da).
 
 ## Komutlar

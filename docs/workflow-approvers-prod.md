@@ -20,7 +20,7 @@ Kaynak: Supabase `iiagqsbiexyukupkffwb` projesindeki `workflow_definitions`, `wo
 | Olur Yazısı | `APPROVAL_LETTER` | 5 | Talep Eden → Birim Amiri → Hukuk Müşaviri → Genel Koordinatör → Yönetim Kurulu Başkanı |
 | Onay Kapağı Finans | `FINANCE_APPROVAL_COVER` | 5 | Talep Eden → İlgili Kişiler → Finans Müdürü → Genel Müdür → Yönetim Kurulu Başkanı |
 | Onay Kapağı Muhasebe | `ACCOUNTING_APPROVAL_COVER` | 5 | Talep Eden → İlgili Kişiler → Muhasebe Müdürü → Genel Müdür → Yönetim Kurulu Başkanı |
-| Şehir İçi/Dışı Görev Formu | `TRAVEL_ASSIGNMENT` | 6 | Talep Eden → Birim Amiri → İdari İşler → Muhasebe → Genel Koordinatör → Asistan |
+| Şehir İçi/Dışı Görev Formu | `TRAVEL_ASSIGNMENT` | 6 | Talep Eden → Birim Amiri → İdari İşler → Muhasebe → Genel Koordinatör → Göreve Giden (Tamamlama) |
 | Talep Formu | `REQUEST_FORM` | 4 | Talep Eden → Bölüm Müdürü → Genel Müdür → Yönetim Kurulu Başkanı |
 | Yıllık İzin Talebi | `ANNUAL_LEAVE` | 5 | Talep Eden → Bölüm Müdürü → Personel Müdürlüğü → Muhasebe → Genel Koordinatör |
 ## Workflow Detayları
@@ -101,7 +101,7 @@ Kaynak: Supabase `iiagqsbiexyukupkffwb` projesindeki `workflow_definitions`, `wo
 | 2 | İlgili Kişiler | `DYNAMIC_USER_LIST` | Talep sırasında seçilen kullanıcılar | Dinamik |
 | 3 | Finans Müdürü | `STATIC_POSITION` | Finans Müdürü (`F100`) | Elvan Kavas |
 | 4 | Genel Müdür | `STATIC_POSITION` | Genel Müdür (`GM`) | Bekir Korkmaz |
-| 5 | Yönetim Kurulu Başkanı | `STATIC_POSITION` | Finans Müdürü (`F100`) | Elvan Kavas |
+| 5 | Yönetim Kurulu Başkanı (YKB imzalı tarama yükleme) | `REQUESTER` | Talep/form oluşturan kullanıcı — 2026-09-05 itibarıyla (önceki: Finans Müdürü `F100`) | Dinamik |
 ### Onay Kapağı Muhasebe (`ACCOUNTING_APPROVAL_COVER`)
 | Sıra | Adım | Tip | Pozisyon / Onaycı | Aktif kişi |
 |---:|---|---|---|---|
@@ -109,7 +109,7 @@ Kaynak: Supabase `iiagqsbiexyukupkffwb` projesindeki `workflow_definitions`, `wo
 | 2 | İlgili Kişiler | `DYNAMIC_USER_LIST` | Talep sırasında seçilen kullanıcılar | Dinamik |
 | 3 | Muhasebe Müdürü | `STATIC_POSITION` | Muhasebe Müdürü (`M100`) | Sevda Çal |
 | 4 | Genel Müdür | `STATIC_POSITION` | Genel Müdür (`GM`) | Bekir Korkmaz |
-| 5 | Yönetim Kurulu Başkanı | `STATIC_POSITION` | Muhasebe Müdürü (`M100`) | Sevda Çal |
+| 5 | Yönetim Kurulu Başkanı (YKB imzalı tarama yükleme) | `REQUESTER` | Talep/form oluşturan kullanıcı — 2026-09-05 itibarıyla (önceki: Muhasebe Müdürü `M100`) | Dinamik |
 ### Şehir İçi/Dışı Görev Formu (`TRAVEL_ASSIGNMENT`)
 | Sıra | Adım | Tip | Pozisyon / Onaycı | Aktif kişi |
 |---:|---|---|---|---|
@@ -118,7 +118,7 @@ Kaynak: Supabase `iiagqsbiexyukupkffwb` projesindeki `workflow_definitions`, `wo
 | 3 | İdari İşler Uzmanı | `STATIC_POSITION` | İdari İşler Uzmanı (`IDR300`) | Samet Battal |
 | 4 | Muhasebe | `STATIC_POSITION` | Muhasebe Müdürü (`M100`) | Sevda Çal |
 | 5 | Genel Koordinatör | `STATIC_POSITION` | Genel Müdür (`GM`) | Bekir Korkmaz |
-| 6 | Asistan | `STATIC_POSITION` | Yönetici Asistanı Antalya (`ASIST100`) | Burcu Akdoğan |
+| 6 | Göreve Giden (Tamamlama) | `REQUESTER` | Talep/form oluşturan kullanıcı — 2026-07-05 itibarıyla (önceki: Yönetici Asistanı Antalya `ASIST100`) | Dinamik |
 ### Talep Formu (`REQUEST_FORM`)
 | Sıra | Adım | Tip | Pozisyon / Onaycı | Aktif kişi |
 |---:|---|---|---|---|

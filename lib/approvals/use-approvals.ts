@@ -45,6 +45,8 @@ export function useApprovals(options: UseApprovalsOptions = {}) {
   const [historyLoaded, setHistoryLoaded] = useState(!historyEnabled);
   const isLoading = !pendingLoaded || !historyLoaded;
   const [selectedApproval, setSelectedApproval] = useState<PendingApproval | null>(null);
+  // Vekalet (Faz B): listelerde "vekaleten" rozeti için görüntüleyenin employee id'si
+  const [viewerEmployeeId, setViewerEmployeeId] = useState<string | null>(null);
   const [comment, setComment] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -327,6 +329,9 @@ export function useApprovals(options: UseApprovalsOptions = {}) {
           const data = await response.json();
           setPendingApprovals(data.items || []);
           setPendingTotal(typeof data.total === "number" ? data.total : 0);
+          if (typeof data.viewer_employee_id === "string") {
+            setViewerEmployeeId(data.viewer_employee_id);
+          }
           if (Array.isArray(data.workflowDefinitions)) {
             setWorkflowDefinitions(data.workflowDefinitions);
           }
@@ -364,6 +369,9 @@ export function useApprovals(options: UseApprovalsOptions = {}) {
           const data = await response.json();
           setApprovalHistory(data.items || []);
           setHistoryTotal(typeof data.total === "number" ? data.total : 0);
+          if (typeof data.viewer_employee_id === "string") {
+            setViewerEmployeeId(data.viewer_employee_id);
+          }
           if (Array.isArray(data.workflowDefinitions)) {
             setWorkflowDefinitions(data.workflowDefinitions);
           }
@@ -714,6 +722,7 @@ export function useApprovals(options: UseApprovalsOptions = {}) {
     pendingApprovals,
     approvalHistory,
     selectedApproval,
+    viewerEmployeeId,
     isLoading,
     isSubmitting,
     comment,

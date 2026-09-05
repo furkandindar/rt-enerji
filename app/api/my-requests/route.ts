@@ -73,6 +73,12 @@ const FULL_LEGACY_SELECT = `
       id,
       first_name,
       last_name
+    ),
+    acted_by_employee_id,
+    acted_by:employees!acted_by_employee_id(
+      id,
+      first_name,
+      last_name
     )
   )
 `;

@@ -161,6 +161,100 @@ export type Database = {
           },
         ]
       }
+      approval_delegations: {
+        Row: {
+          cancelled_at: string | null
+          cancelled_by_user_id: string | null
+          created_at: string
+          created_by_user_id: string
+          delegate_employee_id: string
+          delegator_employee_id: string
+          ends_at: string
+          id: string
+          leave_request_id: string | null
+          reason: string | null
+          source: string
+          starts_at: string
+          status: string
+          workflow_definition_id: string
+        }
+        Insert: {
+          cancelled_at?: string | null
+          cancelled_by_user_id?: string | null
+          created_at?: string
+          created_by_user_id?: string
+          delegate_employee_id: string
+          delegator_employee_id: string
+          ends_at: string
+          id?: string
+          leave_request_id?: string | null
+          reason?: string | null
+          source?: string
+          starts_at: string
+          status?: string
+          workflow_definition_id: string
+        }
+        Update: {
+          cancelled_at?: string | null
+          cancelled_by_user_id?: string | null
+          created_at?: string
+          created_by_user_id?: string
+          delegate_employee_id?: string
+          delegator_employee_id?: string
+          ends_at?: string
+          id?: string
+          leave_request_id?: string | null
+          reason?: string | null
+          source?: string
+          starts_at?: string
+          status?: string
+          workflow_definition_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "approval_delegations_cancelled_by_user_id_fkey"
+            columns: ["cancelled_by_user_id"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "approval_delegations_created_by_user_id_fkey"
+            columns: ["created_by_user_id"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "approval_delegations_delegate_employee_id_fkey"
+            columns: ["delegate_employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "approval_delegations_delegator_employee_id_fkey"
+            columns: ["delegator_employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "approval_delegations_leave_request_id_fkey"
+            columns: ["leave_request_id"]
+            isOneToOne: false
+            referencedRelation: "leave_requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "approval_delegations_workflow_definition_id_fkey"
+            columns: ["workflow_definition_id"]
+            isOneToOne: false
+            referencedRelation: "workflow_definitions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       approval_letter_requests: {
         Row: {
           agreement_amount: string | null
@@ -1509,6 +1603,7 @@ export type Database = {
       }
       request_approvals: {
         Row: {
+          acted_by_employee_id: string | null
           approver_employee_id: string
           comment: string | null
           created_at: string
@@ -1521,6 +1616,7 @@ export type Database = {
           workflow_step_id: string
         }
         Insert: {
+          acted_by_employee_id?: string | null
           approver_employee_id: string
           comment?: string | null
           created_at?: string
@@ -1533,6 +1629,7 @@ export type Database = {
           workflow_step_id: string
         }
         Update: {
+          acted_by_employee_id?: string | null
           approver_employee_id?: string
           comment?: string | null
           created_at?: string
@@ -1545,6 +1642,13 @@ export type Database = {
           workflow_step_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "request_approvals_acted_by_employee_id_fkey"
+            columns: ["acted_by_employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "request_approvals_approver_employee_id_fkey"
             columns: ["approver_employee_id"]
@@ -2449,6 +2553,11 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      approval_stored_approver: {
+        Args: { p_approval_id: string }
+        Returns: string
+      }
+      can_act_on_approval: { Args: { p_approval_id: string }; Returns: boolean }
       create_mukayese_request: {
         Args: {
           p_header: Json
@@ -2471,6 +2580,13 @@ export type Database = {
         Returns: string
       }
       get_current_employee_id: { Args: never; Returns: string }
+      is_active_delegate_for: {
+        Args: {
+          p_delegator_employee_id: string
+          p_workflow_definition_id: string
+        }
+        Returns: boolean
+      }
       is_approver_for_request: {
         Args: { p_request_id: string }
         Returns: boolean
@@ -2511,6 +2627,8 @@ export type Database = {
         | "REQUEST_CANCELLED"
         | "REQUEST_UPDATED"
         | "REVISION_REQUESTED"
+        | "DELEGATION_ASSIGNED"
+        | "DELEGATION_CANCELLED"
       overtime_reason_category:
         | "SHIFT_OUTSIDE"
         | "NON_CONTINUOUS"
@@ -2685,6 +2803,8 @@ export const Constants = {
         "REQUEST_CANCELLED",
         "REQUEST_UPDATED",
         "REVISION_REQUESTED",
+        "DELEGATION_ASSIGNED",
+        "DELEGATION_CANCELLED",
       ],
       overtime_reason_category: [
         "SHIFT_OUTSIDE",

@@ -649,6 +649,35 @@ import { UserMultiPicker } from "@/components/user-multi-picker";
 
 ---
 
+## Vekalet (Approval Delegation)
+
+> Faz B (2026-09). Tasarım/kararlar: [../onay-havuzu-ve-vekalet-plan.md](../onay-havuzu-ve-vekalet-plan.md).
+
+Bir onaycı izindeyken belirlediği vekil, onun **PENDING onay satırlarını** vekalet penceresi
+içinde görür ve işler (onay / red / revize isteği / YKB taraması yükleme). **Satır taşınmaz**;
+yetki işlem anında çözülür, vekalet bitince satır kendiliğinden onaycıya "geri döner".
+
+| Parça | Nerede |
+|---|---|
+| Vekalet kaydı | `approval_delegations` (delegator, delegate, süreç, `starts_at`/`ends_at`, `status`); çakışan aktif vekalet EXCLUDE ile engelli |
+| Fiilen yapan | `request_approvals.acted_by_employee_id` (NULL = onaycının kendisi) |
+| **Tek yetki kaynağı** | DB: `public.can_act_on_approval(approval_id)` — RLS update politikası ve `v_user_pending_approvals` bunu kullanır. Kod: `lib/workflow/delegation.ts` → `resolveActingRights()` (RPC ile aynı fonksiyon) |
+| Kapsam | `DELEGATION_ALLOWED_WORKFLOW_CODES` (`lib/workflow/delegation.ts`) — bu aşamada yalnız `FINANCE_APPROVAL_COVER`. Yeni süreç açmak = listeye kod ekle + o sürecin PDF şablonunda `SignatureInfo.onBehalfNote` render'ını ekle |
+| UI | Profil → "Vekalet" kartı (self-service), `/delegations` (ORG_ADMIN), onay detayında "vekaleten" şeridi, listelerde rozet |
+| Bildirim | `notifyApprover` aktif vekile de gönderir; `notifyDelegationAssigned/Cancelled` |
+| PDF | Vekilin **kendi** imzası + altında "Vekaleten: <vekil>" etiketi; ad/ünvan kolonu onaycınındır (`generate-request-pdf.ts` + kapak şablonları) |
+
+**Kurallar (DB fonksiyonunda kodlu):** transitif değil (vekilin vekili yok); vekil talebin sahibi
+ise o talepte işlem yapamaz; `approver_employee_id` değiştirilemez; `acted_by` yalnız işlemi
+yapan kişi olabilir. **Kod tarafı:** vekaleten verilen onay, vekilin kendi ileriki SIGN_ONLY
+adımlarını otomatik onaylamaz (forward auto-approve kapalı).
+
+**Yeni route yazarken:** onaycı kontrolü için `approval.approver_employee_id === me`
+KARŞILAŞTIRMASI YAPMA — `resolveActingRights(supabase, approvalId, approverEmployeeId, me)`
+kullan ve `request_approvals` güncellemesine `acted_by_employee_id` yaz. SQL: `sql/feature_approval_delegation_v1.sql` (+ `_v1b_notification_types.sql`).
+
+---
+
 ## Notlar
 
 ### Önemli Noktalar
@@ -685,8 +714,9 @@ STATIC_POSITION adımında:
 - ❌ API select sorgularına yeni tabloyu eklememek
 - ❌ Frontend interface'lerini güncellememek
 - ❌ RLS politikalarını eklememek
+- ❌ Route'ta `approver_employee_id === me` ile yetki kontrolü yazmak (vekalet kırılır — `resolveActingRights` kullan)
 
 ---
 
-*Son güncelleme: 2026-01-25*
+*Son güncelleme: 2026-09-05 (Vekalet bölümü)*
 

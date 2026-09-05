@@ -17,8 +17,13 @@ export {
   notifyRequestRejected,
   notifyRequestUpdated,
   notifyRevisionRequested,
+  notifyDelegationAssigned,
+  notifyDelegationCancelled,
   getUnreadNotificationCount,
 } from './notification-service';
+// Vekalet (Faz B): lib/workflow/delegation service-role client import eder;
+// client bundle'a sızmasın diye index'ten re-export EDİLMEZ — sunucu kodu
+// doğrudan '@/lib/workflow/delegation' import eder.
 // V5: Lifecycle helper'ları
 export {
   canEditRequest,

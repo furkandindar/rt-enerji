@@ -16,6 +16,12 @@ import { stampPDF, type StampPositionOverrides } from "@/lib/pdf/stamp-pdf";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { StampPosition } from "@/lib/workflow/types";
 import { getApprovalDetailSelect } from "@/lib/my-requests/server-selects";
+import {
+  resolveActingRights,
+  getEmployeeFullName,
+  formatActingName,
+  NO_ACTING_RIGHTS,
+} from "@/lib/workflow/delegation";
 
 // PDF gen + merge + Storage upload + SharePoint enqueue (after()) zinciri
 // Vercel Pro default 60s'yi aşabilir; explicit set ediyoruz.
@@ -121,6 +127,40 @@ export async function GET(
       }
     }
 
+    // Vekalet (B2): görüntüleyenin bu satırdaki işlem yetkisi + kimin adına.
+    // UI "X adına vekaleten işlem yapıyorsunuz" şeridini ve buton görünürlüğünü buradan alır.
+    const { data: viewerAppUser } = await supabase
+      .from("app_users")
+      .select("employee_id")
+      .eq("id", user.id)
+      .maybeSingle();
+    const viewerEmployeeId = viewerAppUser?.employee_id ?? null;
+    const approvalRow = approval as unknown as {
+      approver_employee_id?: string;
+      viewer?: unknown;
+    };
+    const acting =
+      viewerEmployeeId && approvalRow.approver_employee_id
+        ? await resolveActingRights(supabase, approvalId, approvalRow.approver_employee_id, viewerEmployeeId)
+        : NO_ACTING_RIGHTS;
+    // Üst seviye select'te approver join'i yok (approver yalnız request.approvals[]
+    // içinde) → vekaleten ise adına işlem yapılan kişiyi ayrıca çek.
+    let onBehalfOf: { id: string; first_name: string; last_name: string } | null = null;
+    if (acting.isDelegate && approvalRow.approver_employee_id) {
+      const { data: onBehalfEmployee } = await supabase
+        .from("employees")
+        .select("id, first_name, last_name")
+        .eq("id", approvalRow.approver_employee_id)
+        .maybeSingle();
+      onBehalfOf = onBehalfEmployee ?? null;
+    }
+    approvalRow.viewer = {
+      employee_id: viewerEmployeeId,
+      can_act: acting.canAct,
+      is_delegate: acting.isDelegate,
+      on_behalf_of: onBehalfOf,
+    };
+
     return NextResponse.json(approval);
   } catch (error) {
     console.error("Unexpected error in GET /api/approvals/[id]:", error);
@@ -200,8 +240,15 @@ export async function PATCH(
       return NextResponse.json({ error: "Approval not found" }, { status: 404 });
     }
 
-    // Onaycı kontrolü
-    if (approval.approver_employee_id !== appUser.employee_id) {
+    // Onaycı kontrolü — tek kaynak DB can_act_on_approval(): kendisi VEYA aktif vekil
+    // (vekalet: docs/onay-havuzu-ve-vekalet-plan.md). Satır RLS ile zaten vekile açık.
+    const acting = await resolveActingRights(
+      supabase,
+      id,
+      approval.approver_employee_id,
+      appUser.employee_id
+    );
+    if (!acting.canAct) {
       return NextResponse.json({ error: "You are not the approver" }, { status: 403 });
     }
 
@@ -481,6 +528,7 @@ export async function PATCH(
         status: decision,
         comment: comment || null,
         decided_at: new Date().toISOString(),
+        acted_by_employee_id: acting.isDelegate ? appUser.employee_id : null, // Vekalet (B2): fiilen yapan
       })
       .eq("id", id);
 
@@ -517,9 +565,14 @@ export async function PATCH(
       .eq("id", appUser.employee_id)
       .single();
 
-    const approverName = approverEmployee
+    let approverName = approverEmployee
       ? `${approverEmployee.first_name} ${approverEmployee.last_name}`
       : "Yönetici";
+    if (acting.isDelegate && acting.onBehalfOfEmployeeId) {
+      // Bildirim/e-posta metinlerinde "Ad Soyad (X adına vekaleten)"
+      const onBehalfName = await getEmployeeFullName(supabase, acting.onBehalfOfEmployeeId);
+      approverName = formatActingName(approverName, onBehalfName);
+    }
 
     // 5. Request'i güncelle ve bildirim gönder
     if (decision === 'REJECTED') {
@@ -631,7 +684,10 @@ export async function PATCH(
       // Onaycı gerçekten onay verdikten sonra, ilerideki sadece-imza adımları da onaylanır
       // ================================================================
       const forwardAutoApproveIds: string[] = [];
-      if (allApprovals) {
+      // Vekalet (karar 7 notu): vekaleten verilen onay, vekilin KENDİ ileriki
+      // SIGN_ONLY adımlarını otomatik onaylamaz — vekil kendi adımına sırası
+      // gelince ayrıca imza atar. Aksi hâlde tek tıkla iki imza oluşurdu.
+      if (allApprovals && !acting.isDelegate) {
         const now = new Date().toISOString();
         for (const futureApproval of allApprovals) {
           const futureActionType = Array.isArray(futureApproval.workflow_step)
