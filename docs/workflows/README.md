@@ -680,6 +680,8 @@ kullan ve `request_approvals` güncellemesine `acted_by_employee_id` yaz. SQL: `
 
 ## Notlar
 
+> **Mevcut tanımları görmek için:** panel → **Süreç Yönetimi → Süreç Tanımları** (`/workflow-definitions`, ORG_ADMIN). Adımlar, onaycı tipleri, sabit pozisyonların güncel sahipleri, ek dosya konfigürasyonu ve birim amirleri tek ekranda; motorun çözümleyemeyeceği durumlar (boş pozisyon, çift atama, pasif çalışan) uyarı olarak işaretlenir. Salt okunur — değişiklik hâlâ SQL ile yapılır. Veri katmanı: `lib/workflow/config-overview.ts`.
+
 ### Önemli Noktalar
 
 1. **Workflow Code**: Her zaman `UPPER_SNAKE_CASE` kullan

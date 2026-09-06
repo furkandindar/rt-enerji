@@ -7,6 +7,7 @@ import { NavDictionaries } from "@/components/nav-dictionaries"
 import { NavHome } from "@/components/nav-home"
 import { NavOrganization } from "@/components/nav-organization"
 import { NavWorkflow } from "@/components/nav-workflow"
+import { NavWorkflowAdmin } from "@/components/nav-workflow-admin"
 import { NavUser } from "@/components/nav-user"
 import { SignatureReminder } from "@/components/signature-reminder"
 import {
@@ -66,6 +67,7 @@ export function AppSidebar({ user, ...props }: React.ComponentProps<typeof Sideb
         {/* <NavProjects projects={data.projects} /> */}
         <NavHome />
         <NavWorkflow />
+        <NavWorkflowAdmin />
         <NavDictionaries />
         <NavOrganization />
       </SidebarContent>

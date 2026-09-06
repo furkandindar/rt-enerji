@@ -129,6 +129,7 @@ rt-enerji-frontend/
 │   ├── notifications/ profile/ org-chart/                  ─┘
 │   ├── employees/ positions/ position-assignments/
 │   │   organizational-units/ # organizasyon CRUD — ORG_ADMIN (layout'ta AdminPageWrapper)
+│   ├── workflow-definitions/ # süreç tanımları / adımlar / onaycılar — ORG_ADMIN, salt okunur (veri: lib/workflow/config-overview.ts)
 │   └── (dictionaries)/       # companies, unit-types, position-types, grade-levels — ORG_ADMIN
 ├── components/
 │   ├── ui/                   # shadcn/ui primitifleri
@@ -314,6 +315,7 @@ Sistemi tanımanın en iyi yolu uçtan uca senaryolar koşmak (hepsi dev'de serb
 | 2026-07-08 | **PDF erişimi:** 3 PDF rotasına ORG_ADMIN muafiyeti eklendi (admin her talebin PDF'ini görebilir — `authorize-pdf-access.ts`). | Canlıda. |
 | 2026-09-05 | **Kapak tamamlama adımı talep edene:** Finans + Muhasebe Onay Kapağı'nın YKB imzalı tarama yükleme adımı (COMPLETION) `STATIC_POSITION` (müdür) yerine `REQUESTER` oldu — müdür izindeyken 30 talep takılmıştı. Config-only (`sql/feature_cover_completion_by_requester.sql`); yalnız yeni/yeniden gönderilen talepler. | Canlıda (dev+prod). Eski bekleyen talepler bilinçli olarak müdürde. |
 | 2026-09-05 | **Vekalet sistemi (Faz B):** `approval_delegations` + `acted_by_employee_id` + `can_act_on_approval()`; profil kartı, admin sayfası, PDF "Vekaleten" etiketi. Kapsam yalnız Finans Onay Kapağı. | Dev'de; prod'a deploy ile birlikte (`sql/feature_approval_delegation_v1.sql` + `_v1b`). Plan: `docs/onay-havuzu-ve-vekalet-plan.md` |
+| 2026-09-06 | **Süreç Tanımları ekranı (`/workflow-definitions`):** ORG_ADMIN için süreçler, adımlar, onaycı kuralları ve sabit pozisyonların bugünkü sahipleri + Birim Amirleri tablosu (UNIT_HEAD çözümlemesi). Motorun kuralına göre yapılandırma uyarıları (boş pozisyon, çift atama, pasif çalışan). **Salt okunur** — düzenleme Faz 2'de; hâlâ SQL ile yapılır. | Dev'de; kod-only, DB değişikliği yok. |
 | Faz 2 | **`reports_to_position_id` routing'de kullanılmıyor:** motor birim amirini `is_unit_head` + üst-birim tırmanmasıyla bulur; `reports_to` alanı dolu ama onay zincirine etkisi yok. Lokasyon-bazlı `MANAGER` onaycı tipi Faz 2 tasarımında. | Tasarım aşaması — davranışı değiştirme. |
 
 ---
@@ -335,6 +337,7 @@ Repo kökündeki **`CLAUDE.md`** agent'ın otomatik okuduğu kural setidir. Öz�
 |---|---|
 | Sistemin bütünsel anlatımı (ikinci durak) | [docs/genel-bakis.md](docs/genel-bakis.md) |
 | Tüm süreçler + onay zincirleri (prod) | [docs/surec-bilgileri-prod.md](docs/surec-bilgileri-prod.md) |
+| Süreç adımları / onaycılar — canlı görünüm (admin) | Panel → **Süreç Yönetimi → Süreç Tanımları** (`/workflow-definitions`) |
 | Yeni süreç ekleme rehberi + AI kuralları | [docs/workflows/README.md](docs/workflows/README.md) |
 | Workflow motoru: koşullu adımlar / yaşam döngüsü | [docs/v4-workflow-engine-conditional.md](docs/v4-workflow-engine-conditional.md) · [docs/v5-workflow-engine-lifecycle.md](docs/v5-workflow-engine-lifecycle.md) |
 | Organizasyon veri modeli | [docs/organizasyon-veri-modeli.md](docs/organizasyon-veri-modeli.md) |

@@ -2,6 +2,8 @@
 
 Sistemde tanımlı olan onay süreçleri ve her bir adımda görevli kişiler aşağıda listelenmiştir.
 
+> **Canlı görünüm:** Bu doküman elle güncellenen bir anlık görüntüdür. Güncel adımlar, onaycı kuralları ve pozisyonlardaki kişiler için panelde **Süreç Yönetimi → Süreç Tanımları** (`/workflow-definitions`, yalnız yöneticiler) ekranını kullanın; ekran doğrudan `workflow_definitions` / `workflow_steps` tablolarından okur.
+
 ## Açıklamalar
 - **Talep Eden:** Formu/talebi oluşturan kullanıcının kendisidir; süreç başlatıldığında otomatik atanır.
 - **Birim Amiri / Bölüm Müdürü:** Talep sahibinin bağlı olduğu birimin yöneticisidir; talep edene göre dinamik olarak belirlenir.
