@@ -3,10 +3,11 @@
 
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import {
+  ARCHIVE_TYPE_TOKENS,
   buildArchiveFileName,
   isArchivableStatus,
 } from "@/lib/pdf/file-naming";
-import { buildArchiveFolderPath } from "./folder-mapper";
+import { buildArchiveFolderPath, resolveArchiveBase } from "./folder-mapper";
 import type { Database } from "@/lib/database.types";
 
 type RequestStatus = Database["public"]["Enums"]["request_status"];
@@ -110,8 +111,17 @@ export function deriveArchiveTarget(
   const rootFolder = process.env.SHAREPOINT_ROOT_FOLDER ?? "Talepler";
   const finalizedAt = resolveFinalizedAt(ctx);
 
+  // Birim eşlenemezse belge kaybolmaz (Diğer'e düşer) ama görünür olsun:
+  // eşleme tablosuna satır eklenmesi gereken tek sinyal bu log.
+  if (resolveArchiveBase(ctx.workflowCode, ctx.departmentCode).route === "fallback") {
+    console.warn(
+      `[sharepoint-archive] birim eşlenemedi → Diğer: requestNo=${ctx.requestNo} unitCode=${ctx.departmentCode ?? "(yok)"} unitName=${ctx.departmentName ?? "(yok)"}`
+    );
+  }
+
   const folderPath = buildArchiveFolderPath({
     workflowCode: ctx.workflowCode,
+    unitCode: ctx.departmentCode,
     status: ctx.status,
     finalizedAt,
     rootFolder,
@@ -125,6 +135,7 @@ export function deriveArchiveTarget(
     department_code: ctx.departmentCode,
     department_name: ctx.departmentName,
     status: ctx.status,
+    type_token: ctx.workflowCode ? ARCHIVE_TYPE_TOKENS[ctx.workflowCode] ?? null : null,
   });
 
   return { folderPath, fileName, fullPath: `${folderPath}/${fileName}` };

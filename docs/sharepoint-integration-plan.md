@@ -575,3 +575,35 @@ Bu bölümün üzerindeki plan tarihsel kayıttır; güncel davranış aşağıd
   (`enqueueSharePointSyncFromStorage`).
 - **Rollout:** `SHAREPOINT_ROOT_FOLDER=RTProd` env'i kod deploy'u ile aynı anda
   değiştirilir; eski `Talepler/…` arşivi yerinde bırakıldı (taşıma ayrı çalışma).
+
+## 13. Revizyon — Organizasyon Bazlı Arşiv (Eylül 2026)
+
+Geliştirme Talebi **AS0001** ve "BYS Arşiv Modülü — Klasör Yapısı Teknik Gereksinim"
+(22.08.2026) doğrultusunda §12'deki tarih-öncelikli düzen organizasyon şemasını yansıtan
+düzenle değiştirildi. §12 düzeni 20.08.2026'dan bu revizyonun deploy'una kadar canlıdaydı
+(`RTProd/2026/…` altında ~460 belge); bu belgeler `sharepoint-migrate` ile taşınır. §12'nin altyapısı (terminal kapısı, dondurulmuş
+hedef, çift kayıt temizliği, kapatılan boşluklar) aynen geçerlidir; değişen yalnız yol
+türetimi (detay: [dosya-isimlendirme-standardi.md](dosya-isimlendirme-standardi.md)).
+
+- **Klasör:** `{ROOT}/Departman/Birim/Form Tipi/Sonuç/Yıl/Ay` — `Departman/Birim` talep
+  edenin sonuçlanma anındaki biriminden `UNIT_ARCHIVE_BASES` tablosuyla (`folder-mapper.ts`)
+  çözülür; onay kapakları ve 4 İK formu birimden bağımsız sabit `Birim Süreçleri`
+  klasörlerine gider (`FIXED_ROUTE_FOLDERS`). Yıl/ay sonuç klasörünün **altında**
+  (kullanıcı kararı; teknik dokümandaki "form altında sabit 3 sonuç" kuralı korunur).
+- **Dosya adı:** yalnız iki izin sürecinde `…_TALEPNO_YILLIK-IZIN|KISA-IZIN_DURUM.pdf`
+  (`ARCHIVE_TYPE_TOKENS`); diğer 12 süreç §12 formatıyla birebir aynı.
+- **Boş ağaç:** `GET|POST /api/admin/sharepoint-provision` (ORG_ADMIN) statik ağacı
+  (375 yaprak / 530 klasör) `createChildFolder` ile seviye seviye açar; GET her zaman
+  dry-run. Yıl/ay klasörleri upload anında `ensureFolderPath` ile açılmaya devam eder.
+- **İzinler:** SharePoint'te BT elle verir — [sharepoint-arsiv-izin-rehberi.md](sharepoint-arsiv-izin-rehberi.md).
+  Kod tarafında yetki otomasyonu yok (bilinçli erteleme).
+- **Kararlar:** İK arşivde bağımsız departman; Maaş Avans alt klasörsüz; Destek Hizmetleri
+  → İdari İşler; İnşaat'ta Merkez/Saha dışı üye → Merkez; GM/YK/asistanlar → `Genel Müdürlük`
+  (dokümanda yoktu); eşlenmemiş birim → `Diğer` + log uyarısı.
+- **Geçiş dönemi taşıma:** `GET|POST /api/admin/sharepoint-migrate` (ORG_ADMIN) —
+  `sharepoint_path` kökün altında yıl klasörüyle başlayan talepleri partiler halinde yeni yola
+  taşır (Storage'daki `pdf_path` yüklenir, `uploadPdfToSharePoint` eski item'ı siler);
+  taşınan talep otomatik aday olmaktan çıkar, idempotent.
+- **Rollout:** `SHAREPOINT_ROOT_FOLDER=RTProd` zaten 20.08'den beri ayarlı; deploy → provision
+  (ağaç) → migrate (`remaining` 0 olana kadar) → boşalan `RTProd/2026` elle silinir → BT
+  izinler. Eski `Talepler/…` arşivi yerinde, taşınmaz.

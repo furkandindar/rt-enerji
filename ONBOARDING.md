@@ -226,7 +226,7 @@ TR etiketleri `lib/approvals/constants.ts`'te (Taslak/Beklemede/Onaylandı/…).
 
 ### 6.5 Belge hattı
 
-Onay/red/tamamlanma/iptal → `generateRequestPDF()` (form tipine özel @react-pdf şablonu) → imzalar işlenir (font tabanlı `signature_text`+`signature_font` veya çizim PNG'si) → ekler PDF'e birleştirilir → Supabase Storage `request-documents` bucket'ına yüklenir → SharePoint kuyruğuna düşer (`sharepoint_sync_queue`, prod'da 5 dk'lık cron retry). **Yalnız terminal statüler (APPROVED/COMPLETED/REJECTED/CANCELLED) arşivlenir**; hedef yol enqueue anında dondurulur, sonuç değişirse eski SharePoint kopyası yeni yükleme başarılı olduktan sonra otomatik silinir. Arşiv yapısı: `{ROOT}/Yıl/Ay/Belgeler/Belge Türü/Sonuç` + `AD-SOYAD_YYYY-AA-GG_DEPTKOD_DEPARTMAN_TALEPNO_DURUM.pdf`; uygulama içi indirme adları eski `KOD_YYYYAAGG_TALEPNO_AD-SOYAD_DURUM.pdf` formatında kalır ([docs/dosya-isimlendirme-standardi.md](docs/dosya-isimlendirme-standardi.md)).
+Onay/red/tamamlanma/iptal → `generateRequestPDF()` (form tipine özel @react-pdf şablonu) → imzalar işlenir (font tabanlı `signature_text`+`signature_font` veya çizim PNG'si) → ekler PDF'e birleştirilir → Supabase Storage `request-documents` bucket'ına yüklenir → SharePoint kuyruğuna düşer (`sharepoint_sync_queue`, prod'da 5 dk'lık cron retry). **Yalnız terminal statüler (APPROVED/COMPLETED/REJECTED/CANCELLED) arşivlenir**; hedef yol enqueue anında dondurulur, sonuç değişirse eski SharePoint kopyası yeni yükleme başarılı olduktan sonra otomatik silinir. Arşiv yapısı organizasyon şemasını izler: `{ROOT}/Departman/Birim/Form Tipi/Sonuç/Yıl/Ay` — birim talep edenin sonuçlanma anındaki biriminden çözülür (`UNIT_ARCHIVE_BASES`, `lib/sharepoint/folder-mapper.ts`); onay kapakları ve İK formları birimden bağımsız sabit `Birim Süreçleri` klasörlerine gider. Dosya adı `AD-SOYAD_YYYY-AA-GG_DEPTKOD_DEPARTMAN_TALEPNO[_TÜR]_DURUM.pdf` (TÜR yalnız izinlerde: `YILLIK-IZIN`/`KISA-IZIN`); uygulama içi indirme adları eski `KOD_YYYYAAGG_TALEPNO_AD-SOYAD_DURUM.pdf` formatında kalır ([docs/dosya-isimlendirme-standardi.md](docs/dosya-isimlendirme-standardi.md)). Boş ağaç `POST /api/admin/sharepoint-provision` (ORG_ADMIN) ile önceden açılır, geçiş dönemi belgeleri `POST /api/admin/sharepoint-migrate` ile taşınır; klasör izinlerini BT SharePoint'te elle verir ([docs/sharepoint-arsiv-izin-rehberi.md](docs/sharepoint-arsiv-izin-rehberi.md)).
 
 Kaşe süreci (`STAMP_APPROVAL`) farklıdır: kullanıcı PDF yükler, kaşe pozisyonu seçer (hazır 5 konum veya sayfa-bazlı özel konum), onay sonunda `stampPDF()` kaşeyi + imzayı basar.
 
@@ -343,7 +343,8 @@ Repo kökündeki **`CLAUDE.md`** agent'ın otomatik okuduğu kural setidir. Öz�
 | Organizasyon veri modeli | [docs/organizasyon-veri-modeli.md](docs/organizasyon-veri-modeli.md) |
 | DB & Auth teknik tasarım | [docs/teknik-tasarim-veritabani-ve-auth.md](docs/teknik-tasarim-veritabani-ve-auth.md) |
 | SharePoint entegrasyonu / kurulumu | [docs/sharepoint-integration-plan.md](docs/sharepoint-integration-plan.md) · [docs/sharepoint-kurulum-talimatlari.md](docs/sharepoint-kurulum-talimatlari.md) |
-| SharePoint dosya isimlendirme | [docs/dosya-isimlendirme-standardi.md](docs/dosya-isimlendirme-standardi.md) |
+| SharePoint arşiv yapısı / dosya isimlendirme | [docs/dosya-isimlendirme-standardi.md](docs/dosya-isimlendirme-standardi.md) |
+| SharePoint klasör izinleri (BT rehberi) | [docs/sharepoint-arsiv-izin-rehberi.md](docs/sharepoint-arsiv-izin-rehberi.md) |
 | Ek dosya sistemi | [docs/workflow-attachments.md](docs/workflow-attachments.md) |
 | Auth kurulum / callback sorunları | [docs/auth-setup.md](docs/auth-setup.md) |
 | Faz 2 planı | [docs/faz2-yonetici-ozeti.md](docs/faz2-yonetici-ozeti.md) · [docs/faz2-roadmap.md](docs/faz2-roadmap.md) |

@@ -158,6 +158,55 @@ export async function ensureFolderPath(
   }
 }
 
+/**
+ * Tek bir alt klasör oluşturur; GET ön kontrolü yapmaz. Toplu ağaç kurulumu
+ * (provision-tree) için: ensureFolderPath'in segment başına 2 isteği yerine
+ * klasör başına 1 istek. Üst klasörün var olması çağıranın sorumluluğu.
+ *
+ *   "created" → 201, klasör yeni açıldı
+ *   "exists"  → 409 nameAlreadyExists, zaten vardı (idempotent kullanım)
+ *
+ * 429/503'te Retry-After kadar bekleyip sınırlı sayıda tekrar dener; diğer
+ * hatalarda fırlatır.
+ */
+export async function createChildFolder(
+  driveId: string,
+  parentPath: string,
+  name: string
+): Promise<"created" | "exists"> {
+  const createUrl = parentPath
+    ? `/drives/${driveId}/root:/${encodePath(parentPath)}:/children`
+    : `/drives/${driveId}/root/children`;
+
+  const fullPath = parentPath ? `${parentPath}/${name}` : name;
+  const maxAttempts = 3;
+
+  for (let attempt = 1; ; attempt++) {
+    const response = await graphAppFetch(createUrl, {
+      method: "POST",
+      body: {
+        name,
+        folder: {},
+        "@microsoft.graph.conflictBehavior": "fail",
+      },
+    });
+
+    if (response.ok) return "created";
+    if (response.status === 409) return "exists";
+
+    const throttled = response.status === 429 || response.status === 503;
+    if (throttled && attempt < maxAttempts) {
+      await sleep(retryAfterMs(response));
+      continue;
+    }
+
+    const text = await response.text();
+    throw new Error(
+      `[SharePoint] Klasör oluşturulamadı (${fullPath}): ${response.status} ${text}`
+    );
+  }
+}
+
 // ============================================================================
 // File upload
 // ============================================================================
@@ -266,4 +315,16 @@ function parseSiteUrl(siteUrl: string): { hostname: string; sitePath: string } {
  */
 function encodePath(path: string): string {
   return path.split("/").map(encodeURIComponent).join("/");
+}
+
+// Throttling yanıtındaki Retry-After (saniye) → ms; yoksa 2s, en fazla 10s —
+// serverless zaman bütçesini tek bekleme yemesin.
+function retryAfterMs(response: Response): number {
+  const raw = Number(response.headers.get("Retry-After"));
+  const seconds = Number.isFinite(raw) && raw > 0 ? raw : 2;
+  return Math.min(seconds, 10) * 1000;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }

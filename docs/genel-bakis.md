@@ -250,7 +250,7 @@ rt-enerji-frontend/
 | Ek dosya yönetimi | [workflow-attachments.md](workflow-attachments.md) |
 | Organizasyon veri modeli | [organizasyon-veri-modeli.md](organizasyon-veri-modeli.md) |
 | Veritabanı & Auth teknik tasarımı | [teknik-tasarim-veritabani-ve-auth.md](teknik-tasarim-veritabani-ve-auth.md) |
-| SharePoint entegrasyonu | [sharepoint-integration-plan.md](sharepoint-integration-plan.md) · [sharepoint-kurulum-talimatlari.md](sharepoint-kurulum-talimatlari.md) |
+| SharePoint entegrasyonu | [sharepoint-integration-plan.md](sharepoint-integration-plan.md) · [sharepoint-kurulum-talimatlari.md](sharepoint-kurulum-talimatlari.md) · [dosya-isimlendirme-standardi.md](dosya-isimlendirme-standardi.md) · [sharepoint-arsiv-izin-rehberi.md](sharepoint-arsiv-izin-rehberi.md) |
 | Kaşe (custom) | [../custom-kase.md](../custom-kase.md) |
 | PDF canlı önizleme | [pdf-live-preview.md](pdf-live-preview.md) |
 | Dashboard tasarımı | [home-dashboard-redesign.md](home-dashboard-redesign.md) |

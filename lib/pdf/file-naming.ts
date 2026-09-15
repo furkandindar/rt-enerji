@@ -9,9 +9,11 @@
 //      IZIN_20260508_2026-000142_AHMET-YILMAZ_ONAYLI.pdf
 //
 // 2. SharePoint arşivi (buildArchiveFileName — yalnız terminal statüler):
-//      {AD-SOYAD}_{YYYY-MM-DD}_{DEPTKOD}_{DEPARTMAN}_{TALEPNO}_{DURUM}.pdf
+//      {AD-SOYAD}_{YYYY-MM-DD}_{DEPTKOD}_{DEPARTMAN}_{TALEPNO}[_{TÜR}]_{DURUM}.pdf
 //      SINEM-ALDOGAN-DEMIRKAN_2026-07-31_IL-01_IZIN-ISLERI_2026-000401_TAMAMLANDI.pdf
-//      (tarih = talebin sonuçlandığı gün, Europe/Istanbul)
+//      AHMET-YILMAZ_2026-08-18_BO_BAKIM-ONARIM-DEPARTMANI_2026-000512_YILLIK-IZIN_TAMAMLANDI.pdf
+//      (tarih = talebin sonuçlandığı gün, Europe/Istanbul; TÜR eki yalnız arşivde
+//       aynı klasörü paylaşan izin süreçlerinde — ARCHIVE_TYPE_TOKENS)
 //
 // Sadece [A-Z0-9_-.] karakterleri içerir; cross-OS, SharePoint ve Storage
 // uyumlu kalır.
@@ -184,6 +186,14 @@ export const ARCHIVE_STATUS_TOKEN: Record<ArchivableStatus, string> = {
   CANCELLED: 'IPTAL',
 };
 
+// Arşivde aynı klasörü paylaşan süreçler için dosya adına giren tür eki.
+// Yalnız iki izin süreci tek "İzin" klasörüne düştüğü için burada; diğer
+// süreçlerin adı bilgi notundaki (04.08.2026) formatla birebir aynı kalır.
+export const ARCHIVE_TYPE_TOKENS: Record<string, string> = {
+  ANNUAL_LEAVE: 'YILLIK-IZIN',
+  SHORT_LEAVE:  'KISA-IZIN',
+};
+
 // Departman kodu boşken addan türetilen kısaltmanın üst sınırı
 const DEPT_CODE_MAX_LEN = 12;
 
@@ -195,11 +205,12 @@ export interface BuildArchiveFileNameInput {
   department_code: string | null;            // organizational_units.code (nullable)
   department_name: string | null;            // organizational_units.name
   status: ArchivableStatus;
+  type_token?: string | null;                // ARCHIVE_TYPE_TOKENS[workflow_code]; yoksa ek yok
 }
 
 /**
  * SharePoint arşiv dosya adı:
- *   {AD-SOYAD}_{YYYY-MM-DD}_{DEPTKOD}_{DEPARTMAN}_{TALEPNO}_{DURUM}.pdf
+ *   {AD-SOYAD}_{YYYY-MM-DD}_{DEPTKOD}_{DEPARTMAN}_{TALEPNO}[_{TÜR}]_{DURUM}.pdf
  *
  * Departman, talebin sonuçlandığı anda çözülüp kuyruğa dondurulur — çalışanın
  * departmanı sonradan değişse bile geçmiş belgelerin yeri değişmez.
@@ -222,7 +233,11 @@ export function buildArchiveFileName(input: BuildArchiveFileNameInput): string {
 
   const status = ARCHIVE_STATUS_TOKEN[input.status];
 
-  return `${name}_${date}_${deptCode}_${deptName}_${input.request_no}_${status}.pdf`;
+  const parts = [name, date, deptCode, deptName, input.request_no];
+  if (input.type_token) parts.push(input.type_token);
+  parts.push(status);
+
+  return `${parts.join('_')}.pdf`;
 }
 
 // ----------------------------------------------------------------------------
