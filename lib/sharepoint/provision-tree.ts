@@ -42,13 +42,14 @@ export interface ProvisionArchiveTreeResult {
   nextOffset: number;        // bir sonraki çağrının offset'i (completed ise = totalFolders)
   completed: boolean;        // true → plan bitti; false → nextOffset ile tekrar çağır
   budgetExceeded: boolean;   // true → parti yarım kaldı, aynı offset ile tekrar
+  retryBatch: boolean;       // true → partide hata/yarım var, nextOffset = offset (ilerlemedi)
   durationMs: number;
   planned: string[];         // derinlik sırasında tüm klasör yolları
 }
 
-const DEFAULT_LIMIT = 80;
+const DEFAULT_LIMIT = 50;
 const DEFAULT_CONCURRENCY = 4;
-const DEFAULT_TIME_BUDGET_MS = 25_000;  // 80 klasör ~10s; throttling'e pay bırakır
+const DEFAULT_TIME_BUDGET_MS = 25_000;  // prod'da 80 klasör bütçeyi aşıyordu; 50 rahat sığar
 
 // ============================================================================
 // Public API
@@ -112,6 +113,7 @@ export async function provisionArchiveTree(
     nextOffset: start + batch.length,
     completed: start + batch.length >= planned.length,
     budgetExceeded: false,
+    retryBatch: false,
     durationMs: 0,
     planned,
   };
@@ -151,8 +153,13 @@ export async function provisionArchiveTree(
     });
   }
 
-  // Parti yarım kaldıysa aynı offset'ten tekrar: açılanlar "exists" der, geçer.
-  if (result.budgetExceeded) {
+  // Parti yarım kaldıysa YA DA içinde hata varsa aynı offset'ten tekrar:
+  // açılanlar "exists" der, geçer; hatalılar yeniden denenir. Offset ilerleseydi
+  // geçici bir 429 yüzünden açılamayan klasör sessizce eksik kalırdı (prod'da
+  // ilk çalıştırmada 2 klasör böyle atlandı). Kalıcı hata varsa çağıran
+  // offset'i elle ilerletebilir.
+  if (result.budgetExceeded || result.failed.length > 0) {
+    result.retryBatch = true;
     result.nextOffset = start;
     result.completed = false;
   }

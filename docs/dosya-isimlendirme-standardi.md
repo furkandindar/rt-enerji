@@ -226,8 +226,9 @@ endpoint'iyle önceden oluşturulur:
 
 - `GET /api/admin/sharepoint-provision` — her zaman **dry-run**, açılacak yolları listeler.
 - `POST /api/admin/sharepoint-provision` `{ "scope"?: "<departman>", "offset"?: n, "limit"?: n }` —
-  planın bir partisini (varsayılan 80 klasör) açar ve `nextOffset` döner; `completed: true`
-  olana kadar `offset: nextOffset` ile tekrar çağrılır (530 klasör ≈ 7 çağrı). Idempotent,
+  planın bir partisini (varsayılan 50 klasör) açar ve `nextOffset` döner; hata/yarım kalma
+  varsa offset ilerlemez; `completed: true` olana kadar `offset: nextOffset` ile tekrar çağrılır
+  (530 klasör ≈ 11 çağrı). Idempotent,
   var olanlar `existing` sayılır. Tek istekte tamamı Vercel 60 sn sınırına takılır (504).
 
 - `GET | POST /api/admin/sharepoint-migrate` `{ "limit"?: n }` — geçiş dönemi (Ağustos düzeni,

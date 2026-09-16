@@ -7,7 +7,8 @@
 //       Tarayıcıdan bakıp Nur Hanım'a onaylatmak için.
 //
 //   POST /api/admin/sharepoint-provision  { scope?, dryRun?, offset?, limit? }
-//     → Planın bir partisini (varsayılan 80 klasör) açar, `nextOffset` döner;
+//     → Planın bir partisini (varsayılan 50 klasör) açar, `nextOffset` döner;
+//       hata ya da yarım kalma varsa nextOffset ilerlemez (aynı parti tekrar);
 //       `completed: true` olana kadar nextOffset ile tekrar çağrılır.
 //       Idempotent — var olanlar "existing" sayılır. 530 klasörü tek istekte
 //       açmak Vercel 60s sınırında 504 veriyordu; parti bu yüzden.
@@ -26,7 +27,7 @@ import {
 import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 
-// Parti başına 80 klasör, 4 paralel istek — provision-tree kendi zaman
+// Parti başına 50 klasör, 4 paralel istek — provision-tree kendi zaman
 // bütçesini (25s) bunun çok altında tutar ki yanıt her zaman JSON dönsün.
 export const maxDuration = 60;
 
@@ -165,13 +166,13 @@ async function runProvision(params: {
       ...summary,
       note: params.dryRun
         ? `${result.totalFolders} klasör açılacak (${result.leafCount} yaprak).`
-        : result.budgetExceeded
-          ? `Zaman bütçesi doldu, parti yarım kaldı. Aynı offset (${result.nextOffset}) ile tekrar gönder — açılanlar atlanır.`
+        : result.retryBatch
+          ? result.budgetExceeded
+            ? `Zaman bütçesi doldu, parti yarım kaldı. Aynı offset (${result.nextOffset}) ile tekrar gönder — açılanlar atlanır.`
+            : `${result.failed.length} klasör açılamadı ('failed'); aynı offset (${result.nextOffset}) ile tekrar gönder. Kalıcı hataysa offset'i elle ilerlet.`
           : !result.completed
             ? `${result.nextOffset}/${result.totalFolders} — devam için body'de offset: ${result.nextOffset} gönder.`
-            : result.failed.length > 0
-              ? "Plan bitti ama bazı klasörler açılamadı; 'failed' listesine bak, aynı offset ile tekrar gönder."
-              : "Plan bitti, tüm klasörler mevcut.",
+            : "Plan bitti, tüm klasörler mevcut.",
       // Dry-run'da tam liste (onaylatmak için); gerçek çalıştırmada yalnız özet.
       planned: params.dryRun ? planned : undefined,
     });
