@@ -166,8 +166,9 @@ export async function ensureFolderPath(
  *   "created" → 201, klasör yeni açıldı
  *   "exists"  → 409 nameAlreadyExists, zaten vardı (idempotent kullanım)
  *
- * 429/503'te Retry-After kadar bekleyip sınırlı sayıda tekrar dener; diğer
- * hatalarda fırlatır.
+ * 429/503'te Retry-After kadar (en fazla 5s) bekleyip bir kez daha dener;
+ * hâlâ throttle ediliyorsa fırlatır — çağıran partiyi sonra tekrar eder.
+ * Uzun beklemeler serverless zaman bütçesini yiyip 504'e yol açıyordu.
  */
 export async function createChildFolder(
   driveId: string,
@@ -179,7 +180,7 @@ export async function createChildFolder(
     : `/drives/${driveId}/root/children`;
 
   const fullPath = parentPath ? `${parentPath}/${name}` : name;
-  const maxAttempts = 3;
+  const maxAttempts = 2;
 
   for (let attempt = 1; ; attempt++) {
     const response = await graphAppFetch(createUrl, {
@@ -317,12 +318,12 @@ function encodePath(path: string): string {
   return path.split("/").map(encodeURIComponent).join("/");
 }
 
-// Throttling yanıtındaki Retry-After (saniye) → ms; yoksa 2s, en fazla 10s —
+// Throttling yanıtındaki Retry-After (saniye) → ms; yoksa 2s, en fazla 5s —
 // serverless zaman bütçesini tek bekleme yemesin.
 function retryAfterMs(response: Response): number {
   const raw = Number(response.headers.get("Retry-After"));
   const seconds = Number.isFinite(raw) && raw > 0 ? raw : 2;
-  return Math.min(seconds, 10) * 1000;
+  return Math.min(seconds, 5) * 1000;
 }
 
 function sleep(ms: number): Promise<void> {

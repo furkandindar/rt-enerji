@@ -12,8 +12,9 @@
 ## 1) Ön koşullar
 
 1. **Ağaç açılmış olmalı.** İzin ancak var olan klasöre verilir. Deploy sonrası ORG_ADMIN bir
-   hesapla `POST /api/admin/sharepoint-provision` çalıştırılır (önce `GET` ile dry-run listesine
-   bakılabilir). Yanıtta `completed: true` ve `failed: []` görülmeli; değilse aynı istek tekrarlanır.
+   hesapla `POST /api/admin/sharepoint-provision` partiler halinde çalıştırılır (önce `GET` ile
+   dry-run listesine bakılabilir): yanıttaki `nextOffset` bir sonraki çağrıya `offset` olarak
+   verilir, `completed: true` ve `failed: []` görülene kadar sürer (≈ 7 çağrı).
 2. **Miras mantığı.** SharePoint'te alt klasörler izinleri üstten devralır. İzinler yalnız
    aşağıdaki **sabit** klasörlere verilir; sonradan sistemin açtığı `Yıl/Ay` klasörleri ve
    yüklenen dosyalar bulundukları klasörün iznini otomatik alır — tek tek ayar gerekmez.

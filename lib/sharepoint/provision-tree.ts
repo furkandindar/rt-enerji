@@ -3,9 +3,12 @@
 // verebilsin diye ağaç önceden açılır; yıl/ay klasörleri ilk belgeyle
 // kendiliğinden açılır (upload hattı ensureFolderPath kullanmaya devam eder).
 //
-// Idempotent: var olan klasör "exists" sayılır, tekrar çalıştırmak güvenlidir.
-// Serverless zaman bütçesi aşılırsa kalan yollar atlanır (`completed=false`);
-// aynı çağrı tekrar edilince kaldığı yerden devam eder.
+// Partili çalışır: plan (derinlik sırasında, deterministik) `offset`'ten
+// başlayıp en fazla `limit` klasör işler ve `nextOffset` döner; çağıran
+// `completed` olana kadar tekrar çağırır. 530 klasörü tek istekte açmak
+// Vercel'in 60s sınırına takılıp 504 veriyordu.
+//
+// Idempotent: var olan klasör "exists" sayılır, aynı parti tekrar edilebilir.
 
 import { createChildFolder } from "@/lib/msgraph/sharepoint";
 import { listStaticArchiveFolders } from "./folder-mapper";
@@ -19,8 +22,10 @@ export interface ProvisionArchiveTreeParams {
   rootFolder: string;
   scope?: string | null;     // kök altındaki ilk segment (örn. "İnsan Kaynakları") — alt ağaç sınırı
   dryRun?: boolean;          // true: Graph'a dokunmaz, yalnız planı döner
+  offset?: number;           // plandaki başlangıç indeksi (partili çağrı)
+  limit?: number;            // bu çağrıda işlenecek en fazla klasör
   concurrency?: number;      // aynı seviyede paralel istek sayısı
-  timeBudgetMs?: number;     // bu süre aşılınca yeni klasör açılmaz, kalan "skipped"
+  timeBudgetMs?: number;     // bu süre aşılınca yeni klasör açılmaz
 }
 
 export interface ProvisionArchiveTreeResult {
@@ -28,18 +33,22 @@ export interface ProvisionArchiveTreeResult {
   scope: string | null;
   dryRun: boolean;
   leafCount: number;         // kapsam içindeki sonuç klasörü sayısı
-  totalFolders: number;      // ara klasörler dahil açılacak toplam klasör
+  totalFolders: number;      // ara klasörler dahil plandaki toplam klasör
+  offset: number;            // bu partinin başlangıcı
+  batchSize: number;         // bu partide ele alınan klasör sayısı
   created: number;
   existing: number;
-  skipped: number;           // zaman bütçesi bitince açılmayan
   failed: { path: string; error: string }[];
-  completed: boolean;        // false → tekrar çalıştır (idempotent)
+  nextOffset: number;        // bir sonraki çağrının offset'i (completed ise = totalFolders)
+  completed: boolean;        // true → plan bitti; false → nextOffset ile tekrar çağır
+  budgetExceeded: boolean;   // true → parti yarım kaldı, aynı offset ile tekrar
   durationMs: number;
   planned: string[];         // derinlik sırasında tüm klasör yolları
 }
 
-const DEFAULT_CONCURRENCY = 6;
-const DEFAULT_TIME_BUDGET_MS = 48_000;  // route maxDuration=60 altında pay bırakır
+const DEFAULT_LIMIT = 80;
+const DEFAULT_CONCURRENCY = 4;
+const DEFAULT_TIME_BUDGET_MS = 25_000;  // 80 klasör ~10s; throttling'e pay bırakır
 
 // ============================================================================
 // Public API
@@ -60,9 +69,9 @@ export function listArchiveScopes(rootFolder: string): string[] {
 }
 
 /**
- * Statik ağacı derinlik sırasında, seviye seviye açar. Bir seviyedeki tüm
- * klasörler (created/exists/failed) bitmeden alt seviyeye geçilmez — üst
- * klasör garanti altında olsun.
+ * Planın [offset, offset+limit) dilimini derinlik sırasında, seviye seviye
+ * açar. Plan derinliğe göre sıralı olduğundan bir klasörün üstü ya daha önceki
+ * bir partide ya da aynı partide daha önceki seviyede açılmış olur.
  */
 export async function provisionArchiveTree(
   params: ProvisionArchiveTreeParams
@@ -72,6 +81,8 @@ export async function provisionArchiveTree(
     rootFolder,
     scope = null,
     dryRun = false,
+    offset = 0,
+    limit = DEFAULT_LIMIT,
     concurrency = DEFAULT_CONCURRENCY,
     timeBudgetMs = DEFAULT_TIME_BUDGET_MS,
   } = params;
@@ -84,6 +95,8 @@ export async function provisionArchiveTree(
   );
 
   const planned = expandToAllPrefixes(leaves);
+  const start = Math.min(Math.max(0, offset), planned.length);
+  const batch = planned.slice(start, start + limit);
 
   const result: ProvisionArchiveTreeResult = {
     rootFolder,
@@ -91,30 +104,33 @@ export async function provisionArchiveTree(
     dryRun,
     leafCount: leaves.length,
     totalFolders: planned.length,
+    offset: start,
+    batchSize: batch.length,
     created: 0,
     existing: 0,
-    skipped: 0,
     failed: [],
-    completed: true,
+    nextOffset: start + batch.length,
+    completed: start + batch.length >= planned.length,
+    budgetExceeded: false,
     durationMs: 0,
     planned,
   };
 
-  if (dryRun || planned.length === 0) {
+  if (dryRun || batch.length === 0) {
     result.durationMs = Date.now() - startedAt;
     return result;
   }
 
-  const byDepth = groupByDepth(planned);
+  const byDepth = groupByDepth(batch);
   const depths = Array.from(byDepth.keys()).sort((a, b) => a - b);
 
   for (const depth of depths) {
+    if (result.budgetExceeded) break;
     const paths = byDepth.get(depth) ?? [];
 
     await runWithConcurrency(paths, concurrency, async (path) => {
-      if (Date.now() - startedAt > timeBudgetMs) {
-        result.skipped++;
-        result.completed = false;
+      if (result.budgetExceeded || Date.now() - startedAt > timeBudgetMs) {
+        result.budgetExceeded = true;
         return;
       }
 
@@ -135,6 +151,12 @@ export async function provisionArchiveTree(
     });
   }
 
+  // Parti yarım kaldıysa aynı offset'ten tekrar: açılanlar "exists" der, geçer.
+  if (result.budgetExceeded) {
+    result.nextOffset = start;
+    result.completed = false;
+  }
+
   result.durationMs = Date.now() - startedAt;
   return result;
 }
@@ -149,7 +171,7 @@ function splitPath(path: string): string[] {
 
 /**
  * Yaprak yollardan tüm ön-ek yollarını üretir ("a/b/c" → "a", "a/b", "a/b/c"),
- * tekilleştirir, derinliğe sonra ada göre sıralar.
+ * tekilleştirir, derinliğe sonra ada göre sıralar — deterministik plan.
  */
 function expandToAllPrefixes(leaves: string[]): string[] {
   const all = new Set<string>();

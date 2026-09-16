@@ -6,9 +6,11 @@
 //     → Her zaman DRY-RUN: Graph'a dokunmaz, açılacak klasör listesini döner.
 //       Tarayıcıdan bakıp Nur Hanım'a onaylatmak için.
 //
-//   POST /api/admin/sharepoint-provision  { scope?: string, dryRun?: boolean }
-//     → Klasörleri gerçekten açar. Idempotent — var olanlar "existing" sayılır.
-//       Zaman bütçesi biterse completed=false döner; aynı çağrı tekrarlanır.
+//   POST /api/admin/sharepoint-provision  { scope?, dryRun?, offset?, limit? }
+//     → Planın bir partisini (varsayılan 80 klasör) açar, `nextOffset` döner;
+//       `completed: true` olana kadar nextOffset ile tekrar çağrılır.
+//       Idempotent — var olanlar "existing" sayılır. 530 klasörü tek istekte
+//       açmak Vercel 60s sınırında 504 veriyordu; parti bu yüzden.
 //
 // Yetki: ORG_ADMIN rolü zorunlu (app_users.role). Yıl/ay klasörleri burada
 // açılmaz, ilk belgeyle kendiliğinden oluşur.
@@ -24,13 +26,17 @@ import {
 import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 
-// ~530 klasör, 6 paralel istek — provision-tree kendi zaman bütçesini bunun
-// altında tutar (48s) ki yanıt her zaman JSON olarak dönsün.
+// Parti başına 80 klasör, 4 paralel istek — provision-tree kendi zaman
+// bütçesini (25s) bunun çok altında tutar ki yanıt her zaman JSON dönsün.
 export const maxDuration = 60;
+
+const MAX_LIMIT = 150;
 
 interface ProvisionBody {
   scope?: string;
   dryRun?: boolean;
+  offset?: number;
+  limit?: number;
 }
 
 export async function GET(request: NextRequest) {
@@ -59,12 +65,20 @@ export async function POST(request: NextRequest) {
   return runProvision({
     scope: body.scope ?? null,
     dryRun: body.dryRun === true,
+    offset: parseNonNegativeInt(body.offset),
+    limit: parseNonNegativeInt(body.limit, MAX_LIMIT),
   });
 }
 
 // ============================================================================
 // Helpers
 // ============================================================================
+
+function parseNonNegativeInt(raw: unknown, max?: number): number | undefined {
+  if (typeof raw !== "number" || !Number.isFinite(raw) || raw < 0) return undefined;
+  const n = Math.floor(raw);
+  return max ? Math.min(n, max) : n;
+}
 
 async function requireOrgAdmin(): Promise<NextResponse | null> {
   const supabase = await createClient();
@@ -94,6 +108,8 @@ async function requireOrgAdmin(): Promise<NextResponse | null> {
 async function runProvision(params: {
   scope: string | null;
   dryRun: boolean;
+  offset?: number;
+  limit?: number;
 }): Promise<NextResponse> {
   const siteUrl = process.env.SHAREPOINT_SITE_URL;
   const libraryName = process.env.SHAREPOINT_LIBRARY_NAME ?? "Documents";
@@ -136,6 +152,8 @@ async function runProvision(params: {
       rootFolder,
       scope,
       dryRun: params.dryRun,
+      offset: params.offset,
+      limit: params.limit && params.limit > 0 ? params.limit : undefined,
     });
 
     const { planned, ...summary } = result;
@@ -145,11 +163,15 @@ async function runProvision(params: {
       mode: params.dryRun ? "dry-run" : "provision",
       config,
       ...summary,
-      note: !result.completed
-        ? `Zaman bütçesi doldu, ${result.skipped} klasör açılmadı. Aynı isteği tekrar gönder — var olanlar atlanır, kalanlar açılır.`
-        : result.failed.length > 0
-          ? "Bazı klasörler açılamadı; 'failed' listesine bak, düzeltip tekrar gönder."
-          : undefined,
+      note: params.dryRun
+        ? `${result.totalFolders} klasör açılacak (${result.leafCount} yaprak).`
+        : result.budgetExceeded
+          ? `Zaman bütçesi doldu, parti yarım kaldı. Aynı offset (${result.nextOffset}) ile tekrar gönder — açılanlar atlanır.`
+          : !result.completed
+            ? `${result.nextOffset}/${result.totalFolders} — devam için body'de offset: ${result.nextOffset} gönder.`
+            : result.failed.length > 0
+              ? "Plan bitti ama bazı klasörler açılamadı; 'failed' listesine bak, aynı offset ile tekrar gönder."
+              : "Plan bitti, tüm klasörler mevcut.",
       // Dry-run'da tam liste (onaylatmak için); gerçek çalıştırmada yalnız özet.
       planned: params.dryRun ? planned : undefined,
     });

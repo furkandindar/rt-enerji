@@ -225,9 +225,10 @@ ağacın statik kısmı (sonuç klasörüne kadar, **375 yaprak / 530 klasör**)
 endpoint'iyle önceden oluşturulur:
 
 - `GET /api/admin/sharepoint-provision` — her zaman **dry-run**, açılacak yolları listeler.
-- `POST /api/admin/sharepoint-provision` `{ "scope"?: "<departman>", "dryRun"?: bool }` —
-  klasörleri gerçekten açar; idempotent, var olanlar `existing` sayılır; zaman bütçesi
-  dolarsa `completed=false` döner, aynı istek tekrarlanır.
+- `POST /api/admin/sharepoint-provision` `{ "scope"?: "<departman>", "offset"?: n, "limit"?: n }` —
+  planın bir partisini (varsayılan 80 klasör) açar ve `nextOffset` döner; `completed: true`
+  olana kadar `offset: nextOffset` ile tekrar çağrılır (530 klasör ≈ 7 çağrı). Idempotent,
+  var olanlar `existing` sayılır. Tek istekte tamamı Vercel 60 sn sınırına takılır (504).
 
 - `GET | POST /api/admin/sharepoint-migrate` `{ "limit"?: n }` — geçiş dönemi (Ağustos düzeni,
   `{KÖK}/20xx/…`) belgelerini yeni düzene taşır: PDF yeniden üretilmez, Storage'daki nihai
