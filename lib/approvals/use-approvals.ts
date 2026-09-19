@@ -112,7 +112,17 @@ export function useApprovals(options: UseApprovalsOptions = {}) {
 
   // Derived values
   const isStampApproval = selectedApproval?.request?.stamp_request != null;
-  const hasValidSignature = isStampApproval
+  // Kaşe üstü canvas imzası yalnız PDF'i basan SON onay adımında alınır (Genel Müdür).
+  // Ara adımlar (Bölüm Müdürü) standart onay verir — çizdikleri imza zaten hiçbir yere
+  // basılmıyordu. Zincir bilinmiyorsa canvas istenir; son sözü API guard'ı söyler.
+  const requiresStampSignature = (() => {
+    if (!isStampApproval || !selectedApproval) return false;
+    const chain = selectedApproval.request.approvals;
+    if (!chain?.length || selectedApproval.sequence_order == null) return true;
+    const lastSequence = Math.max(...chain.map((a) => a.sequence_order));
+    return selectedApproval.sequence_order >= lastSequence;
+  })();
+  const hasValidSignature = requiresStampSignature
     ? Boolean(signatureDataUrl)
     : Boolean(signatureInfo.signatureText && signatureInfo.signatureFont);
 
@@ -473,7 +483,7 @@ export function useApprovals(options: UseApprovalsOptions = {}) {
       } = { decision, comment };
 
       // Stamp approval ise canvas imzasını gönder
-      if (decision === "APPROVED" && isStampApproval && signatureDataUrl) {
+      if (decision === "APPROVED" && requiresStampSignature && signatureDataUrl) {
         requestBody.signature_data_url = signatureDataUrl;
       }
 
@@ -753,6 +763,7 @@ export function useApprovals(options: UseApprovalsOptions = {}) {
     currentSeparationSectionConfig,
     separationSectionKey,
     isStampApproval,
+    requiresStampSignature,
     isTravelCompletionForm,
     isYkbSignedPdfForm,
     canApprove,

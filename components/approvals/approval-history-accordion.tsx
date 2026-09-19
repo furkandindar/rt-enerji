@@ -63,7 +63,7 @@ export function ApprovalHistoryAccordion({ approvals }: ApprovalHistoryAccordion
                     .map((approval) => (
                       <TableRow key={approval.id}>
                         <TableCell className="font-medium">
-                          {approval.workflow_step.step_order}
+                          {approval.sequence_order}
                         </TableCell>
                         <TableCell>
                           {getApproverDisplayName(approval)}

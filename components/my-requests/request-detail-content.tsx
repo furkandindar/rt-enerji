@@ -36,6 +36,7 @@ import { getApproverDisplayName } from "@/lib/approvals/types";
 import { AttachmentList } from "@/components/approvals/attachment-list";
 import { ComparisonFormDetails } from "@/components/approvals/comparison-form-details";
 import { RequestActivityLog } from "@/components/approvals/request-activity-log";
+import { StampStatusSummary } from "@/components/approvals/stamp-status-summary";
 import { ApprovalStatusBadge, RequestStatusBadge } from "@/components/approvals/status-badge";
 import { RequestLifecycleActions } from "@/components/my-requests/request-lifecycle-actions";
 import type {
@@ -967,12 +968,14 @@ export function RequestDetailContent({
                       : `Sayfa: ${selectedRequest.stamp_request.selected_pages}`}
                   </p>
                 </div>
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground">Durum</p>
-                  <p className="text-sm font-semibold">
-                    {selectedRequest.stamp_request.stamped_pdf_path ? "Kaşelenmiş ✓" : "Kaşelenmedi"}
-                  </p>
-                </div>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Durum</p>
+                <StampStatusSummary
+                  approvals={selectedRequest.approvals}
+                  requestStatus={selectedRequest.status}
+                  stampedPdfPath={selectedRequest.stamp_request.stamped_pdf_path}
+                />
               </div>
               {selectedRequest.stamp_request.description && (
                 <div>
@@ -1521,7 +1524,7 @@ export function RequestDetailContent({
                             .map((approval) => (
                               <TableRow key={approval.id}>
                                 <TableCell className="font-medium">
-                                  {approval.workflow_step.step_order}
+                                  {approval.sequence_order}
                                 </TableCell>
                                 <TableCell>
                                   {getApproverDisplayName(approval)}

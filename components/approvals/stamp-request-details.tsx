@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { PdfViewerDialog } from "@/components/pdf-viewer-dialog";
 import { openPdfPreview } from "@/lib/pdf/open-preview";
 import type { PendingApproval } from "@/lib/approvals/types";
+import { StampStatusSummary } from "./stamp-status-summary";
 
 const positionLabels: Record<string, string> = {
   "top-left": "Sol Üst",
@@ -55,12 +56,14 @@ export function StampRequestDetails({ approval }: StampRequestDetailsProps) {
             {stamp.selected_pages === "all" ? "Tüm sayfalar" : `Sayfa: ${stamp.selected_pages}`}
           </p>
         </div>
-        <div>
-          <p className="text-sm font-medium text-muted-foreground">Durum</p>
-          <p className="text-sm font-semibold">
-            {stamp.stamped_pdf_path ? "Kaşelenmiş ✓" : "Kaşelenmedi"}
-          </p>
-        </div>
+      </div>
+      <div>
+        <p className="text-sm font-medium text-muted-foreground">Durum</p>
+        <StampStatusSummary
+          approvals={approval.request.approvals}
+          requestStatus={approval.request.status}
+          stampedPdfPath={stamp.stamped_pdf_path}
+        />
       </div>
       {stamp.description && (
         <div>

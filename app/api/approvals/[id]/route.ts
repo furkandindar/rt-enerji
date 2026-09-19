@@ -281,6 +281,36 @@ export async function PATCH(
       );
     }
 
+    // 2a. Kaşeli belge: PDF'i basan SON onay adımında kaşe üstü canvas imzası zorunlu.
+    // UI bunu zaten şart koşuyor; burada yoksa imzasız onay font-imza fallback'iyle
+    // basılıp arşive gidiyordu. Ara adımlar (Bölüm Müdürü) imzasız onay verir.
+    if (decision === 'APPROVED' && !signature_data_url?.trim()) {
+      const { data: stampReq } = await supabase
+        .from("stamp_requests")
+        .select("id")
+        .eq("request_id", requestData.id)
+        .maybeSingle();
+
+      if (stampReq) {
+        // RLS onaycıya yalnız kendi satırını gösterir → zincir için service-role
+        const { data: laterApprovals, error: laterError } = await createServiceRoleClient()
+          .from("request_approvals")
+          .select("id")
+          .eq("request_id", requestData.id)
+          .eq("revision_cycle", requestData.current_revision_cycle ?? 0)
+          .gt("sequence_order", approval.sequence_order)
+          .limit(1);
+
+        if (laterError) {
+          console.error("Error checking stamp approval chain:", laterError);
+          return NextResponse.json({ error: "Onay zinciri kontrol edilemedi, lütfen tekrar deneyin." }, { status: 500 });
+        }
+        if (!laterApprovals?.length) {
+          return NextResponse.json({ error: "Kaşeli belge imzalanmadan onaylanamaz" }, { status: 400 });
+        }
+      }
+    }
+
     // 2b. Zorunlu attachment kontrolü (onay durumunda)
     if (decision === 'APPROVED') {
       const { data: requiredConfigs } = await supabase

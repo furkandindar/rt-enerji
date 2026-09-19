@@ -104,6 +104,7 @@ export interface PendingApproval {
   id: string;
   status: string;
   decided_at: string | null;
+  sequence_order?: number;
   // Vekalet (Faz B): liste select'i `*` ile gelir; detay GET'i `viewer` ekler.
   approver_employee_id?: string;
   acted_by_employee_id?: string | null;

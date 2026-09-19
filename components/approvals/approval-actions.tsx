@@ -60,8 +60,8 @@ interface ApprovalActionsProps {
   signatureAccepted: boolean;
   setSignatureAccepted: (value: boolean) => void;
 
-  // Canvas signature (stamp approval)
-  isStampApproval: boolean;
+  // Canvas signature (stamp approval — yalnız PDF'i basan son onay adımı)
+  requiresStampSignature: boolean;
   signatureDataUrl: string | null;
   setSignatureDataUrl: (dataUrl: string | null) => void;
   /** Kaşe görseli (imza kanvasının arkasında WYSIWYG hizalama için) */
@@ -118,8 +118,8 @@ export function ApprovalActions({
   signatureInfo,
   signatureAccepted,
   setSignatureAccepted,
-  isStampApproval,
-  signatureDataUrl,
+  requiresStampSignature,
+signatureDataUrl,
   setSignatureDataUrl,
   stampImageUrl,
   stampAspectRatio,
@@ -411,7 +411,7 @@ export function ApprovalActions({
       </div>
 
       {/* İmza Paneli */}
-      {isStampApproval ? (
+      {requiresStampSignature ? (
         <SignatureCanvasPanel
           signatureDataUrl={signatureDataUrl}
           onSignatureChange={setSignatureDataUrl}

@@ -13,7 +13,7 @@ Kaynak: Supabase `iiagqsbiexyukupkffwb` projesindeki `workflow_definitions`, `wo
 | Harcama Formu | `EXPENSE_FORM` | 4 | Talep Eden → Birim Amiri → Muhasebe → Genel Müdür |
 | İşe Giriş Takip Formu | `EMPLOYEE_ONBOARDING` | 7 | İK → Genel Müdür → İK → Hukuk → İdari İşler → Asistan → Genel Müdür |
 | İşten Çıkış Takip Formu | `EMPLOYEE_SEPARATION` | 9 | İK → Genel Müdür → İK → Hukuk → Muhasebe → İdari İşler → İK Uzmanı → Asistan → Genel Müdür |
-| Kaşeli Belge Onayı | `STAMP_APPROVAL` | 2 | Talep Eden → Genel Müdür |
+| Kaşeli Belge Onayı | `STAMP_APPROVAL` | 3 | Talep Eden → Bölüm Müdürü → Genel Müdür |
 | Kısa Süreli İzin Talebi | `SHORT_LEAVE` | 4 | Talep Eden → Bölüm Müdürü → Personel Müdürlüğü → Genel Koordinatör |
 | Maaş Avans Talebi | `SALARY_ADVANCE` | 6 | Talep Eden → Personel Müdürlüğü → Muhasebe → Finans → Genel Koordinatör → Yönetim Kurulu Başkanı |
 | Mukayese Formu | `COMPARISON_FORM` | 4 | Talep Eden → Birim Müdürü → Genel Koordinatör → Yönetim Kurulu Başkanı |
@@ -62,7 +62,9 @@ Kaynak: Supabase `iiagqsbiexyukupkffwb` projesindeki `workflow_definitions`, `wo
 | Sıra | Adım | Tip | Pozisyon / Onaycı | Aktif kişi |
 |---:|---|---|---|---|
 | 1 | Talep Eden | `REQUESTER` | Talep/form oluşturan kullanıcı | Dinamik |
-| 2 | Genel Müdür | `STATIC_POSITION` | Genel Müdür (`GM`) | Bekir Korkmaz |
+| 2 | Bölüm Müdürü | `UNIT_HEAD` | Talep sahibinin birim amiri | Dinamik |
+| 3 | Genel Müdür | `STATIC_POSITION` | Genel Müdür (`GM`) | Bekir Korkmaz |
+> Not (2026-07-28): Bölüm Müdürü adımı eklendi. Müdür yalnız onay verir; kaşe üstü imzayı yalnız son adım (Genel Müdür) atar. Müdür zaten Genel Müdür'e çözülüyorsa 2. adım oluşmaz.
 ### Kısa Süreli İzin Talebi (`SHORT_LEAVE`)
 | Sıra | Adım | Tip | Pozisyon / Onaycı | Aktif kişi |
 |---:|---|---|---|---|
