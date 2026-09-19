@@ -1,7 +1,15 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
+import {
+  ATTACHMENTS_BUCKET,
+  buildAttachmentStoragePath,
+  validateAttachmentUpload,
+} from "@/lib/attachments/validate-upload";
 
 // POST /api/attachments/upload - Dosya yükle
+// NOT: Dosya bu rotanın gövdesinden geçtiği için Vercel istek sınırına (~4.5MB)
+// takılır. Büyük dosyalar için upload-url + confirm akışı kullanılır
+// (lib/attachments/upload-attachment.ts).
 export async function POST(request: Request) {
   try {
     const supabase = await createClient();
@@ -32,81 +40,26 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "file, request_id ve step_attachment_config_id zorunludur" }, { status: 400 });
     }
 
-    // 3. Attachment config'i getir ve validasyon yap
-    const { data: config, error: configError } = await supabase
-      .from("workflow_step_attachments")
-      .select("*")
-      .eq("id", configId)
-      .single();
+    // 3-4. Config validasyonu (tür, boyut, adet) + yetki kontrolü
+    const validation = await validateAttachmentUpload(supabase, {
+      employeeId: appUser.employee_id,
+      requestId,
+      configId,
+      mimeType: file.type,
+      fileSize: file.size,
+    });
 
-    if (configError || !config) {
-      return NextResponse.json({ error: "Attachment config bulunamadı" }, { status: 404 });
-    }
-
-    // 3a. Dosya tipi kontrolü (null veya boş ise tüm tipler kabul edilir)
-    if (config.allowed_mime_types && config.allowed_mime_types.length > 0 && !config.allowed_mime_types.includes(file.type)) {
-      return NextResponse.json({
-        error: `Geçersiz dosya tipi. İzin verilen: ${config.allowed_mime_types.join(", ")}`,
-      }, { status: 400 });
-    }
-
-    // 3b. Dosya boyutu kontrolü
-    if (file.size > config.max_file_size_bytes) {
-      const maxMB = Math.round(config.max_file_size_bytes / 1048576);
-      return NextResponse.json({
-        error: `Dosya boyutu çok büyük. Maksimum: ${maxMB}MB`,
-      }, { status: 400 });
-    }
-
-    // 3c. Maksimum dosya sayısı kontrolü
-    const { data: existingFiles, error: countError } = await supabase
-      .from("request_attachments")
-      .select("id")
-      .eq("request_id", requestId)
-      .eq("step_attachment_config_id", configId);
-
-    if (countError) {
-      return NextResponse.json({ error: "Dosya sayısı kontrol edilemedi" }, { status: 500 });
-    }
-
-    if (existingFiles && existingFiles.length >= config.max_files) {
-      return NextResponse.json({
-        error: `Bu alan için maksimum ${config.max_files} dosya yüklenebilir`,
-      }, { status: 400 });
-    }
-
-    // 4. Yetki kontrolü - talep sahibi veya bekleyen onaycı mı?
-    const { data: requestData } = await supabase
-      .from("requests")
-      .select("requester_employee_id")
-      .eq("id", requestId)
-      .single();
-
-    const isRequester = requestData?.requester_employee_id === appUser.employee_id;
-
-    if (!isRequester) {
-      const { data: approval } = await supabase
-        .from("request_approvals")
-        .select("id")
-        .eq("request_id", requestId)
-        .eq("approver_employee_id", appUser.employee_id)
-        .eq("status", "PENDING");
-
-      if (!approval || approval.length === 0) {
-        return NextResponse.json({ error: "Bu talep için dosya yükleme yetkiniz yok" }, { status: 403 });
-      }
+    if (!validation.ok) {
+      return NextResponse.json({ error: validation.error }, { status: validation.status });
     }
 
     // 5. Storage'a yükle
-    const fileExt = file.name.split(".").pop() || "pdf";
-    const uniqueId = crypto.randomUUID().split("-")[0];
-    const sanitizedName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-    const storagePath = `${requestId}/${uniqueId}_${sanitizedName}`;
+    const storagePath = buildAttachmentStoragePath(requestId, file.name);
 
     const fileBuffer = Buffer.from(await file.arrayBuffer());
 
     const { error: uploadError } = await supabase.storage
-      .from("workflow-attachments")
+      .from(ATTACHMENTS_BUCKET)
       .upload(storagePath, fileBuffer, {
         contentType: file.type,
         upsert: false,
@@ -134,7 +87,7 @@ export async function POST(request: Request) {
 
     if (insertError) {
       // Veritabanı hatası - storage'dan da sil
-      await supabase.storage.from("workflow-attachments").remove([storagePath]);
+      await supabase.storage.from(ATTACHMENTS_BUCKET).remove([storagePath]);
       console.error("DB insert error:", insertError);
       return NextResponse.json({ error: "Dosya kaydedilemedi" }, { status: 500 });
     }
@@ -145,4 +98,3 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
-

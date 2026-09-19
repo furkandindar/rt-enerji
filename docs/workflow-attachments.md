@@ -263,6 +263,27 @@ Fields:
 }
 ```
 
+> **Boyut sınırı:** Bu rotada dosya Next rotasının gövdesinden geçer ve Vercel istek
+> sınırına (~4.5 MB) takılır — config 10 MB dese bile. Büyük dosya gereken yerlerde
+> aşağıdaki doğrudan-Storage akışı kullanılır.
+
+### 6.1b Doğrudan Storage'a yükleme: `upload-url` + `confirm` (2026-09-19)
+
+Kullananlar: Finans/Muhasebe onay kapağı yeni talep formları ve `<AttachmentUploader>`
+(istemci helper'ı: `lib/attachments/upload-attachment.ts`). Diğer yeni talep formları
+hâlâ 6.1'deki multipart rotasını kullanır.
+
+1. `POST /api/attachments/upload-url` — JSON `{ request_id, step_attachment_config_id, file_name, file_size, mime_type }`.
+   6.1 ile aynı validasyonlar (`lib/attachments/validate-upload.ts`) → `{ path, token }` (imzalı yükleme URL'i).
+2. Tarayıcı dosyayı `supabase.storage.uploadToSignedUrl(path, token, file)` ile doğrudan bucket'a yükler.
+   Bucket kendi sınırlarını uygular (25 MB, yalnız `application/pdf`).
+3. `POST /api/attachments/confirm` — JSON `{ request_id, step_attachment_config_id, file_path, file_name }`.
+   İstemcinin beyanına güvenilmez: Storage'daki nesnenin gerçek boyutu/türü okunur, kurallar tekrar
+   uygulanır; uymayan nesne silinir, uyan için `request_attachments` kaydı oluşturulur.
+
+Yeni talep formlarında dosya seçimi `components/pending-attachments-field.tsx` ile yapılır:
+adet/boyut/tür nedeniyle eklenemeyen dosyalar sessizce atılmaz, adlarıyla listelenir.
+
 ### 6.2 DELETE `/api/attachments/[id]`
 
 Yüklenen dosyayı siler.

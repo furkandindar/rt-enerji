@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import type { WorkflowStepAttachmentConfig, RequestAttachment } from "@/lib/workflow/types";
 import { PdfViewerDialog } from "@/components/pdf-viewer-dialog";
 import { openPdfPreview } from "@/lib/pdf/open-preview";
+import { uploadAttachment } from "@/lib/attachments/upload-attachment";
 
 interface AttachmentUploaderProps {
   requestId: string;
@@ -72,22 +73,7 @@ export function AttachmentUploader({
     // Upload
     setUploadingConfigId(configId);
     try {
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("request_id", requestId);
-      formData.append("step_attachment_config_id", configId);
-
-      const response = await fetch("/api/attachments/upload", {
-        method: "POST",
-        body: formData,
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "Dosya yüklenemedi");
-      }
-
-      const attachment: RequestAttachment = await response.json();
+      const attachment = await uploadAttachment({ file, requestId, configId });
       onUpload(attachment);
       toast.success("Dosya başarıyla yüklendi");
     } catch (error) {

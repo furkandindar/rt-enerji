@@ -6,9 +6,11 @@ import { useForm, useFieldArray, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
-import { Loader2, Banknote, Plus, Trash2, Upload, X, Info } from "lucide-react";
+import { Loader2, Banknote, Plus, Trash2, Info } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { SignaturePanel } from "@/components/signature-panel";
+import { PendingAttachmentsField, showFailedUploadsToast } from "@/components/pending-attachments-field";
+import { uploadPendingFiles } from "@/lib/attachments/upload-attachment";
 import { SignatureFont } from "@/lib/signature/types";
 import { UserMultiPicker, type UserMultiPickerEmployee } from "@/components/user-multi-picker";
 import { sumItemsByCurrency, joinCurrencyTotals } from "@/lib/currency";
@@ -137,7 +139,7 @@ export default function NewFinanceApprovalCoverPage() {
   const [attachmentLabel, setAttachmentLabel] = useState<string>("Ek Dosyalar");
   const [allowedMimeTypes, setAllowedMimeTypes] = useState<string[] | null>(null);
   const [maxFileSizeBytes, setMaxFileSizeBytes] = useState<number>(10485760);
-  const [maxFiles, setMaxFiles] = useState<number>(10);
+  const [maxFiles, setMaxFiles] = useState<number>(20);
 
   const form = useForm<FinanceCoverFormValues>({
     resolver: zodResolver(financeCoverSchema),
@@ -300,30 +302,6 @@ export default function NewFinanceApprovalCoverPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
-    const validFiles = files.filter((file) => {
-      if (allowedMimeTypes && !allowedMimeTypes.includes(file.type)) {
-        toast.error(`${file.name}: Desteklenmeyen dosya türü`);
-        return false;
-      }
-      if (file.size > maxFileSizeBytes) {
-        toast.error(`${file.name}: Dosya boyutu çok büyük (maks ${Math.round(maxFileSizeBytes / 1048576)} MB)`);
-        return false;
-      }
-      return true;
-    });
-    setPendingFiles((prev) => {
-      const combined = [...prev, ...validFiles];
-      return combined.slice(0, maxFiles);
-    });
-    e.target.value = "";
-  };
-
-  const removeFile = (index: number) => {
-    setPendingFiles((prev) => prev.filter((_, i) => i !== index));
-  };
-
   const addItemRow = () => {
     append({
       item_date: new Date().toISOString().split("T")[0],
@@ -397,22 +375,8 @@ export default function NewFinanceApprovalCoverPage() {
       const requestId: string = result.id;
 
       if (requestId && pendingFiles.length > 0) {
-        for (const file of pendingFiles) {
-          const formData = new FormData();
-          formData.append("file", file);
-          formData.append("request_id", requestId);
-          if (attachmentConfigId) {
-            formData.append("step_attachment_config_id", attachmentConfigId);
-          }
-          const uploadRes = await fetch("/api/attachments/upload", {
-            method: "POST",
-            body: formData,
-          });
-          if (!uploadRes.ok) {
-            console.error("Dosya yüklenemedi:", file.name);
-            toast.warning(`${file.name} yüklenemedi, talep yine de oluşturuldu`);
-          }
-        }
+        const failedUploads = await uploadPendingFiles(pendingFiles, requestId, attachmentConfigId);
+        showFailedUploadsToast(failedUploads);
       }
 
       toast.success("Onay kapağı talebi başarıyla oluşturuldu");
@@ -950,61 +914,13 @@ export default function NewFinanceApprovalCoverPage() {
                 </div>
 
                 {/* Dosya Yükleme */}
-                <div className="space-y-2">
-                  <Label className="text-sm">{attachmentLabel}</Label>
-                  {pendingFiles.length > 0 && (
-                    <ul className="space-y-1">
-                      {pendingFiles.map((file, index) => (
-                        <li
-                          key={`${file.name}-${index}`}
-                          className="flex items-center gap-2 rounded-md border bg-muted/30 px-2 py-1.5 text-sm"
-                        >
-                          <span className="flex-1 truncate">{file.name}</span>
-                          <span className="text-xs text-muted-foreground">
-                            {Math.round(file.size / 1024)} KB
-                          </span>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="h-6 w-6 text-destructive hover:text-destructive"
-                            onClick={() => removeFile(index)}
-                            disabled={isSubmitting}
-                            aria-label="Dosyayı kaldır"
-                          >
-                            <X className="h-3.5 w-3.5" />
-                          </Button>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                  {pendingFiles.length < maxFiles && (
-                    <div>
-                      <input
-                        id="finance-file-input"
-                        type="file"
-                        multiple
-                        accept={allowedMimeTypes && allowedMimeTypes.length > 0 ? allowedMimeTypes.join(",") : undefined}
-                        className="hidden"
-                        onChange={handleFileChange}
-                        disabled={isSubmitting}
-                      />
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => document.getElementById("finance-file-input")?.click()}
-                        disabled={isSubmitting}
-                      >
-                        <Upload className="mr-2 h-4 w-4" />
-                        Dosya Seç
-                      </Button>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Maksimum {maxFiles} dosya, her biri en fazla {Math.round(maxFileSizeBytes / 1048576)} MB.
-                      </p>
-                    </div>
-                  )}
-                </div>
+                <PendingAttachmentsField
+                  label={attachmentLabel}
+                  files={pendingFiles}
+                  onFilesChange={setPendingFiles}
+                  rules={{ allowedMimeTypes, maxFileSizeBytes, maxFiles }}
+                  disabled={isSubmitting}
+                />
               </section>
 
               {/* İmza Paneli */}
