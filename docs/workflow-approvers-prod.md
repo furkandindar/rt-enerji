@@ -10,7 +10,7 @@ Kaynak: Supabase `iiagqsbiexyukupkffwb` projesindeki `workflow_definitions`, `wo
 | Workflow | Kod | Adım Sayısı | Onay Zinciri |
 |---|---:|---:|---|
 | Fazla Mesai Onay Formu | `OVERTIME` | 2 | İK → Genel Müdür |
-| Harcama Formu | `EXPENSE_FORM` | 4 | Talep Eden → Birim Amiri → Muhasebe → Genel Müdür |
+| Harcama Formu | `EXPENSE_FORM` | 6 | Talep Eden → Muhasebe Uzmanı → İnsan Kaynakları Müdürü → Finans Müdürü → Muhasebe → Genel Müdür |
 | İşe Giriş Takip Formu | `EMPLOYEE_ONBOARDING` | 7 | İK → Genel Müdür → İK → Hukuk → İdari İşler → Asistan → Genel Müdür |
 | İşten Çıkış Takip Formu | `EMPLOYEE_SEPARATION` | 9 | İK → Genel Müdür → İK → Hukuk → Muhasebe → İdari İşler → İK Uzmanı → Asistan → Genel Müdür |
 | Kaşeli Belge Onayı | `STAMP_APPROVAL` | 3 | Talep Eden → Bölüm Müdürü → Genel Müdür |
@@ -33,9 +33,13 @@ Kaynak: Supabase `iiagqsbiexyukupkffwb` projesindeki `workflow_definitions`, `wo
 | Sıra | Adım | Tip | Pozisyon / Onaycı | Aktif kişi |
 |---:|---|---|---|---|
 | 1 | Talep Eden | `REQUESTER` | Talep/form oluşturan kullanıcı | Dinamik |
-| 2 | Birim Amiri | `UNIT_HEAD` | Talep sahibinin birim amiri | Dinamik |
-| 3 | Muhasebe | `STATIC_POSITION` | Muhasebe Müdürü (`M100`) | Sevda Çal |
-| 4 | Genel Müdür | `STATIC_POSITION` | Genel Müdür (`GM`) | Bekir Korkmaz |
+| 2 | Muhasebe Uzmanı | `STATIC_POSITION` | Muhasebe Uzman Yardımcısı (`M401`) | Uğur Emir Dabaz |
+| 3 | İnsan Kaynakları Müdürü | `STATIC_POSITION` | İnsan Kaynakları Şefi (`IK200`) | Halime Keskin |
+| 4 | Finans Müdürü | `STATIC_POSITION` | Finans Müdürü (`F100`) | Elvan Kavas |
+| 5 | Muhasebe | `STATIC_POSITION` | Muhasebe Müdürü (`M100`) | Sevda Çal |
+| 6 | Genel Müdür | `STATIC_POSITION` | Genel Müdür (`GM`) | Bekir Korkmaz |
+
+> 2026-09-19: Zincir 4 → 6 adıma genişletildi. Birim Amiri (`UNIT_HEAD`) adımı bilinçli olarak kaldırıldı; eski Birim Amiri satırı "Muhasebe Uzmanı" adımına dönüştürüldüğü için bu tarihten önceki taleplerde birim amiri onayı bu adım adıyla görünür.
 ### İşe Giriş Takip Formu (`EMPLOYEE_ONBOARDING`)
 | Sıra | Adım | Tip | Pozisyon / Onaycı | Aktif kişi |
 |---:|---|---|---|---|

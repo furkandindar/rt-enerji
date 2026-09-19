@@ -149,6 +149,9 @@ const formatAmount = (v: number | null | undefined): string => {
   return new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v);
 };
 
+// İmza ve ad-soyad hecelenmez ("Kork-maz" olmaz); sığmayan ad boşluktan kırılır.
+const noHyphenation = (word: string) => [word];
+
 const getRequesterPosition = (requester: PdfRequester | undefined): string => {
   if (!requester?.employee_positions) return '-';
   const primary = requester.employee_positions.find((ep) => ep.is_primary && !ep.end_date);
@@ -163,14 +166,6 @@ export const ExpenseFormPDFTemplate: React.FC<ExpenseFormPDFTemplateProps> = ({
   approvals,
   signatures = {},
 }) => {
-  const renderSignature = (employeeId: string, status?: string) => {
-    if (status === 'REJECTED') {
-      return <Text style={{ fontSize: 9, fontWeight: 700, color: '#DC2626' }}>Reddedildi</Text>;
-    }
-    const sig = signatures[employeeId];
-    if (sig) return <Text style={[styles.signatureText, { fontFamily: signatureFontMap[sig.font] }]}>{sig.text}</Text>;
-    return <Text style={styles.signaturePending}>İmza</Text>;
-  };
 
   const items = [...(expenseRequest.items || [])].sort(
     (a, b) => (a.row_order ?? 0) - (b.row_order ?? 0)
@@ -201,6 +196,31 @@ export const ExpenseFormPDFTemplate: React.FC<ExpenseFormPDFTemplateProps> = ({
       status: a.status,
     });
   });
+
+  // 5'ten fazla kolonda (6 adımlı zincir) kolon ~91pt'ye düşer: imza/başlık/ad
+  // küçültülür, başlık satırı iki satıra göre sabitlenir (kolonlar arası hiza).
+  const compact = approvalColumns.length > 5;
+  const titleRowStyle = compact ? [styles.onayTitleRow, { minHeight: 26 }] : styles.onayTitleRow;
+  const titleTextStyle = compact ? [styles.onayTitleText, { fontSize: 7 }] : styles.onayTitleText;
+  const nameTextStyle = compact ? [styles.onayNameText, { fontSize: 7 }] : styles.onayNameText;
+
+  const renderSignature = (employeeId: string, status?: string) => {
+    if (status === 'REJECTED') {
+      return <Text style={{ fontSize: 9, fontWeight: 700, color: '#DC2626' }}>Reddedildi</Text>;
+    }
+    const sig = signatures[employeeId];
+    if (sig) {
+      return (
+        <Text
+          style={[styles.signatureText, { fontFamily: signatureFontMap[sig.font] }, compact ? { fontSize: 11 } : {}]}
+          hyphenationCallback={noHyphenation}
+        >
+          {sig.text}
+        </Text>
+      );
+    }
+    return <Text style={styles.signaturePending}>İmza</Text>;
+  };
 
   const isTravel = expenseRequest.is_travel === true;
 
@@ -299,10 +319,10 @@ export const ExpenseFormPDFTemplate: React.FC<ExpenseFormPDFTemplateProps> = ({
         <View style={styles.onayContent}>
           {approvalColumns.map((col, index) => (
             <View key={index} style={index === approvalColumns.length - 1 ? styles.onayColumnLast : styles.onayColumn}>
-              <View style={styles.onayTitleRow}><Text style={styles.onayTitleText}>{col.title}</Text></View>
+              <View style={titleRowStyle}><Text style={titleTextStyle}>{col.title}</Text></View>
               <View style={styles.onaySignatureRow}>
                 {renderSignature(col.employeeId, col.status)}
-                <Text style={styles.onayNameText}>{col.name}</Text>
+                <Text style={nameTextStyle} hyphenationCallback={noHyphenation}>{col.name}</Text>
               </View>
               {col.note ? (
                 <View style={styles.onayNoteRow}><Text style={styles.onayNoteText}>{col.note}</Text></View>

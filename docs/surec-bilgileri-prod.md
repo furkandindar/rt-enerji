@@ -13,7 +13,7 @@ Sistemde tanımlı olan onay süreçleri ve her bir adımda görevli kişiler a�
 | Süreç | Adım Sayısı | Onay Zinciri |
 |---|---:|---|
 | Fazla Mesai Onay Formu | 2 | İnsan Kaynakları → Genel Müdür |
-| Harcama Formu | 4 | Talep Eden → Birim Amiri → Muhasebe → Genel Müdür |
+| Harcama Formu | 6 | Talep Eden → Muhasebe Uzmanı → İnsan Kaynakları Müdürü → Finans Müdürü → Muhasebe → Genel Müdür |
 | İşe Giriş Takip Formu | 7 | İK → Genel Müdür → İK → Hukuk → İdari İşler → Asistan → Genel Müdür |
 | İşten Çıkış Takip Formu | 9 | İK → Genel Müdür → İK → Hukuk → Muhasebe → İdari İşler → İK Uzmanı → Asistan → Genel Müdür |
 | Kaşeli Belge Onayı | 2 | Talep Eden → Genel Müdür |
@@ -39,9 +39,11 @@ Sistemde tanımlı olan onay süreçleri ve her bir adımda görevli kişiler a�
 | Sıra | Adım | Onaylayan Kişi |
 |---:|---|---|
 | 1 | Talep Eden | Talep eden kullanıcı |
-| 2 | Birim Amiri | Talep sahibinin birim amiri |
-| 3 | Muhasebe | Sevda Çal |
-| 4 | Genel Müdür | Bekir Korkmaz |
+| 2 | Muhasebe Uzmanı | Uğur Emir Dabaz |
+| 3 | İnsan Kaynakları Müdürü | Halime Keskin |
+| 4 | Finans Müdürü | Elvan Kavas |
+| 5 | Muhasebe | Sevda Çal |
+| 6 | Genel Müdür | Bekir Korkmaz |
 
 ### İşe Giriş Takip Formu
 | Sıra | Adım | Onaylayan Kişi |
