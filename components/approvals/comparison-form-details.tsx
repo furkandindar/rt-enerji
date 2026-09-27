@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, type ReactNode } from "react";
 import { format } from "date-fns";
 import { tr } from "date-fns/locale";
 import { Sigma } from "lucide-react";
@@ -8,6 +8,14 @@ import type { Approval, PendingApproval } from "@/lib/approvals/types";
 import type { PreviousStepAttachment } from "@/lib/workflow/types";
 import { ApprovalStatusBadge } from "./status-badge";
 import { AttachmentList } from "./attachment-list";
+import {
+  deriveMatrixTotals,
+  formatKdvRate,
+  kdvLabels,
+  MUKAYESE_CURRENCY_SYMBOL,
+  resolveRowPricing,
+} from "@/lib/comparison-form/matrix-totals";
+import { MoneyBagLines, TryAmount } from "@/components/comparison-form/money-bag-lines";
 
 type MukayeseDetail = NonNullable<PendingApproval["request"]["mukayese_request"]>;
 
@@ -17,7 +25,6 @@ interface ComparisonFormDetailsProps {
   previousStepAttachments?: PreviousStepAttachment[];
 }
 
-const CURRENCY_SYMBOL: Record<string, string> = { TRY: "₺", USD: "$", EUR: "€" };
 const UNIT_LABEL: Record<string, string> = { ADET: "Adet", SET: "Set", GUN: "Gün" };
 
 const moneyFmt = new Intl.NumberFormat("tr-TR", {
@@ -46,47 +53,28 @@ export function ComparisonFormDetails({ mukayese, approvals = [], previousStepAt
     return m;
   }, [mukayese.prices]);
 
-  const derived = useMemo(() => {
-    const blockSums: Record<string, number> = {};
-    for (const s of suppliers) blockSums[s.id] = 0;
-    const subtotalValues: Record<string, Record<string, number>> = {};
-    const minMaxByItem: Record<string, { min: number; max: number }> = {};
-    const columnTotalsExKdv: Record<string, number> = {};
-    for (const s of suppliers) columnTotalsExKdv[s.id] = 0;
+  const defaults = { currency: mukayese.form_currency, kdvRate: mukayese.kdv_rate };
+  const derived = useMemo(
+    () =>
+      deriveMatrixTotals(
+        items,
+        suppliers.map((s) => s.id),
+        priceMap,
+        { currency: mukayese.form_currency, kdvRate: mukayese.kdv_rate },
+        { usdTry: mukayese.fx_usd_try, eurTry: mukayese.fx_eur_try },
+      ),
+    [items, suppliers, priceMap, mukayese.form_currency, mukayese.kdv_rate, mukayese.fx_usd_try, mukayese.fx_eur_try],
+  );
+  const labels = kdvLabels(derived.kdvRates);
 
-    for (const it of items) {
-      if (it.row_type === "ITEM") {
-        const qty = typeof it.quantity === "number" ? it.quantity : Number(it.quantity) || 0;
-        const filled: number[] = [];
-        for (const s of suppliers) {
-          const up = priceMap[`${it.id}:${s.id}`];
-          if (typeof up === "number") {
-            blockSums[s.id] += qty * up;
-            columnTotalsExKdv[s.id] += qty * up;
-            filled.push(up);
-          }
-        }
-        if (filled.length >= 2) {
-          minMaxByItem[it.id] = { min: Math.min(...filled), max: Math.max(...filled) };
-        }
-      } else {
-        const row: Record<string, number> = {};
-        for (const s of suppliers) {
-          row[s.id] = blockSums[s.id];
-          blockSums[s.id] = 0;
-        }
-        subtotalValues[it.id] = row;
-      }
-    }
-
-    const kdvMul = 1 + (Number.isFinite(mukayese.kdv_rate) ? Number(mukayese.kdv_rate) : 0) / 100;
-    const columnTotalsIncKdv: Record<string, number> = {};
-    for (const s of suppliers) columnTotalsIncKdv[s.id] = columnTotalsExKdv[s.id] * kdvMul;
-
-    return { subtotalValues, minMaxByItem, columnTotalsExKdv, columnTotalsIncKdv };
-  }, [items, suppliers, priceMap, mukayese.kdv_rate]);
-
-  const symbol = CURRENCY_SYMBOL[mukayese.form_currency] || mukayese.form_currency;
+  // Başlık özeti: kalemlerde kullanılan para birimleri / KDV oranları
+  // (kalem yoksa form başlığındaki varsayılan)
+  const headerPricing = resolveRowPricing({}, defaults);
+  const usedCurrencies = derived.currencies.length > 0 ? derived.currencies : [headerPricing.currency];
+  const usedKdvRates = derived.kdvRates.length > 0 ? derived.kdvRates : [headerPricing.kdvRate];
+  const singleSymbol =
+    usedCurrencies.length === 1 ? MUKAYESE_CURRENCY_SYMBOL[usedCurrencies[0]] : null;
+  const priceHeaderSuffix = singleSymbol ? ` (${singleSymbol})` : "";
 
   const relatedApprovals = approvals
     .filter((a) => a.workflow_step?.approver_type === "DYNAMIC_USER_LIST")
@@ -108,7 +96,9 @@ export function ComparisonFormDetails({ mukayese, approvals = [], previousStepAt
         <div>
           <p className="text-sm font-medium text-muted-foreground">Para Birimi / KDV</p>
           <p className="text-sm font-semibold">
-            {mukayese.form_currency} ({symbol}) · KDV %{mukayese.kdv_rate}
+            {usedCurrencies.join(", ")}
+            {singleSymbol ? ` (${singleSymbol})` : ""} · KDV{" "}
+            {usedKdvRates.map((r) => `%${formatKdvRate(r)}`).join(", ")}
           </p>
         </div>
       </div>
@@ -144,7 +134,9 @@ export function ComparisonFormDetails({ mukayese, approvals = [], previousStepAt
       {/* Matris */}
       {items.length > 0 && suppliers.length > 0 && (
         <div className="border rounded-lg p-3 space-y-2">
-          <p className="text-sm font-semibold">Mukayese Matrisi ({symbol})</p>
+          <p className="text-sm font-semibold">
+            Mukayese Matrisi{singleSymbol ? ` (${singleSymbol})` : ""}
+          </p>
           <div className="overflow-x-auto">
             <table className="w-full text-xs border-separate border-spacing-0">
               <thead>
@@ -152,7 +144,8 @@ export function ComparisonFormDetails({ mukayese, approvals = [], previousStepAt
                   <th rowSpan={2} className="sticky left-0 z-20 w-8 min-w-8 border-b py-1.5 px-2 font-medium text-center bg-muted/40">#</th>
                   <th rowSpan={2} className="sticky left-8 z-20 w-[180px] min-w-[180px] border-b py-1.5 px-2 font-medium bg-muted/40">Mal / Hizmet</th>
                   <th rowSpan={2} className="sticky left-[212px] z-20 w-16 min-w-16 border-b py-1.5 px-2 font-medium text-right bg-muted/40">Miktar</th>
-                  <th rowSpan={2} className="sticky left-[276px] z-20 w-14 min-w-14 border-b border-r py-1.5 px-2 font-medium text-center bg-muted/40">Birim</th>
+                  <th rowSpan={2} className="sticky left-[276px] z-20 w-14 min-w-14 border-b py-1.5 px-2 font-medium text-center bg-muted/40">Birim</th>
+                  <th rowSpan={2} className="sticky left-[332px] z-20 w-20 min-w-20 border-b border-r py-1.5 px-2 font-medium text-center bg-muted/40">PB / KDV</th>
                   {suppliers.map((s) => (
                     <th key={s.id} colSpan={2} className="border-b border-l py-1.5 px-2 font-medium text-center bg-muted/40">
                       {s.company_name || "-"}
@@ -165,13 +158,13 @@ export function ComparisonFormDetails({ mukayese, approvals = [], previousStepAt
                       key={`${s.id}-bf`}
                       className="border-b border-l py-1 px-2 font-normal text-right text-[10px] text-muted-foreground min-w-[85px] bg-muted/40"
                     >
-                      Birim Fiyat ({symbol})
+                      Birim Fiyat{priceHeaderSuffix}
                     </th>,
                     <th
                       key={`${s.id}-tf`}
                       className="border-b border-l py-1 px-2 font-normal text-right text-[10px] text-muted-foreground min-w-[85px] bg-muted/40"
                     >
-                      Toplam Fiyat ({symbol})
+                      Toplam Fiyat{priceHeaderSuffix}
                     </th>,
                   ])}
                 </tr>
@@ -180,6 +173,7 @@ export function ComparisonFormDetails({ mukayese, approvals = [], previousStepAt
                 {items.map((it) => {
                   const isSub = it.row_type === "SUBTOTAL";
                   const minMax = derived.minMaxByItem[it.id];
+                  const pricing = derived.rowPricing[it.id];
                   const qty = typeof it.quantity === "number" ? it.quantity : Number(it.quantity) || 0;
                   const rowBg = isSub ? "bg-amber-50 dark:bg-amber-950/30 font-semibold" : "";
                   const stickyBg = isSub ? "bg-amber-50 dark:bg-amber-950/30" : "bg-background";
@@ -194,16 +188,18 @@ export function ComparisonFormDetails({ mukayese, approvals = [], previousStepAt
                       <td className={`sticky left-[212px] z-10 w-16 min-w-16 border-b py-1.5 px-2 text-right whitespace-nowrap ${stickyBg}`}>
                         {isSub ? "" : fmtMoney(it.quantity)}
                       </td>
-                      <td className={`sticky left-[276px] z-10 w-14 min-w-14 border-b border-r py-1.5 px-2 text-center ${stickyBg}`}>
+                      <td className={`sticky left-[276px] z-10 w-14 min-w-14 border-b py-1.5 px-2 text-center ${stickyBg}`}>
                         {isSub ? "" : (UNIT_LABEL[it.unit || ""] || it.unit || "")}
+                      </td>
+                      <td className={`sticky left-[332px] z-10 w-20 min-w-20 border-b border-r py-1.5 px-2 text-center whitespace-nowrap ${stickyBg}`}>
+                        {pricing ? `${pricing.currency} · %${formatKdvRate(pricing.kdvRate)}` : ""}
                       </td>
                       {suppliers.flatMap((s) => {
                         if (isSub) {
-                          const sub = derived.subtotalValues[it.id]?.[s.id] ?? 0;
                           return [
                             <td key={`${s.id}-bf`} className="border-b border-l py-1.5 px-2"></td>,
-                            <td key={`${s.id}-tf`} className="border-b border-l py-1.5 px-2 text-right whitespace-nowrap">
-                              {fmtMoney(sub)}
+                            <td key={`${s.id}-tf`} className="border-b border-l py-1.5 px-2 text-right">
+                              <MoneyBagLines bag={derived.subtotalValues[it.id]?.[s.id]} />
                             </td>,
                           ];
                         }
@@ -226,28 +222,25 @@ export function ComparisonFormDetails({ mukayese, approvals = [], previousStepAt
                     </tr>
                   );
                 })}
-                <tr className="font-semibold bg-muted/30">
-                  <td colSpan={4} className="sticky left-0 z-10 w-[332px] min-w-[332px] border-b border-r py-1.5 px-2 text-right bg-muted/30">
-                    TOPLAM (KDV Hariç)
-                  </td>
-                  {suppliers.flatMap((s) => [
-                    <td key={`${s.id}-bf`} className="border-b border-l py-1.5 px-2"></td>,
-                    <td key={`${s.id}-tf`} className="border-b border-l py-1.5 px-2 text-right whitespace-nowrap">
-                      {fmtMoney(derived.columnTotalsExKdv[s.id])}
-                    </td>,
-                  ])}
-                </tr>
-                <tr className="font-semibold bg-muted/30">
-                  <td colSpan={4} className="sticky left-0 z-10 w-[332px] min-w-[332px] border-b border-r py-1.5 px-2 text-right bg-muted/30">
-                    TOPLAM (KDV %{mukayese.kdv_rate} Dahil)
-                  </td>
-                  {suppliers.flatMap((s) => [
-                    <td key={`${s.id}-bf`} className="border-b border-l py-1.5 px-2"></td>,
-                    <td key={`${s.id}-tf`} className="border-b border-l py-1.5 px-2 text-right whitespace-nowrap">
-                      {fmtMoney(derived.columnTotalsIncKdv[s.id])}
-                    </td>,
-                  ])}
-                </tr>
+                <TotalRow label="TOPLAM (KDV Hariç)" suppliers={suppliers}>
+                  {(sid) => <MoneyBagLines bag={derived.columnTotalsExKdv[sid]} />}
+                </TotalRow>
+                <TotalRow label={labels.kdv} suppliers={suppliers} muted>
+                  {(sid) => <MoneyBagLines bag={derived.columnKdv[sid]} />}
+                </TotalRow>
+                <TotalRow label={`TOPLAM (${labels.incKdv})`} suppliers={suppliers}>
+                  {(sid) => <MoneyBagLines bag={derived.columnTotalsIncKdv[sid]} />}
+                </TotalRow>
+                {derived.tryEquivalent && (
+                  <>
+                    <TotalRow label="TL Karşılığı (KDV Hariç · TCMB)" suppliers={suppliers}>
+                      {(sid) => <TryAmount value={derived.tryEquivalent?.exKdv[sid]} />}
+                    </TotalRow>
+                    <TotalRow label="TL Karşılığı (KDV Dahil · TCMB)" suppliers={suppliers}>
+                      {(sid) => <TryAmount value={derived.tryEquivalent?.incKdv[sid]} />}
+                    </TotalRow>
+                  </>
+                )}
               </tbody>
             </table>
           </div>
@@ -351,5 +344,33 @@ export function ComparisonFormDetails({ mukayese, approvals = [], previousStepAt
       {/* Ek Dosyalar */}
       <AttachmentList attachments={previousStepAttachments} />
     </>
+  );
+}
+
+// Matris alt toplam satırı — etiket sticky, değer firma başına "Toplam Fiyat" hücresinde
+function TotalRow({
+  label,
+  suppliers,
+  muted = false,
+  children,
+}: {
+  label: string;
+  suppliers: Array<{ id: string }>;
+  muted?: boolean;
+  children: (supplierId: string) => ReactNode;
+}) {
+  const rowClass = muted ? "bg-muted/20" : "font-semibold bg-muted/30";
+  return (
+    <tr className={rowClass}>
+      <td colSpan={5} className={`sticky left-0 z-10 w-[412px] min-w-[412px] border-b border-r py-1.5 px-2 text-right ${muted ? "bg-muted/20" : "bg-muted/30"}`}>
+        {label}
+      </td>
+      {suppliers.flatMap((s) => [
+        <td key={`${s.id}-bf`} className="border-b border-l py-1.5 px-2"></td>,
+        <td key={`${s.id}-tf`} className="border-b border-l py-1.5 px-2 text-right">
+          {children(s.id)}
+        </td>,
+      ])}
+    </tr>
   );
 }

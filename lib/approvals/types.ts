@@ -322,6 +322,8 @@ export interface PendingApproval {
         description: string | null;
         quantity: number | null;
         unit: 'ADET' | 'SET' | 'GUN' | null;
+        currency?: 'TRY' | 'USD' | 'EUR' | null;
+        kdv_rate?: number | null;
       }>;
       suppliers?: Array<{
         id: string;

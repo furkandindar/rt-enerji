@@ -1,25 +1,77 @@
 -- ============================================================================
--- MUKAYESE FORMU - Atomik Talep Oluşturma RPC Fonksiyonu
+-- Mukayese Formu: para birimi ve KDV oranı satır (kalem) bazında
 -- ============================================================================
 --
--- Bağımlılık: comparison_form_schema.sql önce çalıştırılmış olmalı.
+-- Sorun (kullanıcı geri bildirimi, 2026-09-27):
+--   Para birimi ve KDV oranı mukayese_requests başlığında TEK değerdi; seçim
+--   tüm matrisi (her kalem, her toplam) değiştiriyordu. Farklı KDV'li kalemler
+--   aynı formda doğru toplanamıyordu (prod örneği: "Personel Kıyafeti" —
+--   kıyafet %10 + baskı/baret %20, kullanıcı tüm tabloya %10 seçmek zorunda
+--   kaldı ve bunu nota yazdı).
 --
--- Bu fonksiyon, mukayese formu talebi için 4 tabloya yazılan toplam
--- (1 + N items + M suppliers + N*M prices) INSERT işlemlerini TEK transaction
--- içinde atomik olarak yürütür. Herhangi bir hatada Postgres tüm değişiklikleri
--- otomatik rollback eder; backend tarafında manuel temizlik gerekmez.
+-- Çözüm:
+--   mukayese_items'a currency + kdv_rate (yalnız ITEM satırlarında dolu).
+--   mukayese_requests.form_currency / kdv_rate KALIR: artık "yeni satır
+--   varsayılanı" ve satırda değer yoksa fallback.
+--   Toplamlar para birimine göre ayrı hesaplanır; karışık para biriminde TL
+--   karşılığı mevcut FX snapshot'ı (fx_usd_try / fx_eur_try) ile gösterilir
+--   (uygulama katmanı, SQL değişikliği gerektirmez).
 --
--- Onay zinciri (request_approvals satırları) bu fonksiyonun KAPSAMI DIŞINDADIR.
--- Backend, dönen request_id ile lib/workflow/workflow-service.ts içindeki
--- createApprovalChain(...) fonksiyonunu çağırarak onay zincirini kurar.
--- createApprovalChain başarısız olursa backend tarafı `DELETE FROM requests
--- WHERE id = <returned_id>` ile temizlik yapar; ON DELETE CASCADE sayesinde
--- mukayese_* alt tabloları da otomatik silinir.
+-- Kolonlar nullable: eski kayıtlar ve deploy penceresinde eski kodun yazdığı
+-- satırlar NULL kalabilir; okuyan kod NULL'da başlık değerine düşer. RPC de
+-- satırda eksik alanı başlıktan doldurur.
 --
--- SECURITY INVOKER: Fonksiyon, çağıran kullanıcının yetkileriyle çalışır;
--- mevcut RLS politikaları geçerliliğini korur.
+-- Önce DEV, sonra PROD.
+-- Sıra: ÖNCE SQL, SONRA deploy. Tersi olursa yeni kod PATCH'te olmayan kolona
+-- yazmaya çalışır (Talebi Düzenle 500 verir) ve eski RPC satır seçimlerini
+-- sessizce yok sayar.
 -- ============================================================================
 
+BEGIN;
+
+-- ----------------------------------------------------------------------------
+-- 1. Kolonlar + kısıtlar
+-- ----------------------------------------------------------------------------
+ALTER TABLE public.mukayese_items
+  ADD COLUMN IF NOT EXISTS currency public.mukayese_currency,
+  ADD COLUMN IF NOT EXISTS kdv_rate NUMERIC(5,2);
+
+ALTER TABLE public.mukayese_items
+  DROP CONSTRAINT IF EXISTS mukayese_items_kdv_rate_range,
+  ADD CONSTRAINT mukayese_items_kdv_rate_range
+    CHECK (kdv_rate IS NULL OR (kdv_rate >= 0 AND kdv_rate <= 100));
+
+-- Ara toplam satırı fiyat taşımaz → para birimi / KDV de taşımaz
+ALTER TABLE public.mukayese_items
+  DROP CONSTRAINT IF EXISTS mukayese_items_subtotal_no_pricing,
+  ADD CONSTRAINT mukayese_items_subtotal_no_pricing
+    CHECK (row_type = 'ITEM' OR (currency IS NULL AND kdv_rate IS NULL));
+
+COMMENT ON COLUMN public.mukayese_items.currency IS
+  'Kalemin para birimi (satırdaki tüm firma fiyatları bu birimde). NULL → mukayese_requests.form_currency';
+COMMENT ON COLUMN public.mukayese_items.kdv_rate IS
+  'Kalemin KDV oranı (%). NULL → mukayese_requests.kdv_rate';
+COMMENT ON COLUMN public.mukayese_requests.form_currency IS
+  'Yeni kalem satırları için varsayılan para birimi; kalemde değer yoksa fallback';
+COMMENT ON COLUMN public.mukayese_requests.kdv_rate IS
+  'Yeni kalem satırları için varsayılan KDV oranı (%); kalemde değer yoksa fallback';
+
+-- ----------------------------------------------------------------------------
+-- 2. Backfill — mevcut ITEM satırları başlık değerini açıkça alır
+--    (görünen hiçbir sonuç değişmez; veri kendi kendini tarif eder hale gelir)
+-- ----------------------------------------------------------------------------
+UPDATE public.mukayese_items mi
+   SET currency = COALESCE(mi.currency, mr.form_currency),
+       kdv_rate = COALESCE(mi.kdv_rate, mr.kdv_rate)
+  FROM public.mukayese_requests mr
+ WHERE mr.id = mi.mukayese_request_id
+   AND mi.row_type = 'ITEM'
+   AND (mi.currency IS NULL OR mi.kdv_rate IS NULL);
+
+-- ----------------------------------------------------------------------------
+-- 3. RPC — tanım sql/comparison_form_rpc.sql ile birebir aynı; tek fark
+--    mukayese_items INSERT'ündeki currency + kdv_rate
+-- ----------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.create_mukayese_request(
   p_workflow_definition_id UUID,
   p_requester_employee_id  UUID,
@@ -98,7 +150,6 @@ BEGIN
   -- 3. mukayese_items (matris satırları)
   --    ITEM: para birimi / KDV satırdan; eksikse başlık varsayılanı
   --    SUBTOTAL: ikisi de NULL
-  --    (kolonlar: sql/feature_mukayese_row_currency_kdv.sql)
   -- ----------------------------------------------------------------
   INSERT INTO public.mukayese_items (
     mukayese_request_id, row_order, row_type, description, quantity, unit,
@@ -159,5 +210,18 @@ BEGIN
 END;
 $$;
 
-COMMENT ON FUNCTION public.create_mukayese_request(UUID, UUID, JSONB, JSONB, JSONB, JSONB) IS
-  'Mukayese Formu için atomik talep oluşturma. requests + mukayese_requests + mukayese_items + mukayese_suppliers + mukayese_prices tek transaction''da yazılır. Onay zinciri ayrıca backend tarafından createApprovalChain ile kurulur.';
+COMMIT;
+
+-- ----------------------------------------------------------------------------
+-- 4. Doğrulama (COMMIT sonrası ayrı çalıştırın)
+-- ----------------------------------------------------------------------------
+-- Beklenen: item_null_pricing = 0, subtotal_with_pricing = 0,
+--           fn_has_currency = true
+--
+-- SELECT
+--   (SELECT count(*) FROM public.mukayese_items
+--     WHERE row_type = 'ITEM' AND (currency IS NULL OR kdv_rate IS NULL)) AS item_null_pricing,
+--   (SELECT count(*) FROM public.mukayese_items
+--     WHERE row_type = 'SUBTOTAL' AND (currency IS NOT NULL OR kdv_rate IS NOT NULL)) AS subtotal_with_pricing,
+--   (SELECT pg_get_functiondef('public.create_mukayese_request(uuid,uuid,jsonb,jsonb,jsonb,jsonb)'::regprocedure)
+--       LIKE '%item->>''currency''%') AS fn_has_currency;

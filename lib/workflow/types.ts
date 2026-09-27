@@ -905,6 +905,9 @@ export interface MukayeseItem {
   description: string | null;
   quantity: number | null;
   unit: MukayeseUnit | null;
+  // Kalem bazında; NULL → mukayese_requests.form_currency / kdv_rate
+  currency: MukayeseCurrency | null;
+  kdv_rate: number | null;
   created_at: string;
 }
 
@@ -939,6 +942,9 @@ export interface CreateMukayeseItemInput {
   description?: string | null;
   quantity?: number | null;
   unit?: MukayeseUnit | null;
+  // Yalnız ITEM satırlarında; eksikse başlık varsayılanı yazılır
+  currency?: MukayeseCurrency | null;
+  kdv_rate?: number | null;
 }
 
 export interface CreateMukayeseSupplierInput {

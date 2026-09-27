@@ -129,6 +129,7 @@ export async function PATCH(
       }
 
       // 3. items insert + ID al
+      //    Para birimi / KDV yalnız ITEM satırında; eksikse başlık varsayılanı (RPC ile aynı)
       const itemsPayload = (body.items as CreateMukayeseItemInput[]).map(it => ({
         mukayese_request_id: mukayese.id,
         row_order: it.row_order,
@@ -136,6 +137,8 @@ export async function PATCH(
         description: it.description ?? null,
         quantity: it.quantity ?? null,
         unit: it.unit ?? null,
+        currency: it.row_type === "ITEM" ? (it.currency ?? body.form_currency ?? null) : null,
+        kdv_rate: it.row_type === "ITEM" ? (it.kdv_rate ?? body.kdv_rate ?? null) : null,
       }));
       const { data: insertedItems, error: insertItemsError } = await supabase
         .from("mukayese_items")

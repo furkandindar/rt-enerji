@@ -756,8 +756,10 @@ export type Database = {
       mukayese_items: {
         Row: {
           created_at: string
+          currency: Database["public"]["Enums"]["mukayese_currency"] | null
           description: string | null
           id: string
+          kdv_rate: number | null
           mukayese_request_id: string
           quantity: number | null
           row_order: number
@@ -766,8 +768,10 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          currency?: Database["public"]["Enums"]["mukayese_currency"] | null
           description?: string | null
           id?: string
+          kdv_rate?: number | null
           mukayese_request_id: string
           quantity?: number | null
           row_order: number
@@ -776,8 +780,10 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          currency?: Database["public"]["Enums"]["mukayese_currency"] | null
           description?: string | null
           id?: string
+          kdv_rate?: number | null
           mukayese_request_id?: string
           quantity?: number | null
           row_order?: number

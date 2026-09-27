@@ -1,8 +1,7 @@
 "use client";
 
-import { Fragment, useMemo } from "react";
+import { Fragment, useMemo, type ReactNode } from "react";
 import {
-  Plus,
   Trash2,
   ArrowUp,
   ArrowDown,
@@ -30,6 +29,16 @@ import {
 import { Label } from "@/components/ui/label";
 
 import type { MukayeseCurrency, MukayeseRowType, MukayeseUnit } from "@/lib/workflow/types";
+import {
+  deriveMatrixTotals,
+  isValidKdvRate,
+  kdvLabels,
+  MUKAYESE_CURRENCIES,
+  MUKAYESE_CURRENCY_SYMBOL,
+  type MatrixFx,
+  type MoneyBag,
+} from "@/lib/comparison-form/matrix-totals";
+import { MoneyBagLines, TryAmount } from "./money-bag-lines";
 
 // ----------------------------------------------------------------------------
 // Tipler — client-side matris state
@@ -41,6 +50,9 @@ export interface MatrixItem {
   description: string;
   quantity: number | null;
   unit: MukayeseUnit | null;
+  // Yalnız ITEM satırında dolu; satırdaki tüm firma fiyatları bu birimde
+  currency: MukayeseCurrency | null;
+  kdv_rate: number | null;
 }
 
 export interface MatrixSupplier {
@@ -63,8 +75,11 @@ export interface MatrixEditorProps {
   onSuppliersChange: (next: MatrixSupplier[]) => void;
   prices: MatrixPrices;
   onPricesChange: (next: MatrixPrices) => void;
-  currency: MukayeseCurrency;
-  kdvRate: number; // % — kolon toplamları için
+  // Yeni kalem satırlarının başlangıç değerleri (form başlığındaki varsayılanlar)
+  defaultCurrency: MukayeseCurrency;
+  defaultKdvRate: number;
+  // TCMB snapshot — karışık para biriminde TL karşılığı için
+  fx?: MatrixFx | null;
   disabled?: boolean;
 }
 
@@ -78,12 +93,6 @@ const UNIT_OPTIONS: { value: MukayeseUnit; label: string }[] = [
   { value: "GUN", label: "Gün" },
 ];
 
-const CURRENCY_SYMBOL: Record<MukayeseCurrency, string> = {
-  TRY: "₺",
-  USD: "$",
-  EUR: "€",
-};
-
 const newClientId = () =>
   typeof crypto !== "undefined" && "randomUUID" in crypto
     ? crypto.randomUUID()
@@ -96,13 +105,18 @@ const moneyFormatter = new Intl.NumberFormat("tr-TR", {
   maximumFractionDigits: 2,
 });
 
-// Boş yeni kalem satırı
-const blankItem = (row_type: MukayeseRowType): MatrixItem => ({
+// Boş yeni kalem satırı — para birimi / KDV başlıktaki varsayılandan başlar
+const blankItem = (
+  row_type: MukayeseRowType,
+  defaults: { currency: MukayeseCurrency; kdvRate: number },
+): MatrixItem => ({
   id: newClientId(),
   row_type,
   description: "",
   quantity: row_type === "ITEM" ? 1 : null,
   unit: row_type === "ITEM" ? "ADET" : null,
+  currency: row_type === "ITEM" ? defaults.currency : null,
+  kdv_rate: row_type === "ITEM" ? defaults.kdvRate : null,
 });
 
 // Boş yeni firma sütunu
@@ -127,12 +141,11 @@ export function MatrixEditor({
   onSuppliersChange,
   prices,
   onPricesChange,
-  currency,
-  kdvRate,
+  defaultCurrency,
+  defaultKdvRate,
+  fx,
   disabled = false,
 }: MatrixEditorProps) {
-  const symbol = CURRENCY_SYMBOL[currency];
-
   // İndeks bazlı sıra numarası — sadece ITEM satırlarını numaralandırırız
   const itemDisplayNumbers = useMemo(() => {
     const map = new Map<string, number>();
@@ -146,62 +159,26 @@ export function MatrixEditor({
     return map;
   }, [items]);
 
-  // -------- Türetilmiş değerler: SUBTOTAL, kolon toplamı, min/max --------
-  const derived = useMemo(() => {
-    // Her firma için bloklar arası akümülatör
-    const blockSums: Record<string, number> = {};
-    for (const s of suppliers) blockSums[s.id] = 0;
-
-    // itemId -> { supplierId -> blok toplamı } (yalnız SUBTOTAL satırlar için dolu)
-    const subtotalValues: Record<string, Record<string, number>> = {};
-    // itemId -> { min, max } (yalnız ITEM satırlar için dolu, dolu hücre sayısı >= 2 olduğunda)
-    const minMaxByItem: Record<string, { min: number; max: number }> = {};
-    // supplierId -> tüm ITEM line-total toplamı (KDV hariç genel toplam)
-    const columnTotalsExKdv: Record<string, number> = {};
-    for (const s of suppliers) columnTotalsExKdv[s.id] = 0;
-
-    for (const it of items) {
-      if (it.row_type === "ITEM") {
-        const qty = typeof it.quantity === "number" ? it.quantity : 0;
-        const lineTotalsForRow: number[] = [];
-        for (const s of suppliers) {
-          const up = prices[cellKey(it.id, s.id)];
-          if (typeof up === "number") {
-            const lineTotal = qty * up;
-            blockSums[s.id] += lineTotal;
-            columnTotalsExKdv[s.id] += lineTotal;
-            lineTotalsForRow.push(up); // min/max birim fiyat üstünden hesaplanır
-          }
-        }
-        if (lineTotalsForRow.length >= 2) {
-          minMaxByItem[it.id] = {
-            min: Math.min(...lineTotalsForRow),
-            max: Math.max(...lineTotalsForRow),
-          };
-        }
-      } else {
-        // SUBTOTAL — biriken blok toplamlarını yaz, sonra resetle
-        const row: Record<string, number> = {};
-        for (const s of suppliers) {
-          row[s.id] = blockSums[s.id];
-          blockSums[s.id] = 0;
-        }
-        subtotalValues[it.id] = row;
-      }
-    }
-
-    const kdvMultiplier = 1 + (Number.isFinite(kdvRate) ? kdvRate : 0) / 100;
-    const columnTotalsIncKdv: Record<string, number> = {};
-    for (const s of suppliers) {
-      columnTotalsIncKdv[s.id] = columnTotalsExKdv[s.id] * kdvMultiplier;
-    }
-
-    return { subtotalValues, minMaxByItem, columnTotalsExKdv, columnTotalsIncKdv };
-  }, [items, suppliers, prices, kdvRate]);
+  // -------- Türetilmiş değerler: SUBTOTAL, kolon toplamları, min/max --------
+  const derived = useMemo(
+    () =>
+      deriveMatrixTotals(
+        items,
+        suppliers.map((s) => s.id),
+        prices,
+        { currency: defaultCurrency, kdvRate: defaultKdvRate },
+        fx,
+      ),
+    [items, suppliers, prices, defaultCurrency, defaultKdvRate, fx],
+  );
+  const labels = kdvLabels(derived.kdvRates);
 
   // -------- Item handlers --------
   const addItemRow = (row_type: MukayeseRowType) => {
-    onItemsChange([...items, blankItem(row_type)]);
+    onItemsChange([
+      ...items,
+      blankItem(row_type, { currency: defaultCurrency, kdvRate: defaultKdvRate }),
+    ]);
   };
 
   const updateItem = (id: string, patch: Partial<MatrixItem>) => {
@@ -339,6 +316,19 @@ export function MatrixEditor({
                 >
                   Birim
                 </th>
+                <th
+                  rowSpan={2}
+                  className="w-[92px] min-w-[92px] border-b border-r px-2 py-2 text-left font-medium"
+                  title="Kalemin para birimi — satırdaki tüm firma fiyatları bu birimde girilir"
+                >
+                  Para Birimi
+                </th>
+                <th
+                  rowSpan={2}
+                  className="w-[96px] min-w-[96px] border-b border-r px-2 py-2 text-left font-medium"
+                >
+                  KDV (%)
+                </th>
                 {suppliers.map((s, sIdx) => (
                   <th
                     key={s.id}
@@ -386,7 +376,9 @@ export function MatrixEditor({
                   displayNumber={itemDisplayNumbers.get(it.id)}
                   suppliers={suppliers}
                   prices={prices}
-                  currency={symbol}
+                  currency={
+                    MUKAYESE_CURRENCY_SYMBOL[derived.rowPricing[it.id]?.currency ?? defaultCurrency]
+                  }
                   disabled={disabled}
                   subtotalValues={derived.subtotalValues[it.id]}
                   minMax={derived.minMaxByItem[it.id]}
@@ -399,50 +391,94 @@ export function MatrixEditor({
             </tbody>
             {suppliers.length > 0 && (
               <tfoot>
-                <tr className="bg-muted/40 font-medium">
-                  <td
-                    colSpan={4}
-                    className="sticky left-0 z-10 border-t border-r bg-muted/40 px-2 py-2 text-right text-xs uppercase tracking-wide text-muted-foreground"
-                  >
-                    Toplam (KDV Hariç)
-                  </td>
-                  {suppliers.map((s) => (
-                    <td
-                      key={s.id}
-                      colSpan={2}
-                      className="border-t border-r px-2 py-2 text-right tabular-nums"
-                    >
-                      {moneyFormatter.format(derived.columnTotalsExKdv[s.id] ?? 0)}{" "}
-                      <span className="text-xs text-muted-foreground">{symbol}</span>
-                    </td>
-                  ))}
-                  <td className="border-t" />
-                </tr>
-                <tr className="bg-muted/60 font-semibold">
-                  <td
-                    colSpan={4}
-                    className="sticky left-0 z-10 border-t border-r bg-muted/60 px-2 py-2 text-right text-xs uppercase tracking-wide text-muted-foreground"
-                  >
-                    Toplam (KDV Dahil · %{Number.isFinite(kdvRate) ? kdvRate : 0})
-                  </td>
-                  {suppliers.map((s) => (
-                    <td
-                      key={s.id}
-                      colSpan={2}
-                      className="border-t border-r px-2 py-2 text-right tabular-nums"
-                    >
-                      {moneyFormatter.format(derived.columnTotalsIncKdv[s.id] ?? 0)}{" "}
-                      <span className="text-xs text-muted-foreground">{symbol}</span>
-                    </td>
-                  ))}
-                  <td className="border-t" />
-                </tr>
+                <FooterRow
+                  label="Toplam (KDV Hariç)"
+                  rowClass="bg-muted/40 font-medium"
+                  stickyBg="bg-muted/40"
+                  suppliers={suppliers}
+                  render={(sid) => <MoneyBagLines bag={derived.columnTotalsExKdv[sid]} />}
+                />
+                <FooterRow
+                  label={labels.kdv}
+                  rowClass="bg-muted/30"
+                  stickyBg="bg-muted/30"
+                  suppliers={suppliers}
+                  render={(sid) => <MoneyBagLines bag={derived.columnKdv[sid]} />}
+                />
+                <FooterRow
+                  label={`Toplam (${labels.incKdv})`}
+                  rowClass="bg-muted/60 font-semibold"
+                  stickyBg="bg-muted/60"
+                  suppliers={suppliers}
+                  render={(sid) => <MoneyBagLines bag={derived.columnTotalsIncKdv[sid]} />}
+                />
+                {derived.tryEquivalent && (
+                  <>
+                    <FooterRow
+                      label="TL Karşılığı (KDV Hariç · TCMB)"
+                      rowClass="bg-sky-50/60 font-medium dark:bg-sky-950/20"
+                      stickyBg="bg-sky-50 dark:bg-sky-950/40"
+                      suppliers={suppliers}
+                      render={(sid) => <TryAmount value={derived.tryEquivalent?.exKdv[sid]} />}
+                    />
+                    <FooterRow
+                      label="TL Karşılığı (KDV Dahil · TCMB)"
+                      rowClass="bg-sky-50/60 font-semibold dark:bg-sky-950/20"
+                      stickyBg="bg-sky-50 dark:bg-sky-950/40"
+                      suppliers={suppliers}
+                      render={(sid) => <TryAmount value={derived.tryEquivalent?.incKdv[sid]} />}
+                    />
+                  </>
+                )}
               </tfoot>
             )}
           </table>
         </div>
       )}
+
+      {derived.isMixedCurrency && !fx && (
+        <p className="text-xs text-destructive">
+          Formda birden fazla para birimi var ancak TCMB kurları alınamadı; TL karşılığı
+          hesaplanamıyor.
+        </p>
+      )}
     </div>
+  );
+}
+
+// ----------------------------------------------------------------------------
+// FooterRow — firma bazında toplam satırı (etiket sticky, PB/KDV kolonları boş)
+// ----------------------------------------------------------------------------
+
+function FooterRow({
+  label,
+  rowClass,
+  stickyBg,
+  suppliers,
+  render,
+}: {
+  label: string;
+  rowClass: string;
+  stickyBg: string;
+  suppliers: MatrixSupplier[];
+  render: (supplierId: string) => ReactNode;
+}) {
+  return (
+    <tr className={rowClass}>
+      <td
+        colSpan={4}
+        className={`sticky left-0 z-10 border-t border-r px-2 py-2 text-right text-xs uppercase tracking-wide text-muted-foreground ${stickyBg}`}
+      >
+        {label}
+      </td>
+      <td colSpan={2} className="border-t border-r" />
+      {suppliers.map((s) => (
+        <td key={s.id} colSpan={2} className="border-t border-r px-2 py-2 text-right tabular-nums">
+          {render(s.id)}
+        </td>
+      ))}
+      <td className="border-t" />
+    </tr>
   );
 }
 
@@ -596,7 +632,7 @@ interface ItemRowProps {
   prices: MatrixPrices;
   currency: string;
   disabled?: boolean;
-  subtotalValues?: Record<string, number>;
+  subtotalValues?: Record<string, MoneyBag>;
   minMax?: { min: number; max: number };
   onChange: (patch: Partial<MatrixItem>) => void;
   onRemove: () => void;
@@ -674,17 +710,52 @@ function ItemRow({
           </SelectContent>
         </Select>
       </td>
+      <td className="w-[92px] min-w-[92px] border-b border-r px-2 py-1.5">
+        <Select
+          value={item.currency ?? undefined}
+          onValueChange={(v) => onChange({ currency: v as MukayeseCurrency })}
+          disabled={disabled || isSubtotal}
+        >
+          <SelectTrigger className="h-8">
+            <SelectValue placeholder="—" />
+          </SelectTrigger>
+          <SelectContent>
+            {MUKAYESE_CURRENCIES.map((c) => (
+              <SelectItem key={c} value={c}>
+                {c} ({MUKAYESE_CURRENCY_SYMBOL[c]})
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </td>
+      <td className="w-[96px] min-w-[96px] border-b border-r px-2 py-1.5">
+        {/* Serbest oran (0–100); boş / aralık dışı gönderimde engellenir */}
+        <Input
+          type="number"
+          step="0.01"
+          min="0"
+          max="100"
+          value={isSubtotal ? "" : (item.kdv_rate ?? "")}
+          onChange={(e) => {
+            const v = e.target.value;
+            onChange({ kdv_rate: v === "" ? null : Number(v) });
+          }}
+          disabled={disabled || isSubtotal}
+          aria-invalid={!isSubtotal && !isValidKdvRate(item.kdv_rate)}
+          className={`h-8 w-full text-right tabular-nums ${
+            !isSubtotal && !isValidKdvRate(item.kdv_rate) ? "border-destructive" : ""
+          }`}
+        />
+      </td>
       {suppliers.map((s) => {
         if (isSubtotal) {
-          const sub = subtotalValues?.[s.id] ?? 0;
           return (
             <td
               key={s.id}
               colSpan={2}
               className="w-60 min-w-60 border-b border-r px-2 py-1.5 text-right tabular-nums font-semibold"
             >
-              {moneyFormatter.format(sub)}{" "}
-              <span className="text-xs font-normal text-muted-foreground">{currency}</span>
+              <MoneyBagLines bag={subtotalValues?.[s.id]} />
             </td>
           );
         }

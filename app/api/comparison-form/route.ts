@@ -251,6 +251,13 @@ function validateMatrix(body: CreateMukayeseInput): string | null {
       if (!it.description?.trim()) return `Satır ${i + 1}: açıklama gerekli`;
       if (typeof it.quantity !== 'number' || it.quantity <= 0) return `Satır ${i + 1}: geçerli bir miktar girin`;
       if (!it.unit || !UNITS.includes(it.unit)) return `Satır ${i + 1}: geçerli bir birim seçin`;
+      // Para birimi / KDV satır bazında; gönderilmezse RPC başlık varsayılanını yazar
+      if (it.currency != null && !CURRENCIES.includes(it.currency)) {
+        return `Satır ${i + 1}: geçersiz para birimi`;
+      }
+      if (it.kdv_rate != null && (typeof it.kdv_rate !== 'number' || it.kdv_rate < 0 || it.kdv_rate > 100)) {
+        return `Satır ${i + 1}: KDV oranı 0–100 arasında olmalı`;
+      }
     }
   }
   if (!hasItemRow) return "En az bir ürün satırı (ITEM) gerekli";

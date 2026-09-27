@@ -1,15 +1,15 @@
 # Mukayese Formu Süreci
 
 > **Workflow Code:** `COMPARISON_FORM`
-> **Versiyon:** 1.1
-> **Tarih:** 2026-04-26
+> **Versiyon:** 1.2
+> **Tarih:** 2026-09-27 (1.2: para birimi + KDV kalem bazına taşındı)
 > **Durum:** Faz 1–4 tamamlandı, end-to-end test bekleniyor
 
 ---
 
 ## 1. Genel Bakış
 
-Mukayese Formu, bir proje veya talep için birden fazla tedarikçiden alınan tekliflerin **matris formatında** karşılaştırılmasını sağlayan süreçtir. Talep eden, satır olarak mal/hizmet kalemlerini, sütun olarak da firma tekliflerini girer; her hücreye o firma için birim fiyat yazar. Form genelinde tek bir para birimi seçilir (TRY/USD/EUR) ve oluşturma anındaki TCMB pariteleri form üzerinde snapshot olarak saklanır.
+Mukayese Formu, bir proje veya talep için birden fazla tedarikçiden alınan tekliflerin **matris formatında** karşılaştırılmasını sağlayan süreçtir. Talep eden, satır olarak mal/hizmet kalemlerini, sütun olarak da firma tekliflerini girer; her hücreye o firma için birim fiyat yazar. Para birimi (TRY/USD/EUR) ve KDV oranı **her kalem satırında ayrı** seçilir; bir satırdaki tüm firma fiyatları o satırın biriminde girilir. Oluşturma anındaki TCMB pariteleri form üzerinde snapshot olarak saklanır ve formda birden fazla para birimi varsa firma toplamlarının TL karşılığı bu kurlarla hesaplanır.
 
 Süreç 4 adımdan oluşur. İlk 3 adım (Talep Eden, Birim Müdürü, Genel Koordinatör) standart `APPROVAL` fazındadır. Son adım, **Yönetim Kurulu Başkanı (YKB) sistemi kullanmadığı için** `COMPLETION` fazına alınmıştır: Genel Koordinatör onayından sonra talep `AWAITING_COMPLETION` durumuna geçer; **YKB Asistanı** formun çıktısını alıp YKB'ye fiziksel olarak imzalattıktan sonra taranmış imzalı PDF'i sisteme yükler ve süreç `COMPLETED` durumuna geçer.
 
@@ -22,7 +22,7 @@ Süreç 4 adımdan oluşur. İlk 3 adım (Talep Eden, Birim Müdürü, Genel Koo
 | Toplam Adım | 4 |
 | Form Dolduran | 1. adım (matris) + 4. adım (imzalı PDF) |
 | Çok Fazlı (V4) | ✅ Evet (`APPROVAL` + `COMPLETION`) |
-| Para Birimi | Form genelinde tek seçim (TRY/USD/EUR) |
+| Para Birimi / KDV | Kalem (satır) bazında; başlıktaki seçim yeni satırların varsayılanı |
 | FX Snapshot | Oluşturma anında TCMB'den çekilir |
 
 ---
@@ -35,7 +35,7 @@ Süreç 4 adımdan oluşur. İlk 3 adım (Talep Eden, Birim Müdürü, Genel Koo
 |-------|------|-----|----------|
 | Sol Üst | Proje / Başlık | TEXT | Mukayesenin hangi proje için yapıldığı |
 | Sol Üst | EUR/TRY, USD/TRY, EUR/USD | NUMERIC | TCMB'den çekilen anlık pariteler (snapshot) |
-| Sol Üst | Form Para Birimi | ENUM | TRY / USD / EUR — tüm fiyatlar bu birimde girilir |
+| Sol Üst | Varsayılan Para Birimi | ENUM | TRY / USD / EUR — yeni eklenen kalemin başlangıç değeri; satırda değer yoksa (eski kayıt) fallback |
 | Sağ Üst | Form Tarihi | DATE | Default `CURRENT_DATE` |
 | Sağ Üst | Düzenleyen | TEXT | Formu düzenleyen kişinin adı |
 | Sağ Üst | Açıklama / Notlar | TEXT | Serbest metin |
@@ -43,7 +43,7 @@ Süreç 4 adımdan oluşur. İlk 3 adım (Talep Eden, Birim Müdürü, Genel Koo
 ### 2.2 Matris (Satırlar × Sütunlar)
 
 **Satırlar (`mukayese_items`):** Her satır bir mal/hizmet kalemini temsil eder.
-- `row_type = ITEM` → `description`, `quantity`, `unit (ADET/SET/GUN)` zorunlu
+- `row_type = ITEM` → `description`, `quantity`, `unit (ADET/SET/GUN)` zorunlu; `currency` + `kdv_rate` satırın para birimi ve KDV oranı (NULL → başlıktaki `form_currency` / `kdv_rate`)
 - `row_type = SUBTOTAL` → "Ara Toplam" satırı; bu satıra ait fiyat kaydı oluşturulmaz, runtime'da bir önceki ara toplamdan sonraki `ITEM` satırlarının toplamı hesaplanır
 - Bir formda birden fazla `SUBTOTAL` satırı olabilir
 - `SUBTOTAL` satırlarında, 2'den fazla firma varsa: en düşük toplama sahip firma yeşil, en yüksek toplama sahip firma kırmızı olarak gösterilir (UI/PDF tarafında)
@@ -56,9 +56,13 @@ Süreç 4 adımdan oluşur. İlk 3 adım (Talep Eden, Birim Müdürü, Genel Koo
 
 ### 2.3 Tablo Altı Özet
 
-- KDV'siz Toplam Tutar: runtime hesaplanır
-- KDV Oranı: `kdv_rate` (default `20.00`, kullanıcı değiştirebilir)
-- KDV Dahil Toplam Tutar: runtime hesaplanır
+Hesaplar tek yerde: [`lib/comparison-form/matrix-totals.ts`](../../lib/comparison-form/matrix-totals.ts) (editör, onay detayı ve PDF aynı fonksiyonu kullanır). Firma başına, **para birimine göre ayrı**:
+
+- KDV'siz Toplam Tutar
+- KDV tutarı — her satır kendi `kdv_rate`'i ile
+- KDV Dahil Toplam Tutar
+- Formda birden fazla para birimi varsa: TL karşılığı (KDV hariç + dahil), `fx_usd_try` / `fx_eur_try` snapshot'ı ile
+- Başlıktaki `kdv_rate` (default `20.00`) yalnız yeni satırların varsayılanıdır
 
 ### 2.4 Footer (Hazırlayan Bilgileri)
 
@@ -105,7 +109,8 @@ requests (1) ──┬─ (1) mukayese_requests
 - `mukayese_items`: `row_type = ITEM` ise `description/quantity/unit` zorunlu; `SUBTOTAL` ise null olmalı
 - `mukayese_prices`: yalnızca `ITEM` satırları için kayıt oluşturulur (uygulama katmanında doğrulanır)
 - `mukayese_requests.fx_*` alanları snapshot'tır; sonradan değişmez
-- `kdv_rate` 0–100 arası olmalı
+- `kdv_rate` 0–100 arası olmalı (başlıkta ve satırda)
+- `SUBTOTAL` satırında `currency` / `kdv_rate` NULL olmalı (bkz. [`sql/feature_mukayese_row_currency_kdv.sql`](../../sql/feature_mukayese_row_currency_kdv.sql))
 
 ---
 

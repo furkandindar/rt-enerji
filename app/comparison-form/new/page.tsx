@@ -13,6 +13,11 @@ import { SignaturePanel } from "@/components/signature-panel";
 import { SignatureFont } from "@/lib/signature/types";
 import type { FxRatesResponse } from "@/app/api/fx-rates/route";
 import {
+  DEFAULT_KDV_RATE,
+  isValidKdvRate,
+  resolveRowPricing,
+} from "@/lib/comparison-form/matrix-totals";
+import {
   MatrixEditor,
   cellKey,
   type MatrixItem,
@@ -60,7 +65,8 @@ const headerSchema = z.object({
   request_reason: z.string().min(1, "Talep gerekçesi gerekli"),
   kdv_rate: z
     .union([z.string(), z.number()])
-    .transform((v) => Number(v))
+    // Boş alan 0 sayılmasın → NaN → refine hatası
+    .transform((v) => (v === "" ? NaN : Number(v)))
     .refine((v) => !isNaN(v) && v >= 0 && v <= 100, "KDV oranı 0–100 arasında olmalı"),
   notes: z.string().optional(),
 });
@@ -88,84 +94,6 @@ const parityFormatter = new Intl.NumberFormat("tr-TR", {
   minimumFractionDigits: 4,
   maximumFractionDigits: 4,
 });
-
-// ============================================================================
-// Test seed — placeholder verilerle hızlı form oluşturma (geliştirme/test için)
-// ============================================================================
-
-const localId = () =>
-  typeof crypto !== "undefined" && "randomUUID" in crypto
-    ? crypto.randomUUID()
-    : `c_${Math.random().toString(36).slice(2)}_${Date.now()}`;
-
-const SEED_SUPPLIERS_DATA = [
-  { name: "Alfa Elektrik San. A.Ş.", payment: "30 gün vadeli", delivery: "15 iş günü", tech: "TS EN 60076-1 uyumlu", contact: "Mehmet Yılmaz", phone: "0532 111 22 33" },
-  { name: "Beta Trafo Ltd. Şti.", payment: "Peşin %5 iskonto", delivery: "20 iş günü", tech: "IEC 60076-2 uyumlu", contact: "Ayşe Demir", phone: "0533 222 33 44" },
-  { name: "Gamma Endüstri A.Ş.", payment: "60 gün vadeli", delivery: "10 iş günü", tech: "TS EN 60076-3 uyumlu", contact: "Ali Kaya", phone: "0534 333 44 55" },
-  { name: "Delta Enerji San. ve Tic.", payment: "30 gün vadeli", delivery: "25 iş günü", tech: "IEC 60076-7 uyumlu", contact: "Fatma Şahin", phone: "0535 444 55 66" },
-  { name: "Epsilon Elektromekanik", payment: "45 gün vadeli", delivery: "18 iş günü", tech: "TS EN 60076-11 uyumlu", contact: "Hasan Çelik", phone: "0536 555 66 77" },
-  { name: "Zeta Power Sistemleri", payment: "Peşin", delivery: "12 iş günü", tech: "IEC 60076-16 uyumlu", contact: "Zeynep Arslan", phone: "0537 666 77 88" },
-];
-
-type SeedItem = {
-  type: "ITEM" | "SUBTOTAL";
-  desc: string;
-  qty?: number;
-  unit?: "ADET" | "SET" | "GUN";
-  basePrice?: number;
-};
-
-const SEED_ITEMS_DATA: SeedItem[] = [
-  { type: "ITEM", desc: "Trafo 1600 kVA 33/0.4 kV ONAN", qty: 4, unit: "ADET", basePrice: 850000 },
-  { type: "ITEM", desc: "Trafo aksesuar seti (silikajel, termometre, buchholz)", qty: 4, unit: "SET", basePrice: 12500 },
-  { type: "ITEM", desc: "Topraklama bara seti 60x10 mm", qty: 8, unit: "ADET", basePrice: 8200 },
-  { type: "ITEM", desc: "Trafo bağlantı kablosu 4x240 mm² XLPE", qty: 240, unit: "ADET", basePrice: 1850 },
-  { type: "ITEM", desc: "Yağ tahliye sistemi", qty: 4, unit: "SET", basePrice: 18500 },
-  { type: "SUBTOTAL", desc: "Trafo grubu ara toplam" },
-  { type: "ITEM", desc: "OG hücresi 36 kV vakumlu kesicili", qty: 6, unit: "ADET", basePrice: 165000 },
-  { type: "ITEM", desc: "OG akım trafosu 50/5 A 5P20", qty: 18, unit: "ADET", basePrice: 4200 },
-  { type: "ITEM", desc: "OG gerilim trafosu 36/0.1 kV", qty: 6, unit: "ADET", basePrice: 5800 },
-  { type: "ITEM", desc: "Koruma rölesi (mesafe + diferansiyel)", qty: 6, unit: "ADET", basePrice: 22000 },
-  { type: "ITEM", desc: "OG bara sistemi 1250 A", qty: 1, unit: "SET", basePrice: 95000 },
-  { type: "SUBTOTAL", desc: "OG hücre grubu ara toplam" },
-  { type: "ITEM", desc: "Devreye alma ve test mühendisliği", qty: 15, unit: "GUN", basePrice: 8500 },
-  { type: "ITEM", desc: "Yerinde montaj işçiliği", qty: 30, unit: "GUN", basePrice: 5200 },
-  { type: "ITEM", desc: "Nakliye ve sigorta", qty: 1, unit: "SET", basePrice: 45000 },
-  { type: "ITEM", desc: "Eğitim ve dokümantasyon", qty: 1, unit: "SET", basePrice: 12000 },
-  { type: "ITEM", desc: "1 yıl garanti dışı bakım rezervi", qty: 4, unit: "GUN", basePrice: 7500 },
-  { type: "SUBTOTAL", desc: "Hizmet grubu ara toplam" },
-];
-
-const SUPPLIER_MULT = [0.92, 0.97, 1.0, 1.05, 1.1, 1.15];
-
-function seedMatrix(): { items: MatrixItem[]; suppliers: MatrixSupplier[]; prices: MatrixPrices } {
-  const suppliers: MatrixSupplier[] = SEED_SUPPLIERS_DATA.map((s) => ({
-    id: localId(),
-    company_name: s.name,
-    payment_terms: s.payment,
-    delivery_time: s.delivery,
-    technical_description: s.tech,
-    contact_name: s.contact,
-    contact_phone: s.phone,
-  }));
-  const items: MatrixItem[] = SEED_ITEMS_DATA.map((it) => ({
-    id: localId(),
-    row_type: it.type,
-    description: it.desc,
-    quantity: it.type === "ITEM" ? (it.qty ?? 1) : null,
-    unit: it.type === "ITEM" ? (it.unit ?? "ADET") : null,
-  }));
-  const prices: MatrixPrices = {};
-  SEED_ITEMS_DATA.forEach((seed, idx) => {
-    if (seed.type !== "ITEM" || !seed.basePrice) return;
-    suppliers.forEach((sup, sIdx) => {
-      const variation = Math.sin(idx * 1.7 + sIdx * 0.9) * 0.04; // ±4% varyans
-      const price = Math.round(seed.basePrice! * SUPPLIER_MULT[sIdx] * (1 + variation));
-      prices[cellKey(items[idx].id, sup.id)] = price;
-    });
-  });
-  return { items, suppliers, prices };
-}
 
 export default function NewComparisonFormPage() {
   const router = useRouter();
@@ -200,29 +128,25 @@ export default function NewComparisonFormPage() {
   const [maxFileSizeBytes, setMaxFileSizeBytes] = useState<number>(10485760);
   const [maxFiles, setMaxFiles] = useState<number>(5);
 
-  // Matris state — items / suppliers / prices (test seed ile başlatılır)
-  const [matrixSeed] = useState(() => seedMatrix());
-  const [matrixItems, setMatrixItems] = useState<MatrixItem[]>(matrixSeed.items);
-  const [matrixSuppliers, setMatrixSuppliers] = useState<MatrixSupplier[]>(matrixSeed.suppliers);
-  const [matrixPrices, setMatrixPrices] = useState<MatrixPrices>(matrixSeed.prices);
+  // Matris state — items / suppliers / prices
+  const [matrixItems, setMatrixItems] = useState<MatrixItem[]>([]);
+  const [matrixSuppliers, setMatrixSuppliers] = useState<MatrixSupplier[]>([]);
+  const [matrixPrices, setMatrixPrices] = useState<MatrixPrices>({});
 
   const form = useForm<HeaderFormInput, unknown, HeaderFormValues>({
     resolver: zodResolver(headerSchema),
     defaultValues: {
-      project_title: "RES Trafo & OG Hücre Tedariği — Test",
+      project_title: "",
       form_currency: "TRY",
       form_date: new Date().toISOString().split("T")[0],
       preparer_full_name: "",
       company: "",
-      subject: "Trafo merkezi ekipman alımı",
-      request_content:
-        "RES sahası için 4 adet 1600 kVA trafo, 6 adet OG hücresi ve aksesuarlar dahil komple paket tedariği talep edilmektedir.",
-      request_amount_text: "Toplam tahmini bedel ≈ 6.500.000 ₺ (KDV hariç)",
-      request_reason:
-        "Devreye alma planına göre Q2 sonuna kadar saha teslimi gereklidir; mevcut ekipman ömrü dolmuş, yenileme zorunlu.",
-      kdv_rate: 20,
-      notes:
-        "Tüm ekipmanlar TSE ve IEC standartlarına uygun olmalıdır. Devreye alma test raporları talep edilecektir.",
+      subject: "",
+      request_content: "",
+      request_amount_text: "",
+      request_reason: "",
+      kdv_rate: DEFAULT_KDV_RATE,
+      notes: "",
     },
   });
 
@@ -268,6 +192,8 @@ export default function NewComparisonFormPage() {
             description: string | null;
             quantity: number | null;
             unit: "ADET" | "SET" | "GUN" | null;
+            currency?: "TRY" | "USD" | "EUR" | null;
+            kdv_rate?: number | null;
           }>;
           suppliers?: Array<{
             id: string;
@@ -298,22 +224,29 @@ export default function NewComparisonFormPage() {
           request_content: f.request_content ?? "",
           request_amount_text: f.request_amount_text ?? "",
           request_reason: f.request_reason ?? "",
-          kdv_rate: f.kdv_rate ?? 20,
+          kdv_rate: f.kdv_rate != null ? Number(f.kdv_rate) : DEFAULT_KDV_RATE,
           notes: f.notes ?? "",
         });
 
         // Matrix state'i reset et — DB id'lerini client id olarak kullanırız;
         // submit'te tüm matris zaten yeniden numaralandırılarak gönderiliyor.
+        // Satırda para birimi / KDV yoksa (eski kayıt) başlık değeri satıra yazılır
+        const headerDefaults = { currency: f.form_currency, kdvRate: f.kdv_rate };
         const sortedItems = (f.items ?? [])
           .slice()
           .sort((a, b) => (a.row_order ?? 0) - (b.row_order ?? 0))
-          .map((it) => ({
-            id: it.id, // DB UUID — client matrix tarafından opak şekilde kullanılır
-            row_type: it.row_type,
-            description: it.description ?? "",
-            quantity: it.row_type === "ITEM" ? (it.quantity ?? null) : null,
-            unit: it.row_type === "ITEM" ? (it.unit ?? null) : null,
-          })) as MatrixItem[];
+          .map((it) => {
+            const pricing = it.row_type === "ITEM" ? resolveRowPricing(it, headerDefaults) : null;
+            return {
+              id: it.id, // DB UUID — client matrix tarafından opak şekilde kullanılır
+              row_type: it.row_type,
+              description: it.description ?? "",
+              quantity: it.row_type === "ITEM" ? (it.quantity ?? null) : null,
+              unit: it.row_type === "ITEM" ? (it.unit ?? null) : null,
+              currency: pricing?.currency ?? null,
+              kdv_rate: pricing?.kdvRate ?? null,
+            };
+          }) as MatrixItem[];
 
         const sortedSuppliers = (f.suppliers ?? [])
           .slice()
@@ -504,6 +437,14 @@ export default function NewComparisonFormPage() {
     setPendingFiles((prev) => prev.filter((_, i) => i !== index));
   };
 
+  // Varsayılanı mevcut tüm kalemlere uygular — yalnız kullanıcı butona basınca;
+  // başlık seçimini değiştirmek tek başına satırlara dokunmaz.
+  const applyToAllItems = (patch: Pick<Partial<MatrixItem>, "currency" | "kdv_rate">) => {
+    setMatrixItems((prev) =>
+      prev.map((it) => (it.row_type === "ITEM" ? { ...it, ...patch } : it))
+    );
+  };
+
   const onSubmit = async (values: HeaderFormValues) => {
     // Matris ön-validasyonu (backend de doğrular ama UX için erken hata)
     const itemRows = matrixItems.filter((it) => it.row_type === "ITEM");
@@ -513,6 +454,11 @@ export default function NewComparisonFormPage() {
     }
     if (matrixSuppliers.length === 0) {
       toast.error("En az bir firma eklemelisiniz");
+      return;
+    }
+    const badKdvIdx = itemRows.findIndex((it) => !isValidKdvRate(it.kdv_rate));
+    if (badKdvIdx >= 0) {
+      toast.error(`${badKdvIdx + 1}. kalem: KDV oranı 0–100 arasında olmalı`);
       return;
     }
 
@@ -529,6 +475,8 @@ export default function NewComparisonFormPage() {
           description: it.description.trim(),
           quantity: it.row_type === "ITEM" ? it.quantity : null,
           unit: it.row_type === "ITEM" ? it.unit : null,
+          currency: it.row_type === "ITEM" ? it.currency : null,
+          kdv_rate: it.row_type === "ITEM" ? it.kdv_rate : null,
         };
       });
 
@@ -640,6 +588,10 @@ export default function NewComparisonFormPage() {
 
   const hasValidSignature = Boolean(signatureInfo.signatureText && signatureInfo.signatureFont);
   const hasItemRow = matrixItems.some((it) => it.row_type === "ITEM");
+  // Başlık KDV'si yazılırken boş / geçersizse yeni kalem %20 ile başlar
+  const watchedKdv = form.watch("kdv_rate");
+  const defaultKdvRate =
+    watchedKdv !== "" && isValidKdvRate(Number(watchedKdv)) ? Number(watchedKdv) : DEFAULT_KDV_RATE;
   const matrixReady = hasItemRow && matrixSuppliers.length > 0;
   const canSubmit = isEditMode
     ? !isSubmitting && !loadingUser && matrixReady
@@ -766,18 +718,24 @@ export default function NewComparisonFormPage() {
                 </div>
               </section>
 
-              {/* Para Birimi + KDV + FX Snapshot */}
+              {/* Varsayılan Para Birimi + KDV + FX Snapshot */}
               <section className="space-y-4">
-                <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-                  Para Birimi & Kurlar
-                </h2>
+                <div className="space-y-1">
+                  <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                    Para Birimi, KDV & Kurlar
+                  </h2>
+                  <p className="text-xs text-muted-foreground">
+                    Para birimi ve KDV oranı her kalemde ayrı seçilir. Buradaki değerler yeni
+                    eklenen kalemlerin başlangıç değeridir; mevcut kalemleri değiştirmez.
+                  </p>
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <FormField
                     control={form.control}
                     name="form_currency"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Form Para Birimi</FormLabel>
+                        <FormLabel>Varsayılan Para Birimi</FormLabel>
                         <Select onValueChange={field.onChange} value={field.value}>
                           <FormControl>
                             <SelectTrigger>
@@ -792,6 +750,10 @@ export default function NewComparisonFormPage() {
                             ))}
                           </SelectContent>
                         </Select>
+                        <ApplyToAllItemsButton
+                          disabled={isSubmitting || !hasItemRow}
+                          onClick={() => applyToAllItems({ currency: field.value })}
+                        />
                         <FormMessage />
                       </FormItem>
                     )}
@@ -801,7 +763,7 @@ export default function NewComparisonFormPage() {
                     name="kdv_rate"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>KDV Oranı (%)</FormLabel>
+                        <FormLabel>Varsayılan KDV Oranı (%)</FormLabel>
                         <FormControl>
                           <Input
                             type="number"
@@ -813,6 +775,15 @@ export default function NewComparisonFormPage() {
                             value={field.value ?? ""}
                           />
                         </FormControl>
+                        <ApplyToAllItemsButton
+                          disabled={
+                            isSubmitting ||
+                            !hasItemRow ||
+                            field.value === "" ||
+                            !isValidKdvRate(Number(field.value))
+                          }
+                          onClick={() => applyToAllItems({ kdv_rate: Number(field.value) })}
+                        />
                         <FormMessage />
                       </FormItem>
                     )}
@@ -943,7 +914,8 @@ export default function NewComparisonFormPage() {
                     Mukayese Matrisi
                   </h2>
                   <p className="text-xs text-muted-foreground">
-                    Kalemler ile firmaların kesişiminde birim fiyatı girin.
+                    Kalemler ile firmaların kesişiminde birim fiyatı girin; para birimi ve KDV her
+                    kalemde ayrı seçilir.
                   </p>
                 </div>
                 <MatrixEditor
@@ -953,8 +925,9 @@ export default function NewComparisonFormPage() {
                   onSuppliersChange={setMatrixSuppliers}
                   prices={matrixPrices}
                   onPricesChange={setMatrixPrices}
-                  currency={form.watch("form_currency")}
-                  kdvRate={Number(form.watch("kdv_rate")) || 0}
+                  defaultCurrency={form.watch("form_currency")}
+                  defaultKdvRate={defaultKdvRate}
+                  fx={fxData}
                   disabled={isSubmitting}
                 />
               </section>
@@ -1048,5 +1021,20 @@ export default function NewComparisonFormPage() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+function ApplyToAllItemsButton({ disabled, onClick }: { disabled?: boolean; onClick: () => void }) {
+  return (
+    <Button
+      type="button"
+      variant="link"
+      size="sm"
+      className="h-auto p-0 text-xs"
+      disabled={disabled}
+      onClick={onClick}
+    >
+      Tüm kalemlere uygula
+    </Button>
   );
 }

@@ -4,6 +4,14 @@ import { format } from 'date-fns';
 import { formatTrDate } from '@/lib/timezone';
 import { SignatureFont } from '@/lib/signature/types';
 import type { PdfApproval, PdfRequester, SignatureInfo } from './types';
+import {
+  bagEntries,
+  deriveMatrixTotals,
+  formatKdvRate,
+  kdvLabels,
+  type MatrixTotals,
+  type MoneyBag,
+} from '@/lib/comparison-form/matrix-totals';
 import path from 'path';
 
 const getLogoPath = () => path.join(process.cwd(), 'public', 'logo.png');
@@ -41,7 +49,8 @@ const colors = {
   navy: '#1a365d',
 };
 
-const CURRENCY_SYMBOL: Record<string, string> = { TRY: 'TL', USD: '$', EUR: '€' };
+// PDF fontunda ₺ glifi yok → TL
+const CURRENCY_LABEL: Record<string, string> = { TRY: 'TL', USD: 'USD', EUR: 'EUR' };
 
 const moneyFmt = new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const fmtMoney = (v: number | null | undefined): string => {
@@ -173,6 +182,8 @@ interface ItemRow {
   description: string | null;
   quantity: number | null;
   unit: string | null;
+  currency?: string | null;
+  kdv_rate?: number | string | null;
 }
 
 interface SupplierCol {
@@ -192,58 +203,12 @@ interface PriceCell {
   unit_price: number;
 }
 
-/**
- * Türetilmiş değerleri hesaplar — UI'daki MatrixEditor'la aynı mantık:
- * - SUBTOTAL satırı için bloktaki ITEM toplamları
- * - Her ITEM satırı için min/max birim fiyat
- * - Her firma için kolon toplamı (KDV hariç & dahil)
- */
-function deriveMatrixTotals(
-  items: ItemRow[],
-  suppliers: SupplierCol[],
-  priceMap: Record<string, number>,
-  kdvRate: number,
-) {
-  const blockSums: Record<string, number> = {};
-  for (const s of suppliers) blockSums[s.id] = 0;
-
-  const subtotalValues: Record<string, Record<string, number>> = {};
-  const minMaxByItem: Record<string, { min: number; max: number }> = {};
-  const columnTotalsExKdv: Record<string, number> = {};
-  for (const s of suppliers) columnTotalsExKdv[s.id] = 0;
-
-  for (const it of items) {
-    if (it.row_type === 'ITEM') {
-      const qty = typeof it.quantity === 'number' ? it.quantity : Number(it.quantity) || 0;
-      const filledUnitPrices: number[] = [];
-      for (const s of suppliers) {
-        const up = priceMap[`${it.id}:${s.id}`];
-        if (typeof up === 'number') {
-          const lineTotal = qty * up;
-          blockSums[s.id] += lineTotal;
-          columnTotalsExKdv[s.id] += lineTotal;
-          filledUnitPrices.push(up);
-        }
-      }
-      if (filledUnitPrices.length >= 2) {
-        minMaxByItem[it.id] = { min: Math.min(...filledUnitPrices), max: Math.max(...filledUnitPrices) };
-      }
-    } else {
-      const row: Record<string, number> = {};
-      for (const s of suppliers) {
-        row[s.id] = blockSums[s.id];
-        blockSums[s.id] = 0;
-      }
-      subtotalValues[it.id] = row;
-    }
-  }
-
-  const kdvMul = 1 + (Number.isFinite(kdvRate) ? kdvRate : 0) / 100;
-  const columnTotalsIncKdv: Record<string, number> = {};
-  for (const s of suppliers) columnTotalsIncKdv[s.id] = columnTotalsExKdv[s.id] * kdvMul;
-
-  return { subtotalValues, minMaxByItem, columnTotalsExKdv, columnTotalsIncKdv };
-}
+/** Para birimine göre ayrılmış tutar → "1.000,00 TL" satırları; boşsa ["-"] */
+const bagLines = (bag: MoneyBag | undefined): string[] => {
+  const entries = bagEntries(bag);
+  if (entries.length === 0) return ['-'];
+  return entries.map((e) => `${fmtMoney(e.amount)} ${CURRENCY_LABEL[e.currency] || e.currency}`);
+};
 
 const renderSig = (
   signatures: Record<string, SignatureInfo> | undefined,
@@ -282,10 +247,16 @@ const ComparisonFormDocument: React.FC<ComparisonFormPDFTemplateProps> = ({
     priceMap[`${p.mukayese_item_id}:${p.mukayese_supplier_id}`] = Number(p.unit_price);
   }
 
-  const kdvRate = Number(mukayeseRequest.kdv_rate) || 0;
-  const currency = mukayeseRequest.form_currency || 'TRY';
-  const symbol = CURRENCY_SYMBOL[currency] || currency;
-  const totals = deriveMatrixTotals(items, suppliers, priceMap, kdvRate);
+  const totals = deriveMatrixTotals(
+    items,
+    suppliers.map((s) => s.id),
+    priceMap,
+    { currency: mukayeseRequest.form_currency, kdvRate: mukayeseRequest.kdv_rate },
+    { usdTry: mukayeseRequest.fx_usd_try, eurTry: mukayeseRequest.fx_eur_try },
+  );
+  // Tek para biriminde birim fiyat başlığı birimi gösterir (önceki görünüm)
+  const priceHeaderLabel =
+    totals.currencies.length === 1 ? CURRENCY_LABEL[totals.currencies[0]] : null;
 
   // Sütun genişlikleri (A3 landscape iç alan ~1140pt)
   const PAGE_INNER = 1140;
@@ -293,13 +264,15 @@ const ComparisonFormDocument: React.FC<ComparisonFormPDFTemplateProps> = ({
   const wDesc = 200;
   const wQty = 50;
   const wUnit = 50;
+  const wCur = 32;
+  const wKdv = 32;
   const wComment = 130;
-  const fixedLeft = wNr + wDesc + wQty + wUnit;
+  const fixedLeft = wNr + wDesc + wQty + wUnit + wCur + wKdv;
   const N = Math.max(suppliers.length, 1);
   const supplierTotalW = Math.max(80, Math.floor((PAGE_INNER - fixedLeft - wComment) / N));
   const supplierUnitW = Math.floor(supplierTotalW / 2);
   const supplierFinalW = supplierTotalW - supplierUnitW;
-  const widths = { wNr, wDesc, wQty, wUnit, supplierUnitW, supplierFinalW, wComment };
+  const widths = { wNr, wDesc, wQty, wUnit, wCur, wKdv, supplierUnitW, supplierFinalW, wComment };
   const supplierAreaW = supplierTotalW * suppliers.length;
   const totalRowW = fixedLeft + supplierAreaW + wComment;
 
@@ -311,7 +284,7 @@ const ComparisonFormDocument: React.FC<ComparisonFormPDFTemplateProps> = ({
         <View style={styles.table}>
           <TopHeaderBlock
             wLogo={wNr + wDesc}
-            wFx={wQty + wUnit}
+            wFx={wQty + wUnit + wCur + wKdv}
             suppliers={suppliers}
             supplierTotalW={supplierTotalW}
             supplierAreaW={supplierAreaW}
@@ -321,7 +294,7 @@ const ComparisonFormDocument: React.FC<ComparisonFormPDFTemplateProps> = ({
           />
           <View style={{ flexDirection: 'row', borderBottomWidth: 0.5, borderColor: colors.black }}>
             <View style={{ flexDirection: 'column', width: fixedLeft + supplierAreaW }}>
-              <ColumnHeaderRow widths={widths} suppliers={suppliers} symbol={symbol} />
+              <ColumnHeaderRow widths={widths} suppliers={suppliers} priceLabel={priceHeaderLabel} />
               <DataRows
                 items={items}
                 suppliers={suppliers}
@@ -333,10 +306,8 @@ const ComparisonFormDocument: React.FC<ComparisonFormPDFTemplateProps> = ({
               <TotalRows
                 suppliers={suppliers}
                 totals={totals}
-                kdvRate={kdvRate}
                 fixedLeft={fixedLeft}
-                supplierUnitW={supplierUnitW}
-                supplierFinalW={supplierFinalW}
+                supplierTotalW={supplierTotalW}
               />
               <SupplierFooterRows
                 suppliers={suppliers}
@@ -454,22 +425,26 @@ const TopHeaderBlock: React.FC<TopHeaderProps> = ({
 // ============================================================================
 
 interface Widths {
-  wNr: number; wDesc: number; wQty: number; wUnit: number;
+  wNr: number; wDesc: number; wQty: number; wUnit: number; wCur: number; wKdv: number;
   supplierUnitW: number; supplierFinalW: number; wComment: number;
 }
 
-const ColumnHeaderRow: React.FC<{ widths: Widths; suppliers: SupplierCol[]; symbol: string }> = ({
-  widths, suppliers, symbol,
+const ColumnHeaderRow: React.FC<{ widths: Widths; suppliers: SupplierCol[]; priceLabel: string | null }> = ({
+  widths, suppliers, priceLabel,
 }) => (
   <View style={styles.row}>
     <View style={[styles.cell, { width: widths.wNr }]}><Text style={styles.textBoldCenter}>Nr</Text></View>
     <View style={[styles.cell, { width: widths.wDesc }]}><Text style={styles.textBoldCenter}>Mal ve Hizmet Bilgileri</Text></View>
     <View style={[styles.cell, styles.bgHeader, { width: widths.wQty }]}><Text style={styles.textBoldCenter}>Miktar</Text></View>
     <View style={[styles.cell, styles.bgHeader, { width: widths.wUnit }]}><Text style={styles.textBoldCenter}>Birim</Text></View>
+    <View style={[styles.cell, styles.bgHeader, { width: widths.wCur }]}><Text style={styles.textBoldCenter}>PB</Text></View>
+    <View style={[styles.cell, styles.bgHeader, { width: widths.wKdv }]}><Text style={styles.textBoldCenter}>KDV</Text></View>
     {suppliers.map((s) => (
       <React.Fragment key={s.id}>
         <View style={[styles.cell, { width: widths.supplierUnitW }]}>
-          <Text style={styles.textBoldCenter}>BİRİM FİYAT ({symbol})</Text>
+          <Text style={styles.textBoldCenter}>
+            {priceLabel ? `BİRİM FİYAT (${priceLabel})` : 'BİRİM FİYAT'}
+          </Text>
         </View>
         <View style={[styles.cell, { width: widths.supplierFinalW }]}>
           <Text style={styles.textBoldCenter}>TOPLAM FİYAT</Text>
@@ -487,7 +462,7 @@ interface DataRowsProps {
   items: ItemRow[];
   suppliers: SupplierCol[];
   priceMap: Record<string, number>;
-  totals: ReturnType<typeof deriveMatrixTotals>;
+  totals: MatrixTotals;
   widths: Widths;
   incrementSeq: () => number;
 }
@@ -500,6 +475,7 @@ const DataRows: React.FC<DataRowsProps> = ({
       const isSub = it.row_type === 'SUBTOTAL';
       const seq = !isSub ? incrementSeq() : null;
       const minMax = totals.minMaxByItem[it.id];
+      const pricing = totals.rowPricing[it.id];
       const qty = typeof it.quantity === 'number' ? it.quantity : Number(it.quantity) || 0;
       return (
         <View key={it.id} style={[styles.row, ...(isSub ? [styles.bgSub] : [])]} wrap={false}>
@@ -519,18 +495,28 @@ const DataRows: React.FC<DataRowsProps> = ({
               {isSub ? '' : (UNIT_LABEL[it.unit || ''] || it.unit || '')}
             </Text>
           </View>
+          <View style={[styles.cell, { width: widths.wCur }]}>
+            <Text style={styles.textCenter}>
+              {pricing ? CURRENCY_LABEL[pricing.currency] || pricing.currency : ''}
+            </Text>
+          </View>
+          <View style={[styles.cell, { width: widths.wKdv }]}>
+            <Text style={styles.textCenter}>
+              {pricing ? `%${formatKdvRate(pricing.kdvRate)}` : ''}
+            </Text>
+          </View>
           {suppliers.map((s) => {
             if (isSub) {
-              const sub = totals.subtotalValues[it.id]?.[s.id] ?? 0;
+              // Blok karışık para birimi içerebilir → birim fiyat + toplam alanı birleşik
               return (
-                <React.Fragment key={s.id}>
-                  <View style={[styles.cell, { width: widths.supplierUnitW }]}>
-                    <Text style={styles.text}> </Text>
-                  </View>
-                  <View style={[styles.cell, { width: widths.supplierFinalW }]}>
-                    <Text style={styles.textBoldRight}>{fmtMoney(sub)}</Text>
-                  </View>
-                </React.Fragment>
+                <View
+                  key={s.id}
+                  style={[styles.cell, { width: widths.supplierUnitW + widths.supplierFinalW }]}
+                >
+                  {bagLines(totals.subtotalValues[it.id]?.[s.id]).map((line) => (
+                    <Text key={line} style={styles.textBoldRight}>{line}</Text>
+                  ))}
+                </View>
               );
             }
             const up = priceMap[`${it.id}:${s.id}`];
@@ -568,20 +554,20 @@ const DataRows: React.FC<DataRowsProps> = ({
 
 interface TotalRowsProps {
   suppliers: SupplierCol[];
-  totals: ReturnType<typeof deriveMatrixTotals>;
-  kdvRate: number;
+  totals: MatrixTotals;
   fixedLeft: number;
-  supplierUnitW: number;
-  supplierFinalW: number;
+  supplierTotalW: number;
 }
 
 const TotalRows: React.FC<TotalRowsProps> = ({
-  suppliers, totals, kdvRate, fixedLeft, supplierUnitW, supplierFinalW,
+  suppliers, totals, fixedLeft, supplierTotalW,
 }) => {
   if (suppliers.length === 0) return null;
+  const labels = kdvLabels(totals.kdvRates);
+  // Değer hücresi firmanın birim fiyat + toplam alanını kaplar (çok satırlı tutar sığsın)
   const renderRow = (
     label: string,
-    getVal: (sid: string) => number,
+    getLines: (sid: string) => string[],
     dark: boolean,
   ) => (
     <View style={[styles.row, dark ? styles.bgHeader : styles.bgSub]} wrap={false}>
@@ -589,21 +575,26 @@ const TotalRows: React.FC<TotalRowsProps> = ({
         <Text style={styles.textBoldRight}>{label}</Text>
       </View>
       {suppliers.map((s) => (
-        <React.Fragment key={s.id}>
-          <View style={[styles.cell, { width: supplierUnitW }]}>
-            <Text style={styles.text}> </Text>
-          </View>
-          <View style={[styles.cell, { width: supplierFinalW }]}>
-            <Text style={styles.textBoldRight}>{fmtMoney(getVal(s.id))}</Text>
-          </View>
-        </React.Fragment>
+        <View key={s.id} style={[styles.cell, { width: supplierTotalW }]}>
+          {getLines(s.id).map((line) => (
+            <Text key={line} style={styles.textBoldRight}>{line}</Text>
+          ))}
+        </View>
       ))}
     </View>
   );
+  const tryLine = (v: number | null | undefined) => [v === null || v === undefined ? '-' : `${fmtMoney(v)} TL`];
   return (
     <>
-      {renderRow('TOPLAM (KDV HARİÇ)', (sid) => totals.columnTotalsExKdv[sid], false)}
-      {renderRow(`TOPLAM (KDV %${kdvRate} DAHİL)`, (sid) => totals.columnTotalsIncKdv[sid], true)}
+      {renderRow('TOPLAM (KDV HARİÇ)', (sid) => bagLines(totals.columnTotalsExKdv[sid]), false)}
+      {renderRow(labels.kdv.toLocaleUpperCase('tr-TR'), (sid) => bagLines(totals.columnKdv[sid]), false)}
+      {renderRow(`TOPLAM (${labels.incKdv.toLocaleUpperCase('tr-TR')})`, (sid) => bagLines(totals.columnTotalsIncKdv[sid]), true)}
+      {totals.tryEquivalent && (
+        <>
+          {renderRow('TL KARŞILIĞI (KDV HARİÇ · TCMB)', (sid) => tryLine(totals.tryEquivalent?.exKdv[sid]), false)}
+          {renderRow('TL KARŞILIĞI (KDV DAHİL · TCMB)', (sid) => tryLine(totals.tryEquivalent?.incKdv[sid]), true)}
+        </>
+      )}
     </>
   );
 };
