@@ -1,4 +1,4 @@
-import type { Requester } from "@/lib/approvals/types";
+import type { Approval, PendingApproval, Requester } from "@/lib/approvals/types";
 import { leaveTypeLabels, overtimeTypeLabels } from "@/lib/approvals/constants";
 
 export const getRequesterFullName = (requester?: Requester): string => {
@@ -81,3 +81,31 @@ export const getRequestSummary = (request: RequestSummarySource): string => {
   return "-";
 };
 
+// Onay teyit penceresi için: bu onay verilince talebin hangi adıma geçeceğini,
+// karar route'unun (app/api/approvals/[id]) ilerletme kuralını izleyerek bulur —
+// APPROVED adımlar atlanır, aynı onaycının ilerideki SIGN_ONLY adımları otomatik
+// onaylanır (vekaleten verilen onayda hariç).
+// null = bu son adım; undefined = zincir okunamadı (sonuç gösterilmez).
+export const getNextApprovalAfter = (
+  approval: PendingApproval
+): Approval | null | undefined => {
+  const chain = approval.request.approvals;
+  const current = chain?.find((a) => a.id === approval.id);
+  if (!chain || !current) return undefined;
+
+  const isDelegate = approval.viewer?.is_delegate === true;
+  const willAutoApprove = (a: Approval) =>
+    !isDelegate &&
+    a.approver?.id === current.approver?.id &&
+    a.workflow_step?.action_type === "SIGN_ONLY";
+
+  const next = chain
+    .filter(
+      (a) =>
+        a.sequence_order > current.sequence_order &&
+        a.status !== "APPROVED" &&
+        !willAutoApprove(a)
+    )
+    .sort((a, b) => a.sequence_order - b.sequence_order)[0];
+  return next ?? null;
+};

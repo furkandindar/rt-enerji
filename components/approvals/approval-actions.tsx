@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,10 +18,14 @@ import { SignaturePanel } from "@/components/signature-panel";
 import { SignatureCanvasPanel } from "@/components/signature-canvas-panel";
 import { AttachmentUploader } from "@/components/attachment-uploader";
 import { YkbSignedPdfUpload } from "@/components/approvals/ykb-signed-pdf-upload";
+import { ApproveConfirmDialog } from "@/components/approvals/approve-confirm-dialog";
 import type { WorkflowStepAttachmentConfig, RequestAttachment } from "@/lib/workflow/types";
-import type { ChecklistStatus, ChecklistItem, SignatureInfo } from "@/lib/approvals/types";
+import type { ChecklistStatus, ChecklistItem, SignatureInfo, PendingApproval } from "@/lib/approvals/types";
 
 interface ApprovalActionsProps {
+  // Teyit penceresindeki özet için
+  approval: PendingApproval;
+
   // HR form
   isHrForm: boolean;
   remainingDays: string;
@@ -90,11 +95,12 @@ interface ApprovalActionsProps {
   // Actions
   canApprove: boolean;
   isSubmitting: boolean;
-  handleDecision: (decision: "APPROVED" | "REJECTED") => void;
+  handleDecision: (decision: "APPROVED" | "REJECTED") => Promise<void>;
   handleRequestRevision: () => void;
 }
 
 export function ApprovalActions({
+  approval,
   isHrForm,
   remainingDays,
   setRemainingDays,
@@ -143,6 +149,8 @@ signatureDataUrl,
   handleDecision,
   handleRequestRevision,
 }: ApprovalActionsProps) {
+  const [confirmOpen, setConfirmOpen] = useState(false);
+
   return (
     <div className="border-t pt-4 mt-6 space-y-4">
       {/* V4: Travel Completion Form — göreve giden kişi gerçekleşen tarihleri + görev özetini girer */}
@@ -441,7 +449,7 @@ signatureDataUrl,
       <div className="flex flex-wrap gap-2">
         <Button
           className="flex-1 min-w-[140px]"
-          onClick={() => handleDecision("APPROVED")}
+          onClick={() => setConfirmOpen(true)}
           disabled={isSubmitting || !canApprove}
         >
           {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -466,6 +474,19 @@ signatureDataUrl,
           Reddet
         </Button>
       </div>
+
+      <ApproveConfirmDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        approval={approval}
+        comment={comment}
+        isSubmitting={isSubmitting}
+        onConfirm={async () => {
+          await handleDecision("APPROVED");
+          // Başarıda sayfa listeye yönlenir; hata toast'la bildirilir, pencere kapanır
+          setConfirmOpen(false);
+        }}
+      />
     </div>
   );
 }

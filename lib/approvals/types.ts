@@ -27,6 +27,7 @@ export interface WorkflowStep {
   step_order: number;
   name: string;
   approver_type?: 'REQUESTER' | 'UNIT_HEAD' | 'STATIC_POSITION' | 'DYNAMIC_USER_LIST';
+  action_type?: 'FILL_AND_SIGN' | 'SIGN_ONLY';
   phase?: 'APPROVAL' | 'COMPLETION';
   form_section_key?: string | null;
 }

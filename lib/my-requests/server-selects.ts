@@ -63,6 +63,7 @@ const REQUEST_BASE_DETAIL_SELECT = `
       step_order,
       name,
       approver_type,
+      action_type,
       phase,
       form_section_key
     ),

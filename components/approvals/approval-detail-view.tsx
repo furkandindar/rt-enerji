@@ -78,7 +78,7 @@ export interface ApprovalDetailViewProps {
   setYkbSignedPdfFileName: (value: string | null) => void;
   canApprove: boolean;
   isSubmitting: boolean;
-  handleDecision: (decision: "APPROVED" | "REJECTED") => void;
+  handleDecision: (decision: "APPROVED" | "REJECTED") => Promise<void>;
   handleRequestRevision: () => void;
   handleDownloadPDF: (requestId: string) => void;
 }
@@ -359,6 +359,7 @@ export function ApprovalDetailView({
             GET viewer.can_act=false ise (atanmamış görüntüleyici) aksiyonlar gizli */}
         {selectedApproval.status === "PENDING" && selectedApproval.viewer?.can_act !== false && (
           <ApprovalActions
+            approval={selectedApproval}
             isHrForm={isHrForm}
             remainingDays={remainingDays}
             setRemainingDays={setRemainingDays}
