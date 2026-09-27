@@ -19,6 +19,8 @@ import {
   type MatrixSupplier,
   type MatrixPrices,
 } from "@/components/comparison-form/matrix-editor";
+import { RevisionNoticeForRequest } from "@/components/my-requests/revision-notice";
+import { RequestEditAttachments } from "@/components/my-requests/request-edit-attachments";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -665,6 +667,13 @@ export default function NewComparisonFormPage() {
         </p>
       </div>
 
+      {/* Revize bandı: yalnız talep REVISION_REQUESTED iken görünür (boşsa gizlenir) */}
+      {isEditMode && (
+        <div className="max-w-6xl empty:hidden">
+          <RevisionNoticeForRequest requestId={editId} />
+        </div>
+      )}
+
       <Card className="max-w-6xl">
         <CardHeader>
           <CardTitle>Form Bilgileri</CardTitle>
@@ -950,8 +959,14 @@ export default function NewComparisonFormPage() {
                 />
               </section>
 
-              {/* Ek Dosyalar */}
-              {attachmentConfigId && (
+              {/* Ek Dosyalar — edit modunda talep zaten var: ekler anında yüklenir/silinir */}
+              {editId ? (
+                <RequestEditAttachments
+                  requestId={editId}
+                  workflowCode="COMPARISON_FORM"
+                  disabled={isSubmitting}
+                />
+              ) : attachmentConfigId && (
                 <section className="space-y-3">
                   <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
                     {attachmentLabel}

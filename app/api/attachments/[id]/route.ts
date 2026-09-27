@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
+import { resolveActingRights } from "@/lib/workflow/delegation";
 
 // DELETE /api/attachments/[id] - Dosya sil
 export async function DELETE(
@@ -29,7 +30,7 @@ export async function DELETE(
     // 2. Attachment kaydını getir
     const { data: attachment, error: fetchError } = await supabase
       .from("request_attachments")
-      .select("*, request:requests(status, current_step)")
+      .select("*")
       .eq("id", id)
       .single();
 
@@ -42,16 +43,62 @@ export async function DELETE(
       return NextResponse.json({ error: "Bu dosyayı silme yetkiniz yok" }, { status: 403 });
     }
 
-    // 4. İlgili adım henüz PENDING mi kontrol et
-    const { data: approvalCheck } = await supabase
-      .from("request_approvals")
-      .select("status")
-      .eq("request_id", attachment.request_id)
-      .eq("approver_employee_id", appUser.employee_id)
+    // 4. Silme penceresi:
+    //    a) Talep sahibi, talep düzenlenebilirken (DRAFT / REVISION_REQUESTED) —
+    //       revize akışında ek güncelleme.
+    //    b) Aksi halde talep canlı olmalı ve ekin ait olduğu adımda, aktif cycle'da
+    //       kullanıcının işlem yapabildiği (kendisi veya vekaleten) PENDING bir satır
+    //       bulunmalı — imzası atılmış adımın eki silinemez.
+    const { data: req } = await supabase
+      .from("requests")
+      .select("status, requester_employee_id, current_revision_cycle")
+      .eq("id", attachment.request_id)
       .single();
 
-    if (approvalCheck && approvalCheck.status !== "PENDING") {
-      return NextResponse.json({ error: "Onaylanmış adımdaki dosya silinemez" }, { status: 400 });
+    if (!req) {
+      return NextResponse.json({ error: "Talep bulunamadı" }, { status: 404 });
+    }
+
+    const isEditingRequester =
+      req.requester_employee_id === appUser.employee_id &&
+      (req.status === "DRAFT" || req.status === "REVISION_REQUESTED");
+
+    if (!isEditingRequester) {
+      const isLive = req.status === "PENDING" || req.status === "AWAITING_COMPLETION";
+
+      const { data: config } = await supabase
+        .from("workflow_step_attachments")
+        .select("workflow_step_id")
+        .eq("id", attachment.step_attachment_config_id)
+        .single();
+
+      const { data: pendingRows } = config && isLive
+        ? await supabase
+            .from("request_approvals")
+            .select("id, approver_employee_id")
+            .eq("request_id", attachment.request_id)
+            .eq("workflow_step_id", config.workflow_step_id)
+            .eq("revision_cycle", req.current_revision_cycle ?? 0)
+            .eq("status", "PENDING")
+        : { data: [] as { id: string; approver_employee_id: string }[] };
+
+      let canAct = false;
+      for (const row of pendingRows ?? []) {
+        const rights = await resolveActingRights(
+          supabase,
+          row.id,
+          row.approver_employee_id,
+          appUser.employee_id
+        );
+        if (rights.canAct) {
+          canAct = true;
+          break;
+        }
+      }
+
+      if (!canAct) {
+        return NextResponse.json({ error: "Onaylanmış adımdaki dosya silinemez" }, { status: 400 });
+      }
     }
 
     // 5. Storage'dan sil

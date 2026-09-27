@@ -10,6 +10,7 @@ import { Loader2, Banknote } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { SignaturePanel } from "@/components/signature-panel";
 import { SignatureFont } from "@/lib/signature/types";
+import { RevisionNoticeForRequest } from "@/components/my-requests/revision-notice";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -209,6 +210,13 @@ export default function NewSalaryAdvancePage() {
           {isEditMode ? "Talep bilgilerini güncelleyin" : "Maaş avans talebinizi oluşturun"}
         </p>
       </div>
+
+      {/* Revize bandı: yalnız talep REVISION_REQUESTED iken görünür (boşsa gizlenir) */}
+      {isEditMode && (
+        <div className="max-w-2xl empty:hidden">
+          <RevisionNoticeForRequest requestId={editId} />
+        </div>
+      )}
 
       <Card className="max-w-2xl">
         <CardHeader>

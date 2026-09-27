@@ -11,6 +11,10 @@ import { createClient } from "@/lib/supabase/client";
 import { SignaturePanel } from "@/components/signature-panel";
 import { SignatureFont } from "@/lib/signature/types";
 import { utcToIstanbulInput } from "@/lib/timezone";
+import { RevisionNoticeForRequest } from "@/components/my-requests/revision-notice";
+import { RequestEditAttachments } from "@/components/my-requests/request-edit-attachments";
+import { PendingAttachmentsField, showFailedUploadsToast } from "@/components/pending-attachments-field";
+import { uploadPendingFiles } from "@/lib/attachments/upload-attachment";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -89,6 +93,56 @@ export default function NewTravelAssignmentPage() {
   const [loadingSignature, setLoadingSignature] = useState(true);
   const [companies, setCompanies] = useState<Company[]>([]);
   const supabase = createClient();
+
+  // Ek dosya (create akışı — talep oluşturulduktan sonra yüklenir)
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [attachmentConfigId, setAttachmentConfigId] = useState<string | null>(null);
+  const [attachmentLabel, setAttachmentLabel] = useState<string>("Ek Dosya");
+  const [allowedMimeTypes, setAllowedMimeTypes] = useState<string[] | null>(null);
+  const [maxFileSizeBytes, setMaxFileSizeBytes] = useState<number>(10485760);
+  const [maxFiles, setMaxFiles] = useState<number>(20);
+
+  // 1. adımın (talep eden) attachment config'ini yükle — edit modunda
+  // RequestEditAttachments kendi config'ini yüklediği için gerekmez.
+  useEffect(() => {
+    if (isEditMode) return;
+    const loadAttachmentConfig = async () => {
+      try {
+        const { data: wfDef } = await supabase
+          .from("workflow_definitions")
+          .select("id")
+          .eq("code", "TRAVEL_ASSIGNMENT")
+          .single();
+        if (!wfDef) return;
+
+        const { data: step } = await supabase
+          .from("workflow_steps")
+          .select("id")
+          .eq("workflow_definition_id", wfDef.id)
+          .eq("step_order", 1)
+          .single();
+        if (!step) return;
+
+        const { data: configs } = await supabase
+          .from("workflow_step_attachments")
+          .select("id, label, allowed_mime_types, max_file_size_bytes, max_files")
+          .eq("workflow_step_id", step.id);
+
+        if (configs && configs.length > 0) {
+          const config = configs[0];
+          setAttachmentConfigId(config.id);
+          setAttachmentLabel(config.label);
+          setAllowedMimeTypes(config.allowed_mime_types);
+          setMaxFileSizeBytes(config.max_file_size_bytes);
+          setMaxFiles(config.max_files);
+        }
+      } catch (error) {
+        console.error("Error loading attachment config:", error);
+      }
+    };
+    loadAttachmentConfig();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // İmza bilgilerini ve şirketleri yükle
   useEffect(() => {
@@ -260,6 +314,13 @@ export default function NewTravelAssignmentPage() {
         }
         toast.success("Talep güncellendi ve onaya gönderildi");
       } else {
+        // Create akışı: seçilen dosyaları yeni talebe yükle
+        const result = await response.json();
+        const requestId: string = result.id;
+        if (requestId && pendingFiles.length > 0) {
+          const failedUploads = await uploadPendingFiles(pendingFiles, requestId, attachmentConfigId);
+          showFailedUploadsToast(failedUploads);
+        }
         toast.success("Görev formu başarıyla oluşturuldu");
       }
       router.push("/my-requests");
@@ -288,6 +349,13 @@ export default function NewTravelAssignmentPage() {
           {isEditMode ? "Talep bilgilerini güncelleyin" : "Görev bilgilerinizi doldurun ve onaya gönderin"}
         </p>
       </div>
+
+      {/* Revize bandı: yalnız talep REVISION_REQUESTED iken görünür (boşsa gizlenir) */}
+      {isEditMode && (
+        <div className="max-w-2xl empty:hidden">
+          <RevisionNoticeForRequest requestId={editId} />
+        </div>
+      )}
 
       <Card className="max-w-2xl">
         <CardHeader>
@@ -582,6 +650,23 @@ export default function NewTravelAssignmentPage() {
                     )}
                   />
                 </div>
+              )}
+
+              {/* Ek Dosyalar — edit modunda talep zaten var: ekler anında yüklenir/silinir */}
+              {editId ? (
+                <RequestEditAttachments
+                  requestId={editId}
+                  workflowCode="TRAVEL_ASSIGNMENT"
+                  disabled={isSubmitting}
+                />
+              ) : attachmentConfigId && (
+                <PendingAttachmentsField
+                  label={attachmentLabel}
+                  files={pendingFiles}
+                  onFilesChange={setPendingFiles}
+                  rules={{ allowedMimeTypes, maxFileSizeBytes, maxFiles }}
+                  disabled={isSubmitting}
+                />
               )}
 
               {/* İmza Paneli */}

@@ -16,6 +16,11 @@ export const WORKFLOW_EDIT_ROUTE: Record<string, string> = {
   EMPLOYEE_SEPARATION: '/separation/new',
   TRAVEL_ASSIGNMENT: '/travel-assignment/new',
   REQUEST_FORM: '/request-form/new',
+  FINANCE_APPROVAL_COVER: '/finance-approval-cover/new',
+  ACCOUNTING_APPROVAL_COVER: '/accounting-approval-cover/new',
+  APPROVAL_LETTER: '/approval-letter/new',
+  STAMP_APPROVAL: '/stamp-approval/new',
+  EMPLOYEE_ONBOARDING: '/onboarding/new',
 };
 
 /**
@@ -43,6 +48,11 @@ export const WORKFLOW_PATCH_ROUTE: Record<string, string> = {
   EMPLOYEE_SEPARATION: '/api/separation',
   TRAVEL_ASSIGNMENT: '/api/travel-assignment',
   REQUEST_FORM: '/api/request-form',
+  FINANCE_APPROVAL_COVER: '/api/finance-approval-cover',
+  ACCOUNTING_APPROVAL_COVER: '/api/accounting-approval-cover',
+  APPROVAL_LETTER: '/api/approval-letter',
+  STAMP_APPROVAL: '/api/stamp-approval',
+  EMPLOYEE_ONBOARDING: '/api/onboarding',
 };
 
 export function getPatchUrl(workflowCode: string | null | undefined, requestId: string): string | null {

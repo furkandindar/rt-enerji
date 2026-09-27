@@ -173,6 +173,7 @@ export function AttachmentUploader({
                     <div className="flex items-center gap-1 shrink-0">
                       {file.mime_type === "application/pdf" && (
                         <Button
+                          type="button"
                           variant="ghost"
                           size="icon"
                           className="h-7 w-7"
@@ -188,6 +189,7 @@ export function AttachmentUploader({
                         </Button>
                       )}
                       <Button
+                        type="button"
                         variant="ghost"
                         size="icon"
                         className="h-7 w-7"
@@ -198,6 +200,7 @@ export function AttachmentUploader({
                       </Button>
                       {!readOnly && (
                         <Button
+                          type="button"
                           variant="ghost"
                           size="icon"
                           className="h-7 w-7 text-destructive hover:text-destructive"
@@ -233,6 +236,7 @@ export function AttachmentUploader({
                   disabled={disabled || isUploading}
                 />
                 <Button
+                  type="button"
                   variant="outline"
                   size="sm"
                   className="w-full"

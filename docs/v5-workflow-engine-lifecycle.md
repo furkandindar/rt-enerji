@@ -122,6 +122,10 @@ Detay tablo (`leave_requests`, `expense_requests`, vb.) ve items üzerinde UPDAT
 
 **UX akışı:** Talep detay Sheet'inde "Düzenle" tıklanır → `/<type>/new?edit=<id>` query parametresiyle form sayfası "edit mode"da açılır. Form mevcut değerlerle doldurulur. Submit butonu **"Talebi Güncelle ve Gönder"** olarak değişir; submit anında **PATCH + resubmit zincirini otomatik çalıştırır** ve kullanıcı tek tıkla güncelleyip onaya yollar. Bu sayede DRAFT/REVISION_REQUESTED durumunda ayrı bir "Yeniden Gönder" butonuna gerek kalmaz.
 
+**Kapsam:** Düzenle butonu yalnız `lib/workflow/route-map.ts` → `WORKFLOW_EDIT_ROUTE`'taki kodlarda görünür; yeni form eklerken buraya + `?edit=` moduna + `PATCH /api/<form>/[id]` rotasına ihtiyaç var (2026-09-27 itibarıyla 14 formun tamamı kapsamda).
+
+**Revize açıklaması + ekler (2026-09-27):** Talep `REVISION_REQUESTED` iken hem detay ekranında hem edit formunun üstünde kimin/hangi adımda/ne zaman/hangi yorumla revize istediği gösterilir (`components/my-requests/revision-notice.tsx`). Edit modunda formun 1. adım ekleri `RequestEditAttachments` ile **anında** yüklenir/silinir ("Güncelle ve Gönder" beklenmez); talep sahibi DRAFT/REVISION_REQUESTED'da kendi ekini silebilir (`DELETE /api/attachments/[id]`).
+
 > ORG_ADMIN APPROVED/COMPLETED bir talebi düzenlerse otomatik resubmit tetiklenmez — sadece PATCH yapılır, talep durumunu korur. (Bu senaryo henüz form UI'da kapsanmadı; ORG_ADMIN düzeltmeleri için ayrı bir admin akışı ileride eklenebilir.)
 
 ---

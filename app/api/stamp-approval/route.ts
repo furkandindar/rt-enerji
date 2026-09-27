@@ -2,6 +2,12 @@ import { createClient } from "@/lib/supabase/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { createApprovalChain, getWorkflowDefinitionByCode, notifyApprover, canStartWorkflow } from "@/lib/workflow";
+import {
+  STAMP_PDF_BUCKET,
+  buildOriginalPdfPath,
+  parseSelectedPages,
+  parseStampPositionFields,
+} from "@/lib/stamp-approval/form-fields";
 
 // GET /api/stamp-approval - Kullanıcının kaşeli belge taleplerini listele
 export async function GET() {
@@ -57,59 +63,17 @@ export async function POST(request: Request) {
     // FormData'dan alanları al
     const pdfFile = formData.get("pdf_file") as File | null;
     const stampId = formData.get("stamp_id") as string;
-    const selectedPages = (formData.get("selected_pages") as string) || "all";
+    const selectedPages = parseSelectedPages(formData);
     const stampPosition = (formData.get("stamp_position") as string) || "bottom-right";
     const subject = formData.get("subject") as string;
     const description = formData.get("description") as string | null;
 
-    // Serbest konum alanları (opsiyonel)
-    const xRatioRaw = formData.get("stamp_x_ratio") as string | null;
-    const yRatioRaw = formData.get("stamp_y_ratio") as string | null;
-    const overridesRaw = formData.get("stamp_position_overrides") as string | null;
-
-    let stampXRatio: number | null = null;
-    let stampYRatio: number | null = null;
-
-    if (xRatioRaw && yRatioRaw) {
-      const xNum = parseFloat(xRatioRaw);
-      const yNum = parseFloat(yRatioRaw);
-      if (!Number.isFinite(xNum) || xNum < 0 || xNum > 1) {
-        return NextResponse.json({ error: "stamp_x_ratio 0-1 arasında bir sayı olmalı" }, { status: 400 });
-      }
-      if (!Number.isFinite(yNum) || yNum < 0 || yNum > 1) {
-        return NextResponse.json({ error: "stamp_y_ratio 0-1 arasında bir sayı olmalı" }, { status: 400 });
-      }
-      stampXRatio = xNum;
-      stampYRatio = yNum;
-    } else if (xRatioRaw || yRatioRaw) {
-      return NextResponse.json({ error: "stamp_x_ratio ve stamp_y_ratio birlikte gönderilmeli" }, { status: 400 });
+    // Serbest konum alanları (opsiyonel) — PATCH ile ortak parse/validasyon
+    const positionFields = parseStampPositionFields(formData);
+    if (!positionFields.ok) {
+      return NextResponse.json({ error: positionFields.error }, { status: 400 });
     }
-
-    // Override map'i tolerantla parse et: geçersiz girişler sessizce atılır
-    let stampPositionOverrides: Record<string, { x: number; y: number }> | null = null;
-    if (overridesRaw) {
-      let parsed: unknown;
-      try {
-        parsed = JSON.parse(overridesRaw);
-      } catch {
-        return NextResponse.json({ error: "stamp_position_overrides geçerli JSON olmalı" }, { status: 400 });
-      }
-      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-        const cleaned: Record<string, { x: number; y: number }> = {};
-        for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
-          const pageNum = Number(key);
-          if (!Number.isInteger(pageNum) || pageNum < 1) continue;
-          if (!value || typeof value !== "object") continue;
-          const v = value as { x?: unknown; y?: unknown };
-          const xn = typeof v.x === "number" ? v.x : NaN;
-          const yn = typeof v.y === "number" ? v.y : NaN;
-          if (!Number.isFinite(xn) || xn < 0 || xn > 1) continue;
-          if (!Number.isFinite(yn) || yn < 0 || yn > 1) continue;
-          cleaned[String(pageNum)] = { x: xn, y: yn };
-        }
-        stampPositionOverrides = Object.keys(cleaned).length > 0 ? cleaned : null;
-      }
-    }
+    const { stampXRatio, stampYRatio, stampPositionOverrides } = positionFields;
 
     // 1. Kullanıcı doğrulama
     const { data: { user } } = await supabase.auth.getUser();
@@ -152,15 +116,11 @@ export async function POST(request: Request) {
 
     // 5. PDF'i Storage'a yükle
     const supabaseAdmin = createServiceRoleClient();
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, "0");
     const pdfBuffer = Buffer.from(await pdfFile.arrayBuffer());
-    const originalFileName = `stamp_${Date.now()}_original.pdf`;
-    const originalPdfPath = `${year}/${month}/${originalFileName}`;
+    const originalPdfPath = buildOriginalPdfPath();
 
     const { error: uploadError } = await supabaseAdmin.storage
-      .from("request-documents")
+      .from(STAMP_PDF_BUCKET)
       .upload(originalPdfPath, pdfBuffer, {
         contentType: "application/pdf",
         upsert: false,
@@ -187,7 +147,7 @@ export async function POST(request: Request) {
     if (requestError || !newRequest) {
       console.error("Error creating request:", requestError);
       // Rollback: yüklenen PDF'i sil
-      await supabaseAdmin.storage.from("request-documents").remove([originalPdfPath]);
+      await supabaseAdmin.storage.from(STAMP_PDF_BUCKET).remove([originalPdfPath]);
       return NextResponse.json({ error: "Failed to create request" }, { status: 500 });
     }
 
@@ -209,7 +169,7 @@ export async function POST(request: Request) {
 
     if (stampError) {
       await supabase.from("requests").delete().eq("id", newRequest.id);
-      await supabaseAdmin.storage.from("request-documents").remove([originalPdfPath]);
+      await supabaseAdmin.storage.from(STAMP_PDF_BUCKET).remove([originalPdfPath]);
       console.error("Error creating stamp request:", stampError);
       return NextResponse.json({ error: "Failed to create stamp request details" }, { status: 500 });
     }
@@ -225,7 +185,7 @@ export async function POST(request: Request) {
     } catch (approvalError) {
       await supabase.from("stamp_requests").delete().eq("request_id", newRequest.id);
       await supabase.from("requests").delete().eq("id", newRequest.id);
-      await supabaseAdmin.storage.from("request-documents").remove([originalPdfPath]);
+      await supabaseAdmin.storage.from(STAMP_PDF_BUCKET).remove([originalPdfPath]);
       console.error("Error creating approval chain:", approvalError);
       return NextResponse.json({
         error: approvalError instanceof Error ? approvalError.message : "Failed to create approval chain"

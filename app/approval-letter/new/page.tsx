@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -10,6 +10,8 @@ import { Loader2, FileText, Upload, X, Plus, Trash2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { SignaturePanel } from "@/components/signature-panel";
 import { SignatureFont } from "@/lib/signature/types";
+import { RevisionNoticeForRequest } from "@/components/my-requests/revision-notice";
+import { RequestEditAttachments } from "@/components/my-requests/request-edit-attachments";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -63,8 +65,29 @@ interface Company {
   is_active: boolean;
 }
 
+// GET /api/my-requests/[id] → approval_letter_request (approval_letter_requests satırı)
+interface ApprovalLetterDetail {
+  letter_date?: string | null;
+  company?: string | null;
+  project?: string | null;
+  subject?: string | null;
+  content?: string | null;
+  has_payment_table?: boolean | null;
+  comparison_approval_date?: string | null;
+  agreement_amount?: string | null;
+  has_contract?: boolean | null;
+  paid_amounts?: unknown;
+  remaining_payment?: string | null;
+  requested_payment_amount?: string | null;
+  remaining_after_payment?: string | null;
+}
+
 export default function NewApprovalLetterPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const editId = searchParams.get("edit");
+  const isEditMode = !!editId;
+  const [loadingEditData, setLoadingEditData] = useState<boolean>(isEditMode);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [signatureAccepted, setSignatureAccepted] = useState(false);
   const [signatureInfo, setSignatureInfo] = useState<SignatureInfo>({
@@ -158,6 +181,61 @@ export default function NewApprovalLetterPage() {
     };
   }, []);
 
+  // Edit mode — ?edit=<id> ile gelirse mevcut olur yazısını yükle
+  useEffect(() => {
+    if (!editId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/my-requests/${editId}`);
+        if (!res.ok) {
+          toast.error("Talep bulunamadı");
+          return;
+        }
+        const body = (await res.json()) as {
+          approval_letter_request?: ApprovalLetterDetail | ApprovalLetterDetail[] | null;
+        };
+        // PostgREST 1:1 embed obje veya tek elemanlı dizi dönebilir
+        const raw = body.approval_letter_request;
+        const f = Array.isArray(raw) ? raw[0] : raw;
+        if (!f) {
+          toast.error("Talep bulunamadı");
+          return;
+        }
+        if (cancelled) return;
+        const hasTable = Boolean(f.has_payment_table);
+        const paid = Array.isArray(f.paid_amounts)
+          ? (f.paid_amounts as unknown[]).filter((v): v is string => typeof v === "string")
+          : [];
+        form.reset({
+          letter_date: f.letter_date ?? new Date().toISOString().split("T")[0],
+          company: f.company ?? "",
+          project: f.project ?? "",
+          subject: f.subject ?? "",
+          content: f.content ?? "",
+          has_payment_table: hasTable,
+          comparison_approval_date: f.comparison_approval_date ?? "",
+          agreement_amount: f.agreement_amount ?? "",
+          has_contract: f.has_contract ?? false,
+          // Boş listede de tek boş satır göster (create ile aynı başlangıç)
+          paid_amounts: paid.length > 0 ? paid.map((value) => ({ value })) : [{ value: "" }],
+          remaining_payment: f.remaining_payment ?? "",
+          requested_payment_amount: f.requested_payment_amount ?? "",
+          remaining_after_payment: f.remaining_after_payment ?? "",
+        });
+      } catch (err) {
+        console.error("Edit data load error:", err);
+        toast.error("Talep yüklenirken hata oluştu");
+      } finally {
+        if (!cancelled) setLoadingEditData(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editId]);
+
   // Attachment config yükle
   useEffect(() => {
     const loadAttachmentConfig = async () => {
@@ -222,57 +300,77 @@ export default function NewApprovalLetterPage() {
   const onSubmit = async (data: ApprovalLetterFormValues) => {
     setIsSubmitting(true);
     try {
-      const response = await fetch("/api/approval-letter", {
-        method: "POST",
+      const payload = {
+        letter_date: data.letter_date,
+        company: data.company,
+        project: data.project,
+        subject: data.subject,
+        content: data.content,
+        has_payment_table: data.has_payment_table,
+        comparison_approval_date: data.has_payment_table ? data.comparison_approval_date || undefined : undefined,
+        agreement_amount: data.has_payment_table ? data.agreement_amount || undefined : undefined,
+        has_contract: data.has_payment_table ? data.has_contract : undefined,
+        paid_amounts: data.has_payment_table
+          ? (data.paid_amounts || []).map((p) => p.value).filter((v) => v.trim() !== "")
+          : undefined,
+        remaining_payment: data.has_payment_table ? data.remaining_payment || undefined : undefined,
+        requested_payment_amount: data.has_payment_table ? data.requested_payment_amount || undefined : undefined,
+        remaining_after_payment: data.has_payment_table ? data.remaining_after_payment || undefined : undefined,
+      };
+
+      const url = isEditMode ? `/api/approval-letter/${editId}` : "/api/approval-letter";
+      const method = isEditMode ? "PATCH" : "POST";
+
+      const response = await fetch(url, {
+        method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          letter_date: data.letter_date,
-          company: data.company,
-          project: data.project,
-          subject: data.subject,
-          content: data.content,
-          has_payment_table: data.has_payment_table,
-          comparison_approval_date: data.has_payment_table ? data.comparison_approval_date || undefined : undefined,
-          agreement_amount: data.has_payment_table ? data.agreement_amount || undefined : undefined,
-          has_contract: data.has_payment_table ? data.has_contract : undefined,
-          paid_amounts: data.has_payment_table
-            ? (data.paid_amounts || []).map((p) => p.value).filter((v) => v.trim() !== "")
-            : undefined,
-          remaining_payment: data.has_payment_table ? data.remaining_payment || undefined : undefined,
-          requested_payment_amount: data.has_payment_table ? data.requested_payment_amount || undefined : undefined,
-          remaining_after_payment: data.has_payment_table ? data.remaining_after_payment || undefined : undefined,
-        }),
+        body: JSON.stringify(payload),
       });
 
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.error || "Talep oluşturulamadı");
+        throw new Error(error.error || (isEditMode ? "Talep güncellenemedi" : "Talep oluşturulamadı"));
       }
 
-      const result = await response.json();
-      const requestId: string = result.id;
+      if (isEditMode) {
+        // Edit sonrası otomatik resubmit → talep onay akışına geri girer
+        const resubmitRes = await fetch(`/api/requests/${editId}/resubmit`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({}),
+        });
+        if (!resubmitRes.ok) {
+          const err = await resubmitRes.json().catch(() => ({}));
+          throw new Error(err.error || "Talep güncellendi ama yeniden gönderilemedi");
+        }
+        toast.success("Talep güncellendi ve onaya gönderildi");
+      } else {
+        // Create akışı: dosyaları yükle
+        const result = await response.json();
+        const requestId: string = result.id;
 
-      // Dosyaları yükle
-      if (requestId && pendingFiles.length > 0) {
-        for (const file of pendingFiles) {
-          const formData = new FormData();
-          formData.append("file", file);
-          formData.append("request_id", requestId);
-          if (attachmentConfigId) {
-            formData.append("step_attachment_config_id", attachmentConfigId);
-          }
-          const uploadRes = await fetch("/api/attachments/upload", {
-            method: "POST",
-            body: formData,
-          });
-          if (!uploadRes.ok) {
-            console.error("Dosya yüklenemedi:", file.name);
-            toast.warning(`${file.name} yüklenemedi, talep yine de oluşturuldu`);
+        if (requestId && pendingFiles.length > 0) {
+          for (const file of pendingFiles) {
+            const formData = new FormData();
+            formData.append("file", file);
+            formData.append("request_id", requestId);
+            if (attachmentConfigId) {
+              formData.append("step_attachment_config_id", attachmentConfigId);
+            }
+            const uploadRes = await fetch("/api/attachments/upload", {
+              method: "POST",
+              body: formData,
+            });
+            if (!uploadRes.ok) {
+              console.error("Dosya yüklenemedi:", file.name);
+              toast.warning(`${file.name} yüklenemedi, talep yine de oluşturuldu`);
+            }
           }
         }
+
+        toast.success("Olur yazısı başarıyla oluşturuldu");
       }
 
-      toast.success("Olur yazısı başarıyla oluşturuldu");
       router.push("/my-requests");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Bir hata oluştu");
@@ -281,12 +379,31 @@ export default function NewApprovalLetterPage() {
     }
   };
 
+  if (loadingEditData) {
+    return (
+      <div className="flex items-center justify-center p-12">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-4 p-4 sm:p-6">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Yeni Olur Yazısı</h1>
-        <p className="text-muted-foreground">Olur yazınızı doldurun ve gönderin</p>
+        <h1 className="text-2xl font-bold tracking-tight">
+          {isEditMode ? "Olur Yazısını Güncelle" : "Yeni Olur Yazısı"}
+        </h1>
+        <p className="text-muted-foreground">
+          {isEditMode ? "Olur yazısı bilgilerini güncelleyin" : "Olur yazınızı doldurun ve gönderin"}
+        </p>
       </div>
+
+      {/* Revize bandı: yalnız talep REVISION_REQUESTED iken görünür (boşsa gizlenir) */}
+      {isEditMode && (
+        <div className="max-w-2xl empty:hidden">
+          <RevisionNoticeForRequest requestId={editId} />
+        </div>
+      )}
 
       <Card className="max-w-2xl">
         <CardHeader>
@@ -345,6 +462,10 @@ export default function NewApprovalLetterPage() {
                             {c.name}
                           </SelectItem>
                         ))}
+                        {/* Edit modu: kayıtlı firma artık pasif/listede yoksa seçili değer yine görünsün */}
+                        {!companiesLoading && field.value && !companies.some((c) => c.name === field.value) && (
+                          <SelectItem value={field.value}>{field.value}</SelectItem>
+                        )}
                       </SelectContent>
                     </Select>
                     <FormMessage />
@@ -547,8 +668,14 @@ export default function NewApprovalLetterPage() {
                 </Card>
               )}
 
-              {/* Ek Dosyalar */}
-              {attachmentConfigId && (
+              {/* Ek Dosyalar — edit modunda talep zaten var: ekler anında yüklenir/silinir */}
+              {editId ? (
+                <RequestEditAttachments
+                  requestId={editId}
+                  workflowCode="APPROVAL_LETTER"
+                  disabled={isSubmitting}
+                />
+              ) : attachmentConfigId && (
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
                     <label className="text-sm font-medium">{attachmentLabel}</label>
@@ -618,11 +745,11 @@ export default function NewApprovalLetterPage() {
                 >
                   İptal
                 </Button>
-                <Button type="submit" disabled={isSubmitting || !canSubmit}>
+                <Button type="submit" disabled={isSubmitting || (!isEditMode && !canSubmit)}>
                   {isSubmitting && (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   )}
-                  İmzala ve Talebi Gönder
+                  {isEditMode ? "Talebi Güncelle ve Gönder" : "İmzala ve Talebi Gönder"}
                 </Button>
               </div>
             </form>

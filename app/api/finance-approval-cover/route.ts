@@ -2,10 +2,11 @@ import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 import { createApprovalChain, getWorkflowDefinitionByCode, notifyApprover, canStartWorkflow } from "@/lib/workflow";
 import type { CreateFinanceApprovalCoverInput } from "@/lib/workflow";
-
-const EXPENSE_AREAS = ['ANA_SAHA', 'ELEKTRIKSEL_KAPASITE_ARTISI', 'YEKA_1', 'YEKA_2'] as const;
-const FUNDING_SOURCES = ['KREDI', 'OZ_KAYNAK', 'NAKIT_FAZLASI', 'DIGER'] as const;
-const CURRENCIES = ['TRY', 'USD', 'EUR'] as const;
+import {
+  buildFinanceCoverDetail,
+  buildFinanceCoverItems,
+  validateFinanceCoverInput,
+} from "@/lib/workflow/approval-cover-payload";
 
 const ALLOWED_PAGE_SIZES = [10, 25, 50, 100] as const;
 const DEFAULT_PAGE_SIZE = 10;
@@ -149,59 +150,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Bu formu başlatma yetkiniz yok" }, { status: 403 });
     }
 
-    // 4. Validasyon - başlık alanları
-    if (!body.subject?.trim()) {
-      return NextResponse.json({ error: "Konu gerekli" }, { status: 400 });
-    }
-    if (!body.document_no?.trim()) {
-      return NextResponse.json({ error: "Sayı gerekli" }, { status: 400 });
-    }
-    if (!body.request_date) {
-      return NextResponse.json({ error: "Tarih gerekli" }, { status: 400 });
-    }
-    if (typeof body.account_available !== 'boolean') {
-      return NextResponse.json({ error: "Hesap durumu bilgisi gerekli" }, { status: 400 });
-    }
-    if (typeof body.cash_flow_recorded !== 'boolean') {
-      return NextResponse.json({ error: "Nakit giriş/çıkış kaydı bilgisi gerekli" }, { status: 400 });
-    }
-    if (typeof body.has_rt_enerji_proforma !== 'boolean') {
-      return NextResponse.json({ error: "RT Enerji proforma bilgisi gerekli" }, { status: 400 });
-    }
-    if (!EXPENSE_AREAS.includes(body.expense_area)) {
-      return NextResponse.json({ error: "Geçerli bir harcama alanı seçin" }, { status: 400 });
-    }
-    if (!FUNDING_SOURCES.includes(body.funding_source)) {
-      return NextResponse.json({ error: "Geçerli bir niteliği seçin" }, { status: 400 });
-    }
-
-    // 5. Validasyon - ödeme tablosu
-    if (!Array.isArray(body.items) || body.items.length === 0) {
-      return NextResponse.json({ error: "En az bir ödeme satırı zorunludur" }, { status: 400 });
-    }
-    for (let i = 0; i < body.items.length; i++) {
-      const it = body.items[i];
-      if (!it.item_date) {
-        return NextResponse.json({ error: `Satır ${i + 1}: tarih gerekli` }, { status: 400 });
-      }
-      if (!it.company_name?.trim()) {
-        return NextResponse.json({ error: `Satır ${i + 1}: firma adı gerekli` }, { status: 400 });
-      }
-      if (!it.payee_name?.trim()) {
-        return NextResponse.json({ error: `Satır ${i + 1}: ödeme yapılacak firma/kurum gerekli` }, { status: 400 });
-      }
-      if (!it.item_subject?.trim()) {
-        return NextResponse.json({ error: `Satır ${i + 1}: konu gerekli` }, { status: 400 });
-      }
-      if (typeof it.invoice_amount !== 'number' || it.invoice_amount < 0) {
-        return NextResponse.json({ error: `Satır ${i + 1}: geçerli bir fatura tutarı girin` }, { status: 400 });
-      }
-      if (typeof it.payable_amount !== 'number' || it.payable_amount < 0) {
-        return NextResponse.json({ error: `Satır ${i + 1}: geçerli bir ödenecek tutar girin` }, { status: 400 });
-      }
-      if (!CURRENCIES.includes(it.currency)) {
-        return NextResponse.json({ error: `Satır ${i + 1}: geçerli bir para birimi seçin` }, { status: 400 });
-      }
+    // 4. Validasyon (başlık + ödeme tablosu) — PATCH ile ortak
+    const validationError = validateFinanceCoverInput(body);
+    if (validationError) {
+      return NextResponse.json({ error: validationError }, { status: 400 });
     }
 
     // 6. Ana request kaydı oluştur
@@ -227,23 +179,7 @@ export async function POST(request: Request) {
       .from("finance_approval_cover_requests")
       .insert({
         request_id: newRequest.id,
-        subject: body.subject,
-        request_date: body.request_date,
-        document_no: body.document_no,
-        account_available: body.account_available,
-        cash_flow_recorded: body.cash_flow_recorded,
-        expense_area: body.expense_area,
-        funding_source: body.funding_source,
-        has_rt_enerji_proforma: body.has_rt_enerji_proforma,
-        // Opsiyonel ödeme tablosu — toggle kapalıysa alanlar temizlenir (olur yazısıyla aynı davranış)
-        has_payment_table: body.has_payment_table || false,
-        comparison_approval_date: body.has_payment_table ? body.comparison_approval_date || null : null,
-        agreement_amount: body.has_payment_table ? body.agreement_amount || null : null,
-        has_contract: body.has_payment_table ? body.has_contract ?? null : null,
-        paid_amounts: body.has_payment_table ? body.paid_amounts || [] : [],
-        remaining_payment: body.has_payment_table ? body.remaining_payment || null : null,
-        requested_payment_amount: body.has_payment_table ? body.requested_payment_amount || null : null,
-        remaining_after_payment: body.has_payment_table ? body.remaining_after_payment || null : null,
+        ...buildFinanceCoverDetail(body),
       })
       .select()
       .single();
@@ -255,17 +191,7 @@ export async function POST(request: Request) {
     }
 
     // 8. Ödeme tablosu satırlarını oluştur
-    const itemsData = body.items.map((it, idx) => ({
-      finance_request_id: financeRequest.id,
-      row_order: idx + 1,
-      item_date: it.item_date,
-      company_name: it.company_name,
-      payee_name: it.payee_name,
-      item_subject: it.item_subject,
-      invoice_amount: it.invoice_amount,
-      payable_amount: it.payable_amount,
-      currency: it.currency,
-    }));
+    const itemsData = buildFinanceCoverItems(body, financeRequest.id);
 
     const { error: itemsError } = await supabase
       .from("finance_approval_cover_items")

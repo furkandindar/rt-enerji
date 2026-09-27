@@ -10,6 +10,8 @@ import { Loader2, FileText, Upload, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { SignaturePanel } from "@/components/signature-panel";
 import { SignatureFont } from "@/lib/signature/types";
+import { RevisionNoticeForRequest } from "@/components/my-requests/revision-notice";
+import { RequestEditAttachments } from "@/components/my-requests/request-edit-attachments";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -374,6 +376,13 @@ export default function NewRequestFormPage() {
         </p>
       </div>
 
+      {/* Revize bandı: yalnız talep REVISION_REQUESTED iken görünür (boşsa gizlenir) */}
+      {isEditMode && (
+        <div className="max-w-2xl empty:hidden">
+          <RevisionNoticeForRequest requestId={editId} />
+        </div>
+      )}
+
       <Card className="max-w-2xl">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -574,8 +583,14 @@ export default function NewRequestFormPage() {
                 )}
               />
 
-              {/* Ek Dosyalar */}
-              {attachmentConfigId && (
+              {/* Ek Dosyalar — edit modunda talep zaten var: ekler anında yüklenir/silinir */}
+              {editId ? (
+                <RequestEditAttachments
+                  requestId={editId}
+                  workflowCode="REQUEST_FORM"
+                  disabled={isSubmitting}
+                />
+              ) : attachmentConfigId && (
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
                     <label className="text-sm font-medium">{attachmentLabel}</label>

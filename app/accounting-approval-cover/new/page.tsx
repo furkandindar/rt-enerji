@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useForm, useFieldArray, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -14,6 +14,8 @@ import { uploadPendingFiles } from "@/lib/attachments/upload-attachment";
 import { SignatureFont } from "@/lib/signature/types";
 import { UserMultiPicker, type UserMultiPickerEmployee } from "@/components/user-multi-picker";
 import { sumItemsByCurrency, joinCurrencyTotals } from "@/lib/currency";
+import { RevisionNoticeForRequest } from "@/components/my-requests/revision-notice";
+import { RequestEditAttachments } from "@/components/my-requests/request-edit-attachments";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -46,6 +48,37 @@ const CAPACITY_TYPE_OPTIONS = [
 /** Sözlükteki şirket adı ("Kiraz Enerji") kalemde büyük harfle saklanır ("KİRAZ ENERJİ") —
  *  eski serbest metin kayıtları ve PDF görünümüyle tutarlı olsun diye. */
 const toTrUpper = (s: string) => s.toLocaleUpperCase("tr-TR");
+
+/** Detay API'sinden (GET /api/my-requests/[id]) gelen muhasebe kapağı kaydı. */
+interface AccountingCoverEditData {
+  subject: string | null;
+  request_date: string | null;
+  document_no: string | null;
+  demirbas_registered: boolean | null;
+  has_dispatch_note: boolean | null;
+  has_delivery_info: boolean | null;
+  has_invoice_record: boolean | null;
+  has_accounting_prog_entry: boolean | null;
+  has_arvento_record: boolean | null;
+  paid_from_credit: boolean | null;
+  items?: Array<{
+    row_order: number;
+    item_date: string;
+    company_name: string;
+    payee_name: string;
+    item_subject: string;
+    capacity_type: "KAPASITE" | "ANASAHA" | "YEKA";
+    invoice_amount: number | string | null;
+    payable_amount: number | string | null;
+    currency: "TRY" | "USD" | "EUR";
+  }>;
+}
+
+interface EditApprovalRow {
+  sequence_order: number;
+  workflow_step?: { approver_type?: string } | null;
+  approver?: { id: string } | null;
+}
 
 interface CompanyOption {
   id: string;
@@ -98,8 +131,15 @@ interface SignatureInfo {
 export default function NewAccountingApprovalCoverPage() {
   const router = useRouter();
   const supabase = createClient();
+  const searchParams = useSearchParams();
+  const editId = searchParams.get("edit");
+  const isEditMode = !!editId;
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [loadingEditData, setLoadingEditData] = useState<boolean>(isEditMode);
+  // Edit modunda "İlgili Kişiler" adımının id'si yüklenmeden gönderilirse resubmit
+  // gövdesi boş gider ve sunucu önceki turun listesini kopyalar — bu yüzden beklenir.
+  const [loadingWorkflowConfig, setLoadingWorkflowConfig] = useState(true);
   const [signatureAccepted, setSignatureAccepted] = useState(false);
   const [signatureInfo, setSignatureInfo] = useState<SignatureInfo>({
     signatureText: null,
@@ -260,11 +300,81 @@ export default function NewAccountingApprovalCoverPage() {
         }
       } catch (error) {
         console.error("Error loading workflow config:", error);
+      } finally {
+        setLoadingWorkflowConfig(false);
       }
     };
     loadWorkflowConfig();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Edit mode — ?edit=<id> ile gelirse mevcut talebi (revize/taslak) yükle
+  useEffect(() => {
+    if (!editId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/my-requests/${editId}`);
+        if (!res.ok) {
+          toast.error("Talep bulunamadı");
+          return;
+        }
+        const body = await res.json();
+        const raw = body.accounting_approval_cover_request;
+        const f = (Array.isArray(raw) ? raw[0] : raw) as AccountingCoverEditData | undefined;
+        if (!f) {
+          toast.error("Talep bulunamadı");
+          return;
+        }
+        if (cancelled) return;
+
+        const yesNo = (v: boolean | null | undefined) =>
+          v === true ? "yes" : v === false ? "no" : undefined;
+        const items = [...(f.items ?? [])].sort((a, b) => a.row_order - b.row_order);
+
+        form.reset({
+          subject: f.subject ?? "",
+          request_date: f.request_date ?? new Date().toISOString().split("T")[0],
+          document_no: f.document_no ?? "",
+          demirbas_registered: yesNo(f.demirbas_registered),
+          has_dispatch_note: yesNo(f.has_dispatch_note),
+          has_delivery_info: yesNo(f.has_delivery_info),
+          has_invoice_record: yesNo(f.has_invoice_record),
+          has_accounting_prog_entry: yesNo(f.has_accounting_prog_entry),
+          has_arvento_record: yesNo(f.has_arvento_record),
+          paid_from_credit: yesNo(f.paid_from_credit),
+          items: items.map((it) => ({
+            item_date: it.item_date,
+            company_name: it.company_name,
+            payee_name: it.payee_name,
+            item_subject: it.item_subject,
+            capacity_type: it.capacity_type,
+            invoice_amount: String(it.invoice_amount ?? 0),
+            payable_amount: String(it.payable_amount ?? 0),
+            currency: it.currency,
+          })),
+        });
+
+        // İlgili Kişiler: aktif turdaki DYNAMIC_USER_LIST onaycıları (sıralı)
+        const approvals = (body.approvals ?? []) as EditApprovalRow[];
+        setRelatedPersonIds(
+          approvals
+            .filter((a) => a.workflow_step?.approver_type === "DYNAMIC_USER_LIST" && a.approver?.id)
+            .sort((a, b) => a.sequence_order - b.sequence_order)
+            .map((a) => a.approver!.id)
+        );
+      } catch (err) {
+        console.error("Edit data load error:", err);
+        toast.error("Talep yüklenirken hata oluştu");
+      } finally {
+        if (!cancelled) setLoadingEditData(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editId]);
 
   const addItemRow = () => {
     append({
@@ -286,7 +396,7 @@ export default function NewAccountingApprovalCoverPage() {
 
 
   const onSubmit = async (data: AccountingCoverFormValues) => {
-    if (!signatureAccepted) {
+    if (!isEditMode && !signatureAccepted) {
       toast.error("Devam etmek için imzanızı onaylayın");
       return;
     }
@@ -298,37 +408,59 @@ export default function NewAccountingApprovalCoverPage() {
           ? { [dynamicStepId]: relatedPersonIds }
           : undefined;
 
-      const response = await fetch("/api/accounting-approval-cover", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          subject: data.subject,
-          request_date: data.request_date,
-          document_no: data.document_no,
-          demirbas_registered: data.demirbas_registered === "yes",
-          has_dispatch_note: data.has_dispatch_note === "yes",
-          has_delivery_info: data.has_delivery_info === "yes",
-          has_invoice_record: data.has_invoice_record === "yes",
-          has_accounting_prog_entry: data.has_accounting_prog_entry === "yes",
-          has_arvento_record: data.has_arvento_record === "yes",
-          paid_from_credit: data.paid_from_credit === "yes",
-          items: data.items.map((it) => ({
-            item_date: it.item_date,
-            company_name: it.company_name,
-            payee_name: it.payee_name,
-            item_subject: it.item_subject,
-            capacity_type: it.capacity_type,
-            invoice_amount: Number(it.invoice_amount),
-            payable_amount: Number(it.payable_amount),
-            currency: it.currency,
-          })),
-          dynamic_approvers,
-        }),
-      });
+      const response = await fetch(
+        isEditMode ? `/api/accounting-approval-cover/${editId}` : "/api/accounting-approval-cover",
+        {
+          method: isEditMode ? "PATCH" : "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            subject: data.subject,
+            request_date: data.request_date,
+            document_no: data.document_no,
+            demirbas_registered: data.demirbas_registered === "yes",
+            has_dispatch_note: data.has_dispatch_note === "yes",
+            has_delivery_info: data.has_delivery_info === "yes",
+            has_invoice_record: data.has_invoice_record === "yes",
+            has_accounting_prog_entry: data.has_accounting_prog_entry === "yes",
+            has_arvento_record: data.has_arvento_record === "yes",
+            paid_from_credit: data.paid_from_credit === "yes",
+            items: data.items.map((it) => ({
+              item_date: it.item_date,
+              company_name: it.company_name,
+              payee_name: it.payee_name,
+              item_subject: it.item_subject,
+              capacity_type: it.capacity_type,
+              invoice_amount: Number(it.invoice_amount),
+              payable_amount: Number(it.payable_amount),
+              currency: it.currency,
+            })),
+            dynamic_approvers,
+          }),
+        }
+      );
 
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.error || "Talep oluşturulamadı");
+        throw new Error(error.error || (isEditMode ? "Talep güncellenemedi" : "Talep oluşturulamadı"));
+      }
+
+      if (isEditMode) {
+        // Güncelleme sonrası yeni onay turu. İlgili Kişiler açıkça gönderilir:
+        // boş liste = dinamik adım atlanır (resubmit'in önceki turdan kopyalamasını ezer).
+        const resubmitRes = await fetch(`/api/requests/${editId}/resubmit`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(
+            dynamicStepId ? { dynamicApprovers: { [dynamicStepId]: relatedPersonIds } } : {}
+          ),
+        });
+        if (!resubmitRes.ok) {
+          const err = await resubmitRes.json().catch(() => ({}));
+          throw new Error(err.error || "Talep güncellendi ama yeniden gönderilemedi");
+        }
+        toast.success("Talep güncellendi ve onaya gönderildi");
+        router.push("/my-requests");
+        return;
       }
 
       const result = await response.json();
@@ -348,7 +480,7 @@ export default function NewAccountingApprovalCoverPage() {
     }
   };
 
-  if (loadingUser) {
+  if (loadingUser || loadingEditData || (isEditMode && loadingWorkflowConfig)) {
     return (
       <div className="flex items-center justify-center p-12">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -360,9 +492,21 @@ export default function NewAccountingApprovalCoverPage() {
   return (
     <div className="flex flex-col gap-4 p-4 sm:p-6">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Yeni Onay Kapağı (Muhasebe)</h1>
-        <p className="text-muted-foreground">Muhasebe onay kapağı talebini doldurun ve gönderin</p>
+        <h1 className="text-2xl font-bold tracking-tight">
+          {isEditMode ? "Onay Kapağını Güncelle (Muhasebe)" : "Yeni Onay Kapağı (Muhasebe)"}
+        </h1>
+        <p className="text-muted-foreground">
+          {isEditMode
+            ? "Onay kapağını düzenleyin ve yeniden onaya gönderin"
+            : "Muhasebe onay kapağı talebini doldurun ve gönderin"}
+        </p>
       </div>
+
+      {isEditMode && (
+        <div className="max-w-5xl empty:hidden">
+          <RevisionNoticeForRequest requestId={editId} />
+        </div>
+      )}
 
       <Card className="max-w-5xl">
         <CardHeader>
@@ -477,6 +621,10 @@ export default function NewAccountingApprovalCoverPage() {
                                   {companies.map((c) => (
                                     <SelectItem key={c.id} value={toTrUpper(c.name)}>{c.name}</SelectItem>
                                   ))}
+                                  {/* Edit: kayıtlı firma pasif/eski serbest metinse listede yok — boş görünmesin */}
+                                  {field.value && !companies.some((c) => toTrUpper(c.name) === field.value) && (
+                                    <SelectItem value={field.value}>{field.value}</SelectItem>
+                                  )}
                                 </SelectContent>
                               </Select>
                               <FormMessage />
@@ -676,41 +824,53 @@ export default function NewAccountingApprovalCoverPage() {
                         <li>Demirbaş kaydı belgesi (varsa)</li>
                       </ul>
                       <p className="text-xs text-blue-700 dark:text-blue-300 pt-1">
-                        Tüm belgeler aşağıdaki alana yüklenebilir (opsiyonel).
+                        {isEditMode
+                          ? "Ekler anında güncellenir: yüklediğiniz dosya hemen eklenir, sildiğiniz dosya hemen kaldırılır."
+                          : "Tüm belgeler aşağıdaki alana yüklenebilir (opsiyonel)."}
                       </p>
                     </div>
                   </div>
                 </div>
 
-                {/* Dosya Yükleme */}
-                <PendingAttachmentsField
-                  label={attachmentLabel}
-                  files={pendingFiles}
-                  onFilesChange={setPendingFiles}
-                  rules={{ allowedMimeTypes, maxFileSizeBytes, maxFiles }}
-                  disabled={isSubmitting}
-                />
+                {/* Dosya Yükleme — edit modunda mevcut ekler anında yüklenir/silinir */}
+                {isEditMode && editId ? (
+                  <RequestEditAttachments
+                    requestId={editId}
+                    workflowCode="ACCOUNTING_APPROVAL_COVER"
+                    disabled={isSubmitting}
+                  />
+                ) : (
+                  <PendingAttachmentsField
+                    label={attachmentLabel}
+                    files={pendingFiles}
+                    onFilesChange={setPendingFiles}
+                    rules={{ allowedMimeTypes, maxFileSizeBytes, maxFiles }}
+                    disabled={isSubmitting}
+                  />
+                )}
               </section>
 
-              {/* İmza Paneli */}
-              <SignaturePanel
-                signatureText={signatureInfo.signatureText}
-                signatureFont={signatureInfo.signatureFont}
-                isAccepted={signatureAccepted}
-                onAcceptChange={setSignatureAccepted}
-                title="TALEP İMZASI"
-                description="Bu talebi imzanızla onaylayacaksınız:"
-                disabled={isSubmitting}
-              />
+              {/* İmza Paneli — edit modunda imza zaten ilk gönderimde verildi */}
+              {!isEditMode && (
+                <SignaturePanel
+                  signatureText={signatureInfo.signatureText}
+                  signatureFont={signatureInfo.signatureFont}
+                  isAccepted={signatureAccepted}
+                  onAcceptChange={setSignatureAccepted}
+                  title="TALEP İMZASI"
+                  description="Bu talebi imzanızla onaylayacaksınız:"
+                  disabled={isSubmitting}
+                />
+              )}
 
               {/* Butonlar */}
               <div className="flex gap-4">
                 <Button type="button" variant="outline" onClick={() => router.back()} disabled={isSubmitting}>
                   İptal
                 </Button>
-                <Button type="submit" disabled={!canSubmit}>
+                <Button type="submit" disabled={isSubmitting || (!isEditMode && !canSubmit)}>
                   {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  İmzala ve Talebi Gönder
+                  {isEditMode ? "Güncelle ve Gönder" : "İmzala ve Talebi Gönder"}
                 </Button>
               </div>
             </form>

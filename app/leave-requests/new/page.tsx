@@ -10,6 +10,7 @@ import { CalendarIcon, Loader2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { SignaturePanel } from "@/components/signature-panel";
 import { SignatureFont } from "@/lib/signature/types";
+import { RevisionNoticeForRequest } from "@/components/my-requests/revision-notice";
 import { format, eachDayOfInterval } from "date-fns";
 import { tr } from "date-fns/locale";
 
@@ -409,6 +410,13 @@ export default function NewLeaveRequestPage() {
           {isEditMode ? "Talep bilgilerini güncelleyin" : "İzin talebi oluşturun"}
         </p>
       </div>
+
+      {/* Revize bandı: yalnız talep REVISION_REQUESTED iken görünür (boşsa gizlenir) */}
+      {isEditMode && (
+        <div className="max-w-2xl empty:hidden">
+          <RevisionNoticeForRequest requestId={editId} />
+        </div>
+      )}
 
       <Card className="max-w-2xl">
         <CardHeader>

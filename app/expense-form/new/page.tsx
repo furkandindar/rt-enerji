@@ -11,6 +11,8 @@ import { createClient } from "@/lib/supabase/client";
 import { SignaturePanel } from "@/components/signature-panel";
 import { SignatureFont } from "@/lib/signature/types";
 import type { CreateExpenseFormInput } from "@/lib/workflow";
+import { RevisionNoticeForRequest } from "@/components/my-requests/revision-notice";
+import { RequestEditAttachments } from "@/components/my-requests/request-edit-attachments";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -490,6 +492,13 @@ export default function NewExpenseFormPage() {
         </p>
       </div>
 
+      {/* Revize bandı: yalnız talep REVISION_REQUESTED iken görünür (boşsa gizlenir) */}
+      {isEditMode && (
+        <div className="max-w-5xl empty:hidden">
+          <RevisionNoticeForRequest requestId={editId} />
+        </div>
+      )}
+
       <Card className="max-w-5xl">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -774,65 +783,73 @@ export default function NewExpenseFormPage() {
                 </div>
               </section>
 
-              {/* Ek Dosyalar (opsiyonel) */}
-              <section className="space-y-3">
-                <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Ekler</h2>
-                <div className="space-y-2">
-                  <Label className="text-sm">{attachmentLabel} <span className="text-xs text-muted-foreground font-normal">(Opsiyonel)</span></Label>
-                  {pendingFiles.length > 0 && (
-                    <ul className="space-y-1">
-                      {pendingFiles.map((file, index) => (
-                        <li
-                          key={`${file.name}-${index}`}
-                          className="flex items-center gap-2 rounded-md border bg-muted/30 px-2 py-1.5 text-sm"
-                        >
-                          <span className="flex-1 truncate">{file.name}</span>
-                          <span className="text-xs text-muted-foreground">
-                            {Math.round(file.size / 1024)} KB
-                          </span>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="h-6 w-6 text-destructive hover:text-destructive"
-                            onClick={() => removeFile(index)}
-                            disabled={isSubmitting}
-                            aria-label="Dosyayı kaldır"
+              {/* Ek Dosyalar (opsiyonel) — edit modunda talep zaten var: ekler anında yüklenir/silinir */}
+              {editId ? (
+                <RequestEditAttachments
+                  requestId={editId}
+                  workflowCode="EXPENSE_FORM"
+                  disabled={isSubmitting}
+                />
+              ) : (
+                <section className="space-y-3">
+                  <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Ekler</h2>
+                  <div className="space-y-2">
+                    <Label className="text-sm">{attachmentLabel} <span className="text-xs text-muted-foreground font-normal">(Opsiyonel)</span></Label>
+                    {pendingFiles.length > 0 && (
+                      <ul className="space-y-1">
+                        {pendingFiles.map((file, index) => (
+                          <li
+                            key={`${file.name}-${index}`}
+                            className="flex items-center gap-2 rounded-md border bg-muted/30 px-2 py-1.5 text-sm"
                           >
-                            <X className="h-3.5 w-3.5" />
-                          </Button>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                  {pendingFiles.length < maxFiles && (
-                    <div>
-                      <input
-                        id="expense-file-input"
-                        type="file"
-                        multiple
-                        accept={allowedMimeTypes && allowedMimeTypes.length > 0 ? allowedMimeTypes.join(",") : undefined}
-                        className="hidden"
-                        onChange={handleFileChange}
-                        disabled={isSubmitting}
-                      />
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => document.getElementById("expense-file-input")?.click()}
-                        disabled={isSubmitting}
-                      >
-                        <Upload className="mr-2 h-4 w-4" />
-                        Dosya Seç
-                      </Button>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Maksimum {maxFiles} dosya, her biri en fazla {Math.round(maxFileSizeBytes / 1048576)} MB.
-                      </p>
-                    </div>
-                  )}
-                </div>
-              </section>
+                            <span className="flex-1 truncate">{file.name}</span>
+                            <span className="text-xs text-muted-foreground">
+                              {Math.round(file.size / 1024)} KB
+                            </span>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6 text-destructive hover:text-destructive"
+                              onClick={() => removeFile(index)}
+                              disabled={isSubmitting}
+                              aria-label="Dosyayı kaldır"
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </Button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {pendingFiles.length < maxFiles && (
+                      <div>
+                        <input
+                          id="expense-file-input"
+                          type="file"
+                          multiple
+                          accept={allowedMimeTypes && allowedMimeTypes.length > 0 ? allowedMimeTypes.join(",") : undefined}
+                          className="hidden"
+                          onChange={handleFileChange}
+                          disabled={isSubmitting}
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => document.getElementById("expense-file-input")?.click()}
+                          disabled={isSubmitting}
+                        >
+                          <Upload className="mr-2 h-4 w-4" />
+                          Dosya Seç
+                        </Button>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Maksimum {maxFiles} dosya, her biri en fazla {Math.round(maxFileSizeBytes / 1048576)} MB.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </section>
+              )}
 
               {/* İmza Paneli */}
               <SignaturePanel

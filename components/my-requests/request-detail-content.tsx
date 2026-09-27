@@ -39,6 +39,7 @@ import { RequestActivityLog } from "@/components/approvals/request-activity-log"
 import { StampStatusSummary } from "@/components/approvals/stamp-status-summary";
 import { ApprovalStatusBadge, RequestStatusBadge } from "@/components/approvals/status-badge";
 import { RequestLifecycleActions } from "@/components/my-requests/request-lifecycle-actions";
+import { RevisionNotice } from "@/components/my-requests/revision-notice";
 import type {
   RequestStatus as RequestLifecycleActionsStatus,
   ApprovalStatus as RequestLifecycleActionsApprovalStatus,
@@ -508,6 +509,11 @@ export function RequestDetailContent({
           </div>
         )}
       </div>
+      {selectedRequest?.status === "REVISION_REQUESTED" && (
+        <div className="px-4 pt-4">
+          <RevisionNotice approvals={selectedRequest.approvals ?? []} />
+        </div>
+      )}
       {selectedRequest && (
         <div className="grid grid-cols-1 gap-4 p-4">
           {/* Kompakt ortak alanlar — tek satırda 5 sütun (responsive). */}

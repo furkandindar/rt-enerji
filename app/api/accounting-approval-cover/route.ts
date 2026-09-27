@@ -2,9 +2,11 @@ import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 import { createApprovalChain, getWorkflowDefinitionByCode, notifyApprover, canStartWorkflow } from "@/lib/workflow";
 import type { CreateAccountingApprovalCoverInput } from "@/lib/workflow";
-
-const CAPACITY_TYPES = ['KAPASITE', 'ANASAHA', 'YEKA'] as const;
-const CURRENCIES = ['TRY', 'USD', 'EUR'] as const;
+import {
+  buildAccountingCoverDetail,
+  buildAccountingCoverItems,
+  validateAccountingCoverInput,
+} from "@/lib/workflow/approval-cover-payload";
 
 const ALLOWED_PAGE_SIZES = [10, 25, 50, 100] as const;
 const DEFAULT_PAGE_SIZE = 10;
@@ -146,65 +148,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Bu formu başlatma yetkiniz yok" }, { status: 403 });
     }
 
-    // 4. Validasyon - başlık alanları
-    if (!body.subject?.trim()) {
-      return NextResponse.json({ error: "Konu gerekli" }, { status: 400 });
+    // 4. Validasyon (başlık + değerlendirme + ödeme tablosu) — PATCH ile ortak
+    const validationError = validateAccountingCoverInput(body);
+    if (validationError) {
+      return NextResponse.json({ error: validationError }, { status: 400 });
     }
-    if (!body.document_no?.trim()) {
-      return NextResponse.json({ error: "Sayı gerekli" }, { status: 400 });
-    }
-    if (!body.request_date) {
-      return NextResponse.json({ error: "Tarih gerekli" }, { status: 400 });
-    }
-
-    // 5. Validasyon - değerlendirme alanları (hepsi zorunlu boolean)
-    const booleanFields: Array<[keyof CreateAccountingApprovalCoverInput, string]> = [
-      ['demirbas_registered', 'Demirbaş kaydı bilgisi gerekli'],
-      ['has_dispatch_note', 'İrsaliye bilgisi gerekli'],
-      ['has_delivery_info', 'Teslim alan/eden bilgisi gerekli'],
-      ['has_invoice_record', 'Fatura kaydı bilgisi gerekli'],
-      ['has_accounting_prog_entry', 'Muhasebe programı bilgisi gerekli'],
-      ['has_arvento_record', 'Arvento kaydı bilgisi gerekli'],
-      ['paid_from_credit', 'Krediden ödeme bilgisi gerekli'],
-    ];
-    for (const [field, message] of booleanFields) {
-      if (typeof body[field] !== 'boolean') {
-        return NextResponse.json({ error: message }, { status: 400 });
-      }
-    }
-
-    // 6. Validasyon - ödeme tablosu
-    if (!Array.isArray(body.items) || body.items.length === 0) {
-      return NextResponse.json({ error: "En az bir ödeme satırı zorunludur" }, { status: 400 });
-    }
-    for (let i = 0; i < body.items.length; i++) {
-      const it = body.items[i];
-      if (!it.item_date) {
-        return NextResponse.json({ error: `Satır ${i + 1}: tarih gerekli` }, { status: 400 });
-      }
-      if (!it.company_name?.trim()) {
-        return NextResponse.json({ error: `Satır ${i + 1}: firma adı gerekli` }, { status: 400 });
-      }
-      if (!it.payee_name?.trim()) {
-        return NextResponse.json({ error: `Satır ${i + 1}: ödeme yapılacak firma/kurum gerekli` }, { status: 400 });
-      }
-      if (!it.item_subject?.trim()) {
-        return NextResponse.json({ error: `Satır ${i + 1}: konu gerekli` }, { status: 400 });
-      }
-      if (!CAPACITY_TYPES.includes(it.capacity_type)) {
-        return NextResponse.json({ error: `Satır ${i + 1}: kapasite tipi seçin` }, { status: 400 });
-      }
-      if (typeof it.invoice_amount !== 'number' || it.invoice_amount < 0) {
-        return NextResponse.json({ error: `Satır ${i + 1}: geçerli bir fatura tutarı girin` }, { status: 400 });
-      }
-      if (typeof it.payable_amount !== 'number' || it.payable_amount < 0) {
-        return NextResponse.json({ error: `Satır ${i + 1}: geçerli bir ödenecek tutar girin` }, { status: 400 });
-      }
-      if (!CURRENCIES.includes(it.currency)) {
-        return NextResponse.json({ error: `Satır ${i + 1}: geçerli bir para birimi seçin` }, { status: 400 });
-      }
-    }
-
 
     // 7. Ana request kaydı oluştur
     const { data: newRequest, error: requestError } = await supabase
@@ -229,16 +177,7 @@ export async function POST(request: Request) {
       .from("accounting_approval_cover_requests")
       .insert({
         request_id: newRequest.id,
-        subject: body.subject,
-        request_date: body.request_date,
-        document_no: body.document_no,
-        demirbas_registered: body.demirbas_registered,
-        has_dispatch_note: body.has_dispatch_note,
-        has_delivery_info: body.has_delivery_info,
-        has_invoice_record: body.has_invoice_record,
-        has_accounting_prog_entry: body.has_accounting_prog_entry,
-        has_arvento_record: body.has_arvento_record,
-        paid_from_credit: body.paid_from_credit,
+        ...buildAccountingCoverDetail(body),
       })
       .select()
       .single();
@@ -250,18 +189,7 @@ export async function POST(request: Request) {
     }
 
     // 9. Ödeme tablosu satırlarını oluştur
-    const itemsData = body.items.map((it, idx) => ({
-      accounting_request_id: accountingRequest.id,
-      row_order: idx + 1,
-      item_date: it.item_date,
-      company_name: it.company_name,
-      payee_name: it.payee_name,
-      item_subject: it.item_subject,
-      capacity_type: it.capacity_type,
-      invoice_amount: it.invoice_amount,
-      payable_amount: it.payable_amount,
-      currency: it.currency,
-    }));
+    const itemsData = buildAccountingCoverItems(body, accountingRequest.id);
 
     const { error: itemsError } = await supabase
       .from("accounting_approval_cover_items")
