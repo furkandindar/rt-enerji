@@ -40,6 +40,12 @@ export const onboardingSectionConfig: Record<string, { title: string; items: Che
     title: "IT İşlemleri",
     items: [
       { key: "computer_setup", label: "Bilgisayar Temini" },
+    ],
+  },
+  // section_5'ten ayrıldı: QNAP maddesi ayrı bir adımda (İdari İşler Personeli) doldurulur.
+  section_5b: {
+    title: "IT İşlemleri",
+    items: [
       { key: "qnap_o365_ip", label: "QNAP/O365/IP Telefon Kaydı" },
     ],
   },
@@ -162,7 +168,58 @@ export const requestStatusColors: Record<string, string> = {
   REVISION_REQUESTED: "bg-orange-500",
 };
 
-export const ONBOARDING_SECTION_KEYS = ['section_2', 'section_3', 'section_4', 'section_5', 'section_6'] as const;
+export const ONBOARDING_SECTION_KEYS = ['section_2', 'section_3', 'section_4', 'section_5', 'section_5b', 'section_6'] as const;
+
+// Ayrılmış bölüm → ayrıldığı bölüm. Ayrılmış bölümün adımı talebin onay zincirinde
+// yoksa (adım eklenmeden önce oluşmuş/devam eden talep) maddeleri ayrıldığı bölümde
+// kalır: eski onaycı doldurur, PDF'te onun imzası basılır.
+export const ONBOARDING_SPLIT_SECTIONS: Record<string, string> = { section_5b: 'section_5' };
+export const SEPARATION_SPLIT_SECTIONS: Record<string, string> = { section_6b: 'section_6' };
+
+type SectionConfig = Record<string, { title: string; items: ChecklistItem[] }>;
+
+/** Onay zincirindeki (aktif cycle) adımların form_section_key kümesi. */
+export function getChainSectionKeys(
+  approvals: ReadonlyArray<{ workflow_step?: { form_section_key?: string | null } | null }> | null | undefined
+): Set<string> {
+  const keys = new Set<string>();
+  for (const a of approvals ?? []) {
+    if (a.workflow_step?.form_section_key) keys.add(a.workflow_step.form_section_key);
+  }
+  return keys;
+}
+
+/**
+ * Bölüm config'ini bir talebin onay zincirine göre çözer (sıra korunur).
+ * `chainSectionKeys`: talebin aktif cycle'ındaki adımların form_section_key'leri.
+ */
+export function resolveChecklistSections(
+  config: SectionConfig,
+  splitSections: Record<string, string>,
+  chainSectionKeys: ReadonlySet<string>
+): SectionConfig {
+  const resolved: SectionConfig = {};
+  for (const [key, section] of Object.entries(config)) {
+    if (splitSections[key] && !chainSectionKeys.has(key)) continue;
+    const mergedItems = Object.entries(splitSections)
+      .filter(([child, parent]) => parent === key && !chainSectionKeys.has(child))
+      .flatMap(([child]) => config[child]?.items ?? []);
+    resolved[key] = mergedItems.length > 0
+      ? { ...section, items: [...section.items, ...mergedItems] }
+      : section;
+  }
+  return resolved;
+}
+
+/** PDF satırının imzasını basacak bölüm: ayrılmış bölümün adımı zincirde yoksa ayrıldığı bölüm. */
+export function resolveSignerSectionKey(
+  sectionKey: string,
+  splitSections: Record<string, string>,
+  chainSectionKeys: ReadonlySet<string>
+): string {
+  const parent = splitSections[sectionKey];
+  return parent && !chainSectionKeys.has(sectionKey) ? parent : sectionKey;
+}
 
 // Separation checklist section tanımları
 export const separationSectionConfig: Record<string, { title: string; items: ChecklistItem[] }> = {
@@ -209,8 +266,14 @@ export const separationSectionConfig: Record<string, { title: string; items: Che
   section_6: {
     title: "IT / İdari İşlemler",
     items: [
-      { key: "qnap_o365_ip_removal", label: "Bilg/QNAP Arşiv ve Sıfırlama O365 Arşiv IP Telefon Kaydı Kaldırılması" },
       { key: "pc_check", label: "PC Kontrolü (İhtiyaç Halinde Profesyonel Kontrol)" },
+    ],
+  },
+  // section_6'dan ayrıldı: QNAP maddesi ayrı bir adımda (İdari İşler Personeli) doldurulur.
+  section_6b: {
+    title: "IT / İdari İşlemler",
+    items: [
+      { key: "qnap_o365_ip_removal", label: "Bilg/QNAP Arşiv ve Sıfırlama O365 Arşiv IP Telefon Kaydı Kaldırılması" },
     ],
   },
   section_7: {
@@ -227,5 +290,5 @@ export const separationSectionConfig: Record<string, { title: string; items: Che
   },
 };
 
-export const SEPARATION_SECTION_KEYS = ['section_2', 'section_3', 'section_4', 'section_5', 'section_6', 'section_7', 'section_8'] as const;
+export const SEPARATION_SECTION_KEYS = ['section_2', 'section_3', 'section_4', 'section_5', 'section_6', 'section_6b', 'section_7', 'section_8'] as const;
 

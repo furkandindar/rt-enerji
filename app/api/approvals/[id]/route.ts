@@ -407,7 +407,7 @@ export async function PATCH(
 
     // 3c. FILL_AND_SIGN adımları için onboarding section alanlarını güncelle (sadece onay durumunda)
     if (decision === 'APPROVED' && stepData.action_type === 'FILL_AND_SIGN' && onboarding_fields?.section_key) {
-      const validSections = ['section_2', 'section_3', 'section_4', 'section_5', 'section_6'];
+      const validSections = ['section_2', 'section_3', 'section_4', 'section_5', 'section_5b', 'section_6'];
       if (!validSections.includes(onboarding_fields.section_key)) {
         return NextResponse.json({ error: "Geçersiz section key" }, { status: 400 });
       }
@@ -450,7 +450,7 @@ export async function PATCH(
 
     // 3d. FILL_AND_SIGN adımları için separation section alanlarını güncelle (sadece onay durumunda)
     if (decision === 'APPROVED' && stepData.action_type === 'FILL_AND_SIGN' && separation_fields?.section_key) {
-      const validSections = ['section_1', 'section_2', 'section_3', 'section_4', 'section_5', 'section_6', 'section_7', 'section_8'];
+      const validSections = ['section_1', 'section_2', 'section_3', 'section_4', 'section_5', 'section_6', 'section_6b', 'section_7', 'section_8'];
       if (!validSections.includes(separation_fields.section_key)) {
         return NextResponse.json({ error: "Geçersiz section key" }, { status: 400 });
       }

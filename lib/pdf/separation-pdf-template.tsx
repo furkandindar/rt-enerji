@@ -4,6 +4,7 @@ import { format } from 'date-fns';
 import { formatTrDate } from '@/lib/timezone';
 import { SignatureFont } from '@/lib/signature/types';
 import type { PdfApproval, PdfRequest, PdfRequester, SignatureInfo } from './types';
+import { SEPARATION_SPLIT_SECTIONS, getChainSectionKeys, resolveSignerSectionKey } from '@/lib/approvals/constants';
 import path from 'path';
 
 const getLogoPath = () => path.join(process.cwd(), 'public', 'logo.png');
@@ -107,7 +108,8 @@ const checklistItems: ChecklistItem[] = [
   { label: 'Personel Avans Kontrolü', statusKey: 'advance_check_status', notesKey: 'advance_check_notes', sectionKey: 'section_3' },
   { label: 'E-posta Hesaplarının Kapatılması / Yönlendirilmesi', statusKey: 'email_closure_status', notesKey: 'email_closure_notes', sectionKey: 'section_2' },
   { label: 'Bilgi İşlem Hesaplarının ve Erişimlerin İptali', statusKey: 'it_access_revocation_status', notesKey: 'it_access_revocation_notes', sectionKey: 'section_2' },
-  { label: 'Bilg/QNAP Arşiv ve Sıfırlama O365 Arşiv IP Telefon Kaydı Kaldırılması', statusKey: 'qnap_o365_ip_removal_status', notesKey: 'qnap_o365_ip_removal_notes', sectionKey: 'section_6' },
+  // section_6b: section_6'dan ayrıldı; adımı zincirde yoksa section_6 imzalar
+  { label: 'Bilg/QNAP Arşiv ve Sıfırlama O365 Arşiv IP Telefon Kaydı Kaldırılması', statusKey: 'qnap_o365_ip_removal_status', notesKey: 'qnap_o365_ip_removal_notes', sectionKey: 'section_6b' },
   { label: 'PC Kontrolü (İhtiyaç Halinde Profesyonel Kontrol)', statusKey: 'pc_check_status', notesKey: 'pc_check_notes', sectionKey: 'section_6' },
   { label: 'Personel Harcama Formunun Personel Tarafından Eksiksiz Olarak Teslimi', statusKey: 'expense_form_submission_status', notesKey: 'expense_form_submission_notes', sectionKey: 'section_5' },
   { label: 'Personel Harcama Formu Muhasebe Kontrolü', statusKey: 'expense_form_review_status', notesKey: 'expense_form_review_notes', sectionKey: 'section_5' },
@@ -176,6 +178,7 @@ export const SeparationPDFTemplate: React.FC<SeparationPDFTemplateProps> = ({
       sectionToStatus[a.workflow_step.form_section_key] = a.status;
     }
   });
+  const chainSectionKeys = getChainSectionKeys(approvals);
 
   const sortedApprovals = approvals
     .filter((a) => a.workflow_step?.step_order > 1)
@@ -248,13 +251,14 @@ export const SeparationPDFTemplate: React.FC<SeparationPDFTemplateProps> = ({
           {checklistItems.map((item, index) => {
             const isLast = index === checklistItems.length - 1;
             const rowStyle = isLast ? styles.tableRowLast : styles.tableRow;
-            const sectionEmployeeId = sectionToEmployeeId[item.sectionKey];
+            const signerSectionKey = resolveSignerSectionKey(item.sectionKey, SEPARATION_SPLIT_SECTIONS, chainSectionKeys);
+            const sectionEmployeeId = sectionToEmployeeId[signerSectionKey];
             return (
               <View key={index} style={rowStyle}>
                 <View style={{ ...styles.tableCell, width: 22 }}><Text style={styles.tableCellCenter}>{index + 1}</Text></View>
                 <View style={{ ...styles.tableCell, width: 230 }}><Text style={styles.tableCellText}>{item.label}</Text></View>
                 <View style={{ ...styles.tableCell, width: 45, alignItems: 'center' }}>{getStatusIcon(sr[item.statusKey])}</View>
-                <View style={{ ...styles.tableCell, width: 80, alignItems: 'center' }}>{sectionEmployeeId ? renderSignature(sectionEmployeeId, true, sectionToStatus[item.sectionKey]) : null}</View>
+                <View style={{ ...styles.tableCell, width: 80, alignItems: 'center' }}>{sectionEmployeeId ? renderSignature(sectionEmployeeId, true, sectionToStatus[signerSectionKey]) : null}</View>
                 <View style={{ ...styles.tableCellLast, flex: 1 }}><Text style={styles.tableCellText}>{sr[item.notesKey] || ''}</Text></View>
               </View>
             );

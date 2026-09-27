@@ -13,7 +13,13 @@ import {
 } from "@/components/ui/table";
 import type { PendingApproval, ChecklistStatus } from "@/lib/approvals/types";
 import type { PreviousStepAttachment } from "@/lib/workflow/types";
-import { separationSectionConfig, checklistStatusLabels } from "@/lib/approvals/constants";
+import {
+  separationSectionConfig,
+  SEPARATION_SPLIT_SECTIONS,
+  checklistStatusLabels,
+  getChainSectionKeys,
+  resolveChecklistSections,
+} from "@/lib/approvals/constants";
 import { AttachmentList } from "./attachment-list";
 
 interface SeparationRequestDetailsProps {
@@ -25,6 +31,13 @@ interface SeparationRequestDetailsProps {
 export function SeparationRequestDetails({ approval, separationSectionKey, previousStepAttachments = [] }: SeparationRequestDetailsProps) {
   const sr = approval.request.separation_request;
   if (!sr) return null;
+
+  const sections = resolveChecklistSections(
+    separationSectionConfig,
+    SEPARATION_SPLIT_SECTIONS,
+    getChainSectionKeys(approval.request.approvals)
+  );
+  const currentIndex = Object.keys(sections).indexOf(separationSectionKey);
 
   return (
     <>
@@ -113,11 +126,9 @@ export function SeparationRequestDetails({ approval, separationSectionKey, previ
       )}
 
       {/* Daha önce doldurulmuş section'ları göster (read-only) */}
-      {Object.entries(separationSectionConfig).map(([sectionKey, config]) => {
-        const sectionNum = parseInt(sectionKey.replace('section_', ''));
-        const currentNum = parseInt(separationSectionKey.replace('section_', '') || '0');
+      {Object.entries(sections).map(([sectionKey, config], index) => {
         // Sadece mevcut adımdan önce gelen section'ları göster
-        if (sectionNum >= currentNum && currentNum > 0) return null;
+        if (currentIndex >= 0 && index >= currentIndex) return null;
 
         return (
           <div key={sectionKey} className="border-t pt-3 mt-1">

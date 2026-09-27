@@ -13,7 +13,13 @@ import {
 } from "@/components/ui/table";
 import type { PendingApproval, ChecklistStatus } from "@/lib/approvals/types";
 import type { PreviousStepAttachment } from "@/lib/workflow/types";
-import { onboardingSectionConfig, checklistStatusLabels } from "@/lib/approvals/constants";
+import {
+  onboardingSectionConfig,
+  ONBOARDING_SPLIT_SECTIONS,
+  checklistStatusLabels,
+  getChainSectionKeys,
+  resolveChecklistSections,
+} from "@/lib/approvals/constants";
 import { AttachmentList } from "./attachment-list";
 
 interface OnboardingRequestDetailsProps {
@@ -25,6 +31,13 @@ interface OnboardingRequestDetailsProps {
 export function OnboardingRequestDetails({ approval, onboardingSectionKey, previousStepAttachments = [] }: OnboardingRequestDetailsProps) {
   const ob = approval.request.onboarding_request;
   if (!ob) return null;
+
+  const sections = resolveChecklistSections(
+    onboardingSectionConfig,
+    ONBOARDING_SPLIT_SECTIONS,
+    getChainSectionKeys(approval.request.approvals)
+  );
+  const currentIndex = Object.keys(sections).indexOf(onboardingSectionKey);
 
   return (
     <>
@@ -72,10 +85,9 @@ export function OnboardingRequestDetails({ approval, onboardingSectionKey, previ
       </div>
 
       {/* Daha önce doldurulmuş section'ları göster (read-only) */}
-      {Object.entries(onboardingSectionConfig).map(([sectionKey, config]) => {
-        const sectionNum = parseInt(sectionKey.replace('section_', ''));
-        const currentNum = parseInt(onboardingSectionKey.replace('section_', '') || '0');
-        if (sectionNum >= currentNum && currentNum > 0) return null;
+      {Object.entries(sections).map(([sectionKey, config], index) => {
+        // Sadece mevcut adımdan önce gelen section'ları göster
+        if (currentIndex >= 0 && index >= currentIndex) return null;
         const firstItem = config.items[0];
         const firstStatus = ob[`${firstItem.key}_status`];
         if (!firstStatus || firstStatus === 'NOT_DONE') return null;

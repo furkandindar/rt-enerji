@@ -1,8 +1,8 @@
 # İşe Giriş Takip Formu Süreci
 
 > **Workflow Code:** `EMPLOYEE_ONBOARDING`  
-> **Versiyon:** 1.1  
-> **Tarih:** 2026-02-25 (son güncelleme: 2026-08-03)
+> **Versiyon:** 1.2  
+> **Tarih:** 2026-02-25 (son güncelleme: 2026-09-27)
 
 ---
 
@@ -16,9 +16,9 @@
 |---------|-------|
 | Workflow Code | `EMPLOYEE_ONBOARDING` |
 | is_restricted | `true` (sadece İK başlatabilir) |
-| Toplam Adım | 7 |
-| Form Dolduran Adımlar | 6 (Adım 1-6: FILL_AND_SIGN) |
-| Son Onay | 1 (Adım 7: SIGN_ONLY) |
+| Toplam Adım | 8 |
+| Form Dolduran Adımlar | 7 (Adım 1-7: FILL_AND_SIGN) |
+| Son Onay | 1 (Adım 8: bölümsüz, `form_section_key = null`) |
 | Toplam Checklist Maddesi | 23 |
 
 ---
@@ -28,12 +28,15 @@
 | Adım | Onaycı | approver_type | action_type | form_section_key | Doldurduğu Bölüm |
 |------|--------|---------------|-------------|------------------|-------------------|
 | 1 | İnsan Kaynakları | `REQUESTER` | `FILL_AND_SIGN` | `section_1` | Temel Bilgiler |
-| 2 | Genel Müdür/CEO | `STATIC_POSITION` | `FILL_AND_SIGN` | `section_2` | Mail İşlemleri |
+| 2 | Genel Müdür | `STATIC_POSITION` | `FILL_AND_SIGN` | `section_2` | Mail İşlemleri |
 | 3 | İnsan Kaynakları | `REQUESTER` | `FILL_AND_SIGN` | `section_3` | İK İşlemleri |
-| 4 | Muhasebe Müdürü | `STATIC_POSITION` | `FILL_AND_SIGN` | `section_4` | Sözleşme İşlemleri |
-| 5 | İdari İşler Müdürü | `STATIC_POSITION` | `FILL_AND_SIGN` | `section_5` | IT İşlemleri |
-| 6 | Finans Uzmanı | `STATIC_POSITION` | `FILL_AND_SIGN` | `section_6` | Diğer |
-| 7 | Genel Müdür/CEO | `STATIC_POSITION` | `SIGN_ONLY` | `null` | Son Onay |
+| 4 | Hukuk Müşaviri | `STATIC_POSITION` | `FILL_AND_SIGN` | `section_4` | Sözleşme İşlemleri |
+| 5 | İdari İşler Uzmanı | `STATIC_POSITION` | `FILL_AND_SIGN` | `section_5` | IT İşlemleri (Bilgisayar Temini) |
+| 6 | İdari İşler Personeli | `STATIC_POSITION` | `FILL_AND_SIGN` | `section_5b` | IT İşlemleri (QNAP/O365/IP Telefon Kaydı) |
+| 7 | Yönetici Asistanı Antalya | `STATIC_POSITION` | `FILL_AND_SIGN` | `section_6` | Diğer |
+| 8 | Genel Müdür | `STATIC_POSITION` | `FILL_AND_SIGN` | `null` | Son Onay |
+
+> **Not (2026-09-27):** Tablo prod konfigürasyonunu yansıtır. Adım 6 (`section_5b`) QNAP maddesini İdari İşler Personeli'ne vermek için `section_5`'ten ayrıldı. Bu adım olmadan kurulmuş zincirlerde (değişiklikten önce gönderilmiş talepler) QNAP maddesi `section_5`'te kalır ve imzasını adım 5 onaycısı atar — kaynak: `ONBOARDING_SPLIT_SECTIONS` (`lib/approvals/constants.ts`). Adım 6, PDF'teki "FORM İÇERİĞİ KONTROLÜ" kutusu (sondan bir önceki onaycı) değişmesin diye Asistan'dan önce konumlandı.
 
 ---
 
@@ -79,21 +82,26 @@
 | 22 | İşe Giriş İşlemleri ve Sicil Numarasının Yapılması | `entry_registration_status` | `entry_registration_notes` |
 | 23 | İşe Giriş Evraklarının Bulut'a Yüklenmesi (İK/Belgeler) | `documents_upload_status` | `documents_upload_notes` |
 
-### 3.4 Section 4: Sözleşme İşlemleri (Muhasebe Müdürü)
+### 3.4 Section 4: Sözleşme İşlemleri (Hukuk Müşaviri)
 
 | No | Madde | Status Key | Notes Key |
 |----|-------|------------|-----------|
 | 9 | İş Sözleşmesi, ekleri ve zimmet tutanağın imzalatılması | `contract_signature_status` | `contract_signature_notes` |
 | 10 | Yönergelerin Basılı ve Elektronik Olarak Teslimi | `s4_guidelines_delivery_status` | `s4_guidelines_delivery_notes` |
 
-### 3.5 Section 5: IT İşlemleri (İdari İşler Müdürü)
+### 3.5 Section 5: IT İşlemleri (İdari İşler Uzmanı)
 
 | No | Madde | Status Key | Notes Key |
 |----|-------|------------|-----------|
 | 7 | Bilgisayar Temini | `computer_setup_status` | `computer_setup_notes` |
+
+### 3.5b Section 5b: IT İşlemleri (İdari İşler Personeli)
+
+| No | Madde | Status Key | Notes Key |
+|----|-------|------------|-----------|
 | 8 | QNAP Kaydı, O365 Arşiv ve IP Telefon Kaydı | `qnap_o365_ip_status` | `qnap_o365_ip_notes` |
 
-### 3.6 Section 6: Diğer (Finans Uzmanı)
+### 3.6 Section 6: Diğer (Yönetici Asistanı)
 
 | No | Madde | Status Key | Notes Key |
 |----|-------|------------|-----------|
@@ -434,10 +442,11 @@ Her checklist maddesi bir `sectionKey`'e sahiptir. Bu key üzerinden o section'�
 
 ```
 section_1, section_3 → Requester (İK)
-section_2 → Genel Müdür/CEO
-section_4 → Muhasebe Müdürü
-section_5 → İdari İşler Müdürü
-section_6 → Finans Uzmanı
+section_2  → Genel Müdür
+section_4  → Hukuk Müşaviri
+section_5  → İdari İşler Uzmanı
+section_5b → İdari İşler Personeli (zincirde yoksa section_5 imzalar)
+section_6  → Yönetici Asistanı
 ```
 
 ---

@@ -6,7 +6,16 @@ import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import type { WorkflowStepAttachmentConfig, RequestAttachment, PreviousStepAttachment } from "@/lib/workflow/types";
 import type { PendingApproval, ChecklistStatus, SignatureInfo } from "./types";
-import { onboardingSectionConfig, ONBOARDING_SECTION_KEYS, separationSectionConfig, SEPARATION_SECTION_KEYS } from "./constants";
+import {
+  onboardingSectionConfig,
+  ONBOARDING_SECTION_KEYS,
+  ONBOARDING_SPLIT_SECTIONS,
+  separationSectionConfig,
+  SEPARATION_SECTION_KEYS,
+  SEPARATION_SPLIT_SECTIONS,
+  getChainSectionKeys,
+  resolveChecklistSections,
+} from "./constants";
 import { parseContentDispositionFilename } from "@/lib/pdf/file-naming";
 import { normalizePageSize } from "@/components/ui/pagination-controls";
 
@@ -136,6 +145,8 @@ export function useApprovals(options: UseApprovalsOptions = {}) {
                               selectedApproval?.workflow_step?.form_section_key === 'salary_deduction_consent';
 
   const formSectionKey = selectedApproval?.workflow_step?.form_section_key || '';
+  // Ayrılmış bölümler (ör. QNAP maddesi) talebin zincirine göre çözülür
+  const chainSectionKeys = getChainSectionKeys(selectedApproval?.request?.approvals);
 
   const onboardingSectionKey = formSectionKey;
   const isOnboardingSectionForm = selectedApproval?.workflow_step?.action_type === 'FILL_AND_SIGN' &&
@@ -143,7 +154,7 @@ export function useApprovals(options: UseApprovalsOptions = {}) {
     (ONBOARDING_SECTION_KEYS as readonly string[]).includes(formSectionKey);
 
   const currentSectionConfig = isOnboardingSectionForm
-    ? onboardingSectionConfig[formSectionKey]
+    ? resolveChecklistSections(onboardingSectionConfig, ONBOARDING_SPLIT_SECTIONS, chainSectionKeys)[formSectionKey] ?? null
     : null;
 
   const separationSectionKey = formSectionKey;
@@ -152,7 +163,7 @@ export function useApprovals(options: UseApprovalsOptions = {}) {
     (SEPARATION_SECTION_KEYS as readonly string[]).includes(formSectionKey);
 
   const currentSeparationSectionConfig = isSeparationSectionForm
-    ? separationSectionConfig[formSectionKey]
+    ? resolveChecklistSections(separationSectionConfig, SEPARATION_SPLIT_SECTIONS, chainSectionKeys)[formSectionKey] ?? null
     : null;
 
   // V4: COMPLETION fazı — asistanın gerçekleşen tarihleri girme formu
@@ -676,7 +687,11 @@ export function useApprovals(options: UseApprovalsOptions = {}) {
 
     if (selectedApproval?.request?.onboarding_request && selectedApproval?.workflow_step?.form_section_key) {
       const sectionKey = selectedApproval.workflow_step.form_section_key;
-      const config = onboardingSectionConfig[sectionKey];
+      const config = resolveChecklistSections(
+        onboardingSectionConfig,
+        ONBOARDING_SPLIT_SECTIONS,
+        getChainSectionKeys(selectedApproval.request.approvals)
+      )[sectionKey];
       const ob = selectedApproval.request.onboarding_request;
       if (config) {
         const initial: Record<string, { status: ChecklistStatus; notes: string }> = {};
@@ -698,7 +713,11 @@ export function useApprovals(options: UseApprovalsOptions = {}) {
 
     if (selectedApproval?.request?.separation_request && selectedApproval?.workflow_step?.form_section_key) {
       const sectionKey = selectedApproval.workflow_step.form_section_key;
-      const config = separationSectionConfig[sectionKey];
+      const config = resolveChecklistSections(
+        separationSectionConfig,
+        SEPARATION_SPLIT_SECTIONS,
+        getChainSectionKeys(selectedApproval.request.approvals)
+      )[sectionKey];
       const sr = selectedApproval.request.separation_request;
       if (config) {
         const initial: Record<string, { status: ChecklistStatus; notes: string }> = {};

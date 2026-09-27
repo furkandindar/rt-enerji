@@ -4,6 +4,7 @@ import { format } from 'date-fns';
 import { formatTrDate } from '@/lib/timezone';
 import { SignatureFont } from '@/lib/signature/types';
 import type { PdfApproval, PdfRequest, PdfRequester, SignatureInfo } from './types';
+import { ONBOARDING_SPLIT_SECTIONS, getChainSectionKeys, resolveSignerSectionKey } from '@/lib/approvals/constants';
 import path from 'path';
 
 const getLogoPath = () => path.join(process.cwd(), 'public', 'logo.png');
@@ -111,6 +112,7 @@ interface ChecklistItem {
 // sectionKey maps each item to the workflow step that fills it
 // section_1: IK (requester), section_2: Genel Müdür/CEO, section_3: IK (requester)
 // section_4: Muhasebe Müdürü, section_5: İdari İşler Müdürü, section_6: Finans Uzmanı
+// section_5b: QNAP maddesi (section_5'ten ayrıldı; adımı zincirde yoksa section_5 imzalar)
 const checklistItems: ChecklistItem[] = [
   { label: 'Sigara Kullanımı', statusKey: 'smoking_info_status', notesKey: 'smoking_info_notes', sectionKey: 'section_6' },
   { label: 'İşten Çıkış Sebebi Kontrolü (Daha Önce Çalışanlar İçin)', statusKey: 'exit_reason_check_status', notesKey: 'exit_reason_check_notes', sectionKey: 'section_3' },
@@ -119,7 +121,7 @@ const checklistItems: ChecklistItem[] = [
   { label: 'Mail Adresinin Açılması', statusKey: 'mail_setup_status', notesKey: 'mail_setup_notes', sectionKey: 'section_2' },
   { label: 'Ekleneceği Mail/Sharepoint/Bulut Grupları', statusKey: 'mail_groups_status', notesKey: 'mail_groups_notes', sectionKey: 'section_2' },
   { label: 'Bilgisayar Temini', statusKey: 'computer_setup_status', notesKey: 'computer_setup_notes', sectionKey: 'section_5' },
-  { label: 'QNAP Kaydı, O365 Arşiv ve IP Telefon Kaydı', statusKey: 'qnap_o365_ip_status', notesKey: 'qnap_o365_ip_notes', sectionKey: 'section_5' },
+  { label: 'QNAP Kaydı, O365 Arşiv ve IP Telefon Kaydı', statusKey: 'qnap_o365_ip_status', notesKey: 'qnap_o365_ip_notes', sectionKey: 'section_5b' },
   { label: 'İş Sözleşmesi, ekleri ve zimmet tutanağın (ekte olmak) imzalatılması', statusKey: 'contract_signature_status', notesKey: 'contract_signature_notes', sectionKey: 'section_4' },
   { label: 'Yönergelerin Basılı ve Elektronik Olarak Teslimi (İdari, mali işler ve tüm diğer tüm yönergeler)', statusKey: 's4_guidelines_delivery_status', notesKey: 's4_guidelines_delivery_notes', sectionKey: 'section_4' },
   { label: 'Kırtasiye Taleplerinin Yapılması', statusKey: 'stationery_request_status', notesKey: 'stationery_request_notes', sectionKey: 'section_3' },
@@ -182,6 +184,7 @@ export const OnboardingPDFTemplate: React.FC<OnboardingPDFTemplateProps> = ({
       sectionToStatus[a.workflow_step.form_section_key] = a.status;
     }
   });
+  const chainSectionKeys = getChainSectionKeys(approvals);
 
   // Sort approvals by step_order for footer
   const sortedApprovals = approvals
@@ -233,13 +236,14 @@ export const OnboardingPDFTemplate: React.FC<OnboardingPDFTemplateProps> = ({
           {checklistItems.map((item, index) => {
             const isLast = index === checklistItems.length - 1;
             const rowStyle = isLast ? styles.tableRowLast : styles.tableRow;
-            const sectionEmployeeId = sectionToEmployeeId[item.sectionKey];
+            const signerSectionKey = resolveSignerSectionKey(item.sectionKey, ONBOARDING_SPLIT_SECTIONS, chainSectionKeys);
+            const sectionEmployeeId = sectionToEmployeeId[signerSectionKey];
             return (
               <View key={index} style={rowStyle}>
                 <View style={{ ...styles.tableCell, width: 22 }}><Text style={styles.tableCellCenter}>{index + 1}</Text></View>
                 <View style={{ ...styles.tableCell, width: 230 }}><Text style={styles.tableCellText}>{item.label}</Text></View>
                 <View style={{ ...styles.tableCell, width: 45, alignItems: 'center' }}>{getStatusIcon(onboardingRequest[item.statusKey] ?? null)}</View>
-                <View style={{ ...styles.tableCell, width: 80, alignItems: 'center' }}>{sectionEmployeeId ? renderSignature(sectionEmployeeId, true, sectionToStatus[item.sectionKey]) : null}</View>
+                <View style={{ ...styles.tableCell, width: 80, alignItems: 'center' }}>{sectionEmployeeId ? renderSignature(sectionEmployeeId, true, sectionToStatus[signerSectionKey]) : null}</View>
                 <View style={{ ...styles.tableCellLast, flex: 1 }}><Text style={styles.tableCellText}>{onboardingRequest[item.notesKey] || ''}</Text></View>
               </View>
             );

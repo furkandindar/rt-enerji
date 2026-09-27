@@ -1,8 +1,8 @@
 # İşten Çıkış Takip Formu Süreci
 
 > **Workflow Code:** `EMPLOYEE_SEPARATION`
-> **Versiyon:** 1.0
-> **Tarih:** 2026-03-08
+> **Versiyon:** 1.1
+> **Tarih:** 2026-03-08 (son güncelleme: 2026-09-27)
 
 ---
 
@@ -16,9 +16,9 @@
 |---------|-------|
 | Workflow Code | `EMPLOYEE_SEPARATION` |
 | is_restricted | `true` (sadece İK başlatabilir) |
-| Toplam Adım | 9 |
-| Form Dolduran Adımlar | 8 (Adım 1-8: FILL_AND_SIGN) |
-| Son Onay | 1 (Adım 9: SIGN_ONLY) |
+| Toplam Adım | 10 |
+| Form Dolduran Adımlar | 9 (Adım 1-9: FILL_AND_SIGN) |
+| Son Onay | 1 (Adım 10: bölümsüz, `form_section_key = null`) |
 | Toplam Checklist Maddesi | 24 |
 
 ---
@@ -28,14 +28,17 @@
 | Adım | Onaycı | approver_type | action_type | form_section_key | Doldurduğu Bölüm |
 |------|--------|---------------|-------------|------------------|-------------------|
 | 1 | İnsan Kaynakları | `REQUESTER` | `FILL_AND_SIGN` | `section_1` | Temel Bilgiler + Mali Tablo |
-| 2 | Genel Müdür/CEO | `STATIC_POSITION` | `FILL_AND_SIGN` | `section_2` | Bilgi İşlem İşlemleri |
+| 2 | Genel Müdür | `STATIC_POSITION` | `FILL_AND_SIGN` | `section_2` | Bilgi İşlem İşlemleri |
 | 3 | İnsan Kaynakları | `REQUESTER` | `FILL_AND_SIGN` | `section_3` | İK İşlemleri |
 | 4 | Hukuk Müşaviri | `STATIC_POSITION` | `FILL_AND_SIGN` | `section_4` | Hukuki İşlemler |
-| 5 | Muhasebe Şefi | `STATIC_POSITION` | `FILL_AND_SIGN` | `section_5` | Muhasebe İşlemleri |
-| 6 | İdari İşler Uzmanı | `STATIC_POSITION` | `FILL_AND_SIGN` | `section_6` | IT / İdari İşlemler |
-| 7 | İK Uzmanı | `STATIC_POSITION` | `FILL_AND_SIGN` | `section_7` | Belge Tarama |
-| 8 | Asistan | `STATIC_POSITION` | `FILL_AND_SIGN` | `section_8` | Takvim İşlemleri |
-| 9 | Genel Müdür/CEO | `STATIC_POSITION` | `SIGN_ONLY` | `null` | Son Onay |
+| 5 | Muhasebe Müdürü | `STATIC_POSITION` | `FILL_AND_SIGN` | `section_5` | Muhasebe İşlemleri |
+| 6 | İdari İşler Uzmanı | `STATIC_POSITION` | `FILL_AND_SIGN` | `section_6` | IT / İdari İşlemler (PC Kontrolü) |
+| 7 | İdari İşler Personeli | `STATIC_POSITION` | `FILL_AND_SIGN` | `section_6b` | IT / İdari İşlemler (QNAP/O365/IP Telefon Kaldırma) |
+| 8 | İnsan Kaynakları Uzmanı | `STATIC_POSITION` | `FILL_AND_SIGN` | `section_7` | Belge Tarama |
+| 9 | Yönetici Asistanı Antalya | `STATIC_POSITION` | `FILL_AND_SIGN` | `section_8` | Takvim İşlemleri |
+| 10 | Genel Müdür | `STATIC_POSITION` | `FILL_AND_SIGN` | `null` | Son Onay |
+
+> **Not (2026-09-27):** Tablo prod konfigürasyonunu yansıtır. Adım 7 (`section_6b`) QNAP maddesini İdari İşler Personeli'ne vermek için `section_6`'dan ayrıldı. Bu adım olmadan kurulmuş zincirlerde (değişiklikten önce gönderilmiş talepler) QNAP maddesi `section_6`'da kalır ve imzasını adım 6 onaycısı atar — kaynak: `SEPARATION_SPLIT_SECTIONS` (`lib/approvals/constants.ts`).
 
 ---
 
@@ -94,7 +97,7 @@
 | 2 | Mersis Kayıtları Kontrolü / İptali | `mersis_revocation_status` | `mersis_revocation_notes` |
 | 3 | Zimmetli Eşyaların Teslim Alınması / Tutanak | `legal_equipment_return_status` | `legal_equipment_return_notes` |
 
-### 3.5 Section 5: Muhasebe İşlemleri (Muhasebe Şefi)
+### 3.5 Section 5: Muhasebe İşlemleri (Muhasebe Müdürü)
 
 | No | Madde | Status Key | Notes Key |
 |----|-------|------------|-----------|
@@ -107,16 +110,21 @@
 
 | No | Madde | Status Key | Notes Key |
 |----|-------|------------|-----------|
-| 1 | Bilg/QNAP Arşiv ve Sıfırlama O365 Arşiv IP Telefon Kaydı Kaldırılması | `qnap_o365_ip_removal_status` | `qnap_o365_ip_removal_notes` |
-| 2 | PC Kontrolü (İhtiyaç Halinde Profesyonel Kontrol) | `pc_check_status` | `pc_check_notes` |
+| 1 | PC Kontrolü (İhtiyaç Halinde Profesyonel Kontrol) | `pc_check_status` | `pc_check_notes` |
 
-### 3.7 Section 7: Belge Tarama (İK Uzmanı)
+### 3.6b Section 6b: IT / İdari İşlemler (İdari İşler Personeli)
+
+| No | Madde | Status Key | Notes Key |
+|----|-------|------------|-----------|
+| 1 | Bilg/QNAP Arşiv ve Sıfırlama O365 Arşiv IP Telefon Kaydı Kaldırılması | `qnap_o365_ip_removal_status` | `qnap_o365_ip_removal_notes` |
+
+### 3.7 Section 7: Belge Tarama (İnsan Kaynakları Uzmanı)
 
 | No | Madde | Status Key | Notes Key |
 |----|-------|------------|-----------|
 | 1 | Tüm Belgelerin Taranması | `documents_scan_status` | `documents_scan_notes` |
 
-### 3.8 Section 8: Takvim İşlemleri (Asistan)
+### 3.8 Section 8: Takvim İşlemleri (Yönetici Asistanı)
 
 | No | Madde | Status Key | Notes Key |
 |----|-------|------------|-----------|
@@ -474,12 +482,13 @@ interface CreateSeparationInput {
 
 ```
 section_1, section_3 → Requester (İK)
-section_2            → Genel Müdür/CEO
+section_2            → Genel Müdür
 section_4            → Hukuk Müşaviri
-section_5            → Muhasebe Şefi
+section_5            → Muhasebe Müdürü
 section_6            → İdari İşler Uzmanı
-section_7            → İK Uzmanı
-section_8            → Asistan
+section_6b           → İdari İşler Personeli (zincirde yoksa section_6 imzalar)
+section_7            → İnsan Kaynakları Uzmanı
+section_8            → Yönetici Asistanı
 ```
 
 ---
