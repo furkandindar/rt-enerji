@@ -105,6 +105,8 @@ export interface PendingApproval {
   status: string;
   decided_at: string | null;
   sequence_order?: number;
+  /** Sadece pending liste: onaycının kuyruğuna düşüş anı (liste bu alana göre sıralı). */
+  queued_at?: string | null;
   // Vekalet (Faz B): liste select'i `*` ile gelir; detay GET'i `viewer` ekler.
   approver_employee_id?: string;
   acted_by_employee_id?: string | null;

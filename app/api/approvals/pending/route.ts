@@ -52,10 +52,14 @@ export async function GET(request: NextRequest) {
     const to = from + pageSize - 1;
 
     // Step 1: view'dan paged id seti + count (+ opsiyonel workflow_code filtresi)
+    // Sıra: onaycının kuyruğuna düşüş anı (queued_at), en eski en üstte.
+    // created_at kullanılamaz — tüm adım satırları talep gönderiminde birlikte
+    // yaratıldığı için o fiilen evrak tarihi (sql/feature_pending_approvals_queue_order.sql).
     let idQuery = supabase
       .from("v_user_pending_approvals")
-      .select("id", { count: "exact" })
-      .order("created_at", { ascending: true })
+      .select("id, queued_at", { count: "exact" })
+      .order("queued_at", { ascending: true })
+      .order("id", { ascending: true })
       .range(from, to);
 
     if (workflowCode) {
@@ -92,16 +96,24 @@ export async function GET(request: NextRequest) {
     const { data: items, error: itemsError } = await supabase
       .from("request_approvals")
       .select(APPROVAL_LIST_SELECT)
-      .in("id", ids)
-      .order("created_at", { ascending: true });
+      .in("id", ids);
 
     if (itemsError) {
       console.error("Error fetching pending approvals:", itemsError);
       return NextResponse.json({ error: "Failed to fetch pending approvals" }, { status: 500 });
     }
 
+    // .in() sıra korumaz → step 1'in sırasını geri kur, queued_at'i ekle.
+    const queuedAtById = new Map(
+      (idRows ?? []).map((r) => [r.id as string, r.queued_at as string | null])
+    );
+    const rank = new Map(ids.map((id, i) => [id as string, i]));
+    const ordered = (items ?? [])
+      .map((item) => ({ ...item, queued_at: queuedAtById.get(item.id) ?? null }))
+      .sort((a, b) => (rank.get(a.id) ?? 0) - (rank.get(b.id) ?? 0));
+
     return NextResponse.json({
-      items: items ?? [],
+      items: ordered,
       total: count ?? 0,
       page,
       page_size: pageSize,

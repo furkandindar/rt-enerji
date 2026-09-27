@@ -60,6 +60,9 @@ export function PendingApprovalsTable({
                   <TableHead>Talep Konusu</TableHead>
                   <TableHead className="w-[110px]">Durum</TableHead>
                   <TableHead>Oluşturulma</TableHead>
+                  <TableHead title="Talebin onayınıza düştüğü an — liste bu tarihe göre, en eskiden yeniye sıralıdır">
+                    Onaya Geliş
+                  </TableHead>
                   <TableHead className="w-[70px]">İşlemler</TableHead>
                 </TableRow>
               </TableHeader>
@@ -106,6 +109,11 @@ export function PendingApprovalsTable({
                     </TableCell>
                     <TableCell className="text-muted-foreground">
                       {format(new Date(approval.request.created_at), "d MMM yyyy HH:mm", { locale: tr })}
+                    </TableCell>
+                    <TableCell className="font-medium">
+                      {approval.queued_at
+                        ? format(new Date(approval.queued_at), "d MMM yyyy HH:mm", { locale: tr })
+                        : "-"}
                     </TableCell>
                     <TableCell>
                       <Button
