@@ -61,6 +61,7 @@ export interface ApprovalDetailViewProps {
   setSignatureAccepted: (value: boolean) => void;
   isStampApproval: boolean;
   requiresStampSignature: boolean;
+  isStampApprovalOnlyStep: boolean;
   signatureDataUrl: string | null;
   setSignatureDataUrl: (dataUrl: string | null) => void;
   isTravelCompletionForm: boolean;
@@ -113,6 +114,7 @@ export function ApprovalDetailView({
   setSignatureAccepted,
   isStampApproval,
   requiresStampSignature,
+  isStampApprovalOnlyStep,
   signatureDataUrl,
   setSignatureDataUrl,
   isTravelCompletionForm,
@@ -383,6 +385,7 @@ export function ApprovalDetailView({
             signatureAccepted={signatureAccepted}
             setSignatureAccepted={setSignatureAccepted}
             requiresStampSignature={requiresStampSignature}
+            isStampApprovalOnlyStep={isStampApprovalOnlyStep}
             signatureDataUrl={signatureDataUrl}
             setSignatureDataUrl={setSignatureDataUrl}
             stampImageUrl={stampSignImageUrl}

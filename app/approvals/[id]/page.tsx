@@ -159,6 +159,7 @@ function ApprovalDetailPageInner() {
         setSignatureAccepted={approvals.setSignatureAccepted}
         isStampApproval={approvals.isStampApproval}
         requiresStampSignature={approvals.requiresStampSignature}
+        isStampApprovalOnlyStep={approvals.isStampApprovalOnlyStep}
         signatureDataUrl={approvals.signatureDataUrl}
         setSignatureDataUrl={approvals.setSignatureDataUrl}
         isTravelCompletionForm={approvals.isTravelCompletionForm}

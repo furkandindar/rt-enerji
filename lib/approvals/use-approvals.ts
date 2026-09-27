@@ -122,6 +122,9 @@ export function useApprovals(options: UseApprovalsOptions = {}) {
     const lastSequence = Math.max(...chain.map((a) => a.sequence_order));
     return selectedApproval.sequence_order >= lastSequence;
   })();
+  // Kaşeli belgenin ara adımı (Bölüm Müdürü) imza değil yalnız onaydır: süreçte tek
+  // imzacı son adım. Bu adımda imza paneli hiç gösterilmez ve onay imzaya bağlanmaz.
+  const isStampApprovalOnlyStep = isStampApproval && !requiresStampSignature;
   const hasValidSignature = requiresStampSignature
     ? Boolean(signatureDataUrl)
     : Boolean(signatureInfo.signatureText && signatureInfo.signatureFont);
@@ -179,7 +182,7 @@ export function useApprovals(options: UseApprovalsOptions = {}) {
 
   const ykbSignedPdfFormValid = !isYkbSignedPdfForm || Boolean(ykbSignedPdfPath);
 
-  const canApprove = hasValidSignature && signatureAccepted && hrFormValid && salaryConsentFormValid && onboardingFormValid && separationFormValid && attachmentsValid && travelCompletionFormValid && ykbSignedPdfFormValid;
+  const canApprove = (isStampApprovalOnlyStep || (hasValidSignature && signatureAccepted)) && hrFormValid && salaryConsentFormValid && onboardingFormValid && separationFormValid && attachmentsValid && travelCompletionFormValid && ykbSignedPdfFormValid;
 
   // Pagination — server-side, total/total_pages API'den geliyor
   const pendingTotalPages = Math.max(Math.ceil(pendingTotal / pendingPageSize), 1);
@@ -764,6 +767,7 @@ export function useApprovals(options: UseApprovalsOptions = {}) {
     separationSectionKey,
     isStampApproval,
     requiresStampSignature,
+    isStampApprovalOnlyStep,
     isTravelCompletionForm,
     isYkbSignedPdfForm,
     canApprove,

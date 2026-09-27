@@ -62,6 +62,8 @@ interface ApprovalActionsProps {
 
   // Canvas signature (stamp approval — yalnız PDF'i basan son onay adımı)
   requiresStampSignature: boolean;
+  /** Kaşeli belgenin ara onay adımı — imza paneli gösterilmez, yalnız onay butonları */
+  isStampApprovalOnlyStep: boolean;
   signatureDataUrl: string | null;
   setSignatureDataUrl: (dataUrl: string | null) => void;
   /** Kaşe görseli (imza kanvasının arkasında WYSIWYG hizalama için) */
@@ -119,6 +121,7 @@ export function ApprovalActions({
   signatureAccepted,
   setSignatureAccepted,
   requiresStampSignature,
+  isStampApprovalOnlyStep,
 signatureDataUrl,
   setSignatureDataUrl,
   stampImageUrl,
@@ -410,8 +413,8 @@ signatureDataUrl,
         />
       </div>
 
-      {/* İmza Paneli */}
-      {requiresStampSignature ? (
+      {/* İmza Paneli (kaşeli belgenin ara onay adımında yok) */}
+      {isStampApprovalOnlyStep ? null : requiresStampSignature ? (
         <SignatureCanvasPanel
           signatureDataUrl={signatureDataUrl}
           onSignatureChange={setSignatureDataUrl}
