@@ -1,8 +1,7 @@
 "use client";
 
-import { Suspense, useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { toast } from "sonner";
 import { ArrowLeft, Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -28,6 +27,9 @@ function ApprovalDetailPageInner() {
 
   const [pageLoading, setPageLoading] = useState(true);
   const [pageError, setPageError] = useState<string | null>(null);
+  // Onay kaydı en az bir kez yüklendi mi — karar sonrası selectedApproval'ın
+  // null'a dönmesini ilk mount'taki null'dan ayırmak için.
+  const [loaded, setLoaded] = useState(false);
 
   // useApprovals tüm sayfa için tasarlanmış (list + form state'leri + handler'lar).
   // Detail sayfasında list gereksiz — mode='none' (default) ile pending/history
@@ -55,6 +57,7 @@ function ApprovalDetailPageInner() {
         const data: PendingApproval = await res.json();
         if (cancelled) return;
         approvals.setSelectedApproval(data);
+        setLoaded(true);
       } catch (err) {
         console.error(err);
         if (!cancelled) setPageError("Bir hata oluştu.");
@@ -69,24 +72,17 @@ function ApprovalDetailPageInner() {
   }, [approvalId]);
 
   // Karar verildikten sonra hook setSelectedApproval(null) çağırıyor — bunu yakalayıp
-  // /approvals listesine yönlendir. "Null" tek başına yetmez; çünkü ilk mount'ta da
-  // null olur ve Next.js 16 cacheComponents senaryolarında stale closure ile yanlış
-  // tetiklenebilir. Bu yüzden non-null → null GEÇİŞİNİ ref ile izliyoruz.
-  const wasSelectedRef = useRef(false);
+  // /approvals listesine yönlendir. "Null" tek başına yetmez; ilk mount'ta da null
+  // olur. Bu yüzden `loaded` (kayıt en az bir kez yüklendi) ile birlikte bakıyoruz.
+  // Başarı toast'ını hook zaten atıyor ("Talep onaylandı" / "Revize istendi").
+  const isRedirecting = loaded && !pageLoading && !pageError && approvals.selectedApproval === null;
   useEffect(() => {
-    if (approvals.selectedApproval !== null) {
-      wasSelectedRef.current = true;
-      return;
-    }
-    if (wasSelectedRef.current && !pageLoading && !pageError) {
-      wasSelectedRef.current = false;
-      toast.success("İşlem tamamlandı");
-      router.push("/approvals");
-    }
+    if (isRedirecting) router.push("/approvals");
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [approvals.selectedApproval, pageLoading, pageError]);
+  }, [isRedirecting]);
 
-  if (pageLoading || approvals.isLoading) {
+  // Yönlendirme sürerken "Onay kaydı bulunamadı" hata ekranı yanıp sönmesin
+  if (pageLoading || approvals.isLoading || isRedirecting) {
     return (
       <div className="flex items-center justify-center p-12">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />

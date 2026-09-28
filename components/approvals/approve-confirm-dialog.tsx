@@ -27,7 +27,8 @@ interface ApproveConfirmDialogProps {
 // alınamaz (sonraki adıma bildirim, PDF, arşiv anında tetiklenir); bu yüzden
 // onaycıya hangi belgeyi onayladığını ve onayın talebi nereye götüreceğini
 // son kez gösteriyoruz. Odak varsayılan olarak "Vazgeç"te — art arda Enter/tık
-// yanlışlıkla onaya dönüşmesin.
+// yanlışlıkla onaya dönüşmesin. Karar isteği birkaç saniye sürdüğünden
+// (bildirim + mail + PDF senkron) gönderim sırasında açık ilerleme durumu gösterilir.
 export function ApproveConfirmDialog({
   open,
   onOpenChange,
@@ -114,15 +115,27 @@ export function ApproveConfirmDialog({
           </div>
         )}
 
-        <p className="text-xs text-muted-foreground">Onay verildikten sonra geri alınamaz.</p>
+        <div aria-live="polite">
+          {isSubmitting ? (
+            <p className="rounded-lg bg-primary/5 p-3 text-sm">
+              Onayınız işleniyor; belge ve bildirimler hazırlanıyor. Bu birkaç saniye sürebilir.
+            </p>
+          ) : (
+            <p className="text-xs text-muted-foreground">Onay verildikten sonra geri alınamaz.</p>
+          )}
+        </div>
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
             Vazgeç
           </Button>
-          <Button onClick={onConfirm} disabled={isSubmitting}>
-            {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            İmzala ve Onayla
+          <Button
+            className="active:scale-[0.98] disabled:opacity-100"
+            onClick={onConfirm}
+            disabled={isSubmitting}
+          >
+            {isSubmitting && <Loader2 className="animate-spin" />}
+            {isSubmitting ? "Onaylanıyor…" : "İmzala ve Onayla"}
           </Button>
         </DialogFooter>
       </DialogContent>
