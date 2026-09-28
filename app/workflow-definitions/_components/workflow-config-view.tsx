@@ -238,7 +238,8 @@ function ApproverResolution({ step }: { step: ConfigStep }) {
     case "DYNAMIC_USER_LIST":
       return (
         <p className="text-sm text-muted-foreground">
-          Talep formunda seçilen kişiler; seçim sırasıyla tek tek onaylar. Kimse seçilmezse adım atlanır.
+          Talep formunda seçilen kişiler (ve varsa sonraki &quot;Ek onaycı ekleyebilir&quot; adımının onaycısının
+          eklediği kişiler); seçim sırasıyla tek tek onaylar. Kimse seçilmezse adım atlanır.
         </p>
       );
     case "STATIC_POSITION":
@@ -291,6 +292,15 @@ function StepCard({ step, isLast }: { step: ConfigStep; isLast: boolean }) {
                 </Badge>
               )}
               {!step.is_required && <Badge variant="secondary">Opsiyonel</Badge>}
+              {step.can_add_extra_approvers && (
+                <Badge
+                  variant="outline"
+                  className="border-primary/50 text-primary"
+                  title="Bu adımın onaycısı, sırası geldiğinde zincire ek onaycı ekleyebilir"
+                >
+                  Ek onaycı ekleyebilir
+                </Badge>
+              )}
             </div>
             <p className="mt-1 text-xs text-muted-foreground">
               {step.action_type ? ACTION_TYPE_LABELS[step.action_type] : "Doldur + İmzala (varsayılan)"}

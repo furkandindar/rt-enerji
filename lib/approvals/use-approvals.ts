@@ -17,6 +17,7 @@ import {
   resolveChecklistSections,
 } from "./constants";
 import { parseContentDispositionFilename } from "@/lib/pdf/file-naming";
+import type { ExtraApproversSubmitInput } from "@/components/approvals/extra-approvers-dialog";
 import { normalizePageSize } from "@/components/ui/pagination-controls";
 
 // Hangi liste fetch'i yapılacağını belirler. Bekleyen ve geçmiş artık ayrı
@@ -599,6 +600,61 @@ export function useApprovals(options: UseApprovalsOptions = {}) {
     }
   };
 
+  // Ek onaycı (yönetici — Olur'da Genel Müdür): DIRECT → mevcut tura, yöneticinin
+  // önüne ekler; REVISION → revize notuyla birlikte kilitli ekler (yeni turda oluşur).
+  // Her iki durumda da bu satır artık yöneticinin sırası değildir → listeye dönülür.
+  const handleAddExtraApprovers = async ({
+    mode,
+    employeeIds,
+    note,
+  }: ExtraApproversSubmitInput): Promise<boolean> => {
+    if (!selectedApproval) return false;
+    if (employeeIds.length === 0) {
+      toast.error("En az bir kişi seçmelisiniz");
+      return false;
+    }
+    if (mode === "REVISION" && !note.trim()) {
+      toast.error("Revize için not zorunludur");
+      return false;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const response =
+        mode === "DIRECT"
+          ? await fetch(`/api/approvals/${selectedApproval.id}/add-approvers`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ employeeIds, note }),
+            })
+          : await fetch(`/api/approvals/${selectedApproval.id}/request-revision`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ comment: note, extraApproverIds: employeeIds }),
+            });
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error.error || "Ek onaycılar eklenemedi");
+      }
+
+      toast.success(
+        mode === "DIRECT"
+          ? "Ek onaycılar eklendi; onayları sonrası talep size dönecek"
+          : "Revize istendi; eklenen kişiler yeni turda sizden önce onay verecek"
+      );
+      setSelectedApproval(null);
+      setComment("");
+      fetchApprovals();
+      return true;
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Bir hata oluştu");
+      return false;
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const handleDownloadPDF = async (requestId: string) => {
     try {
       toast.loading("PDF indiriliyor...");
@@ -829,6 +885,7 @@ export function useApprovals(options: UseApprovalsOptions = {}) {
     // Handlers
     handleDecision,
     handleRequestRevision,
+    handleAddExtraApprovers,
     handleDownloadPDF,
     handlePendingPageChange,
     handlePendingPageSizeChange,

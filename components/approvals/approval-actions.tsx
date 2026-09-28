@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2 } from "lucide-react";
+import { Loader2, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -19,6 +19,10 @@ import { SignatureCanvasPanel } from "@/components/signature-canvas-panel";
 import { AttachmentUploader } from "@/components/attachment-uploader";
 import { YkbSignedPdfUpload } from "@/components/approvals/ykb-signed-pdf-upload";
 import { ApproveConfirmDialog } from "@/components/approvals/approve-confirm-dialog";
+import {
+  ExtraApproversDialog,
+  type ExtraApproversSubmitInput,
+} from "@/components/approvals/extra-approvers-dialog";
 import type { WorkflowStepAttachmentConfig, RequestAttachment } from "@/lib/workflow/types";
 import type { ChecklistStatus, ChecklistItem, SignatureInfo, PendingApproval } from "@/lib/approvals/types";
 
@@ -97,6 +101,7 @@ interface ApprovalActionsProps {
   isSubmitting: boolean;
   handleDecision: (decision: "APPROVED" | "REJECTED") => Promise<void>;
   handleRequestRevision: () => void;
+  handleAddExtraApprovers: (input: ExtraApproversSubmitInput) => Promise<boolean>;
 }
 
 export function ApprovalActions({
@@ -148,8 +153,13 @@ signatureDataUrl,
   isSubmitting,
   handleDecision,
   handleRequestRevision,
+  handleAddExtraApprovers,
 }: ApprovalActionsProps) {
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [extraApproversOpen, setExtraApproversOpen] = useState(false);
+  // Ek onaycı: adım bayrağı (workflow_steps.can_add_extra_approvers — Olur'da Genel Müdür).
+  // Yetki sunucuda yeniden doğrulanır; buton yalnız kolaylık.
+  const canAddExtraApprovers = approval.workflow_step?.can_add_extra_approvers === true;
 
   return (
     <div className="border-t pt-4 mt-6 space-y-4">
@@ -464,6 +474,17 @@ signatureDataUrl,
           {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           Revize İste
         </Button>
+        {canAddExtraApprovers && (
+          <Button
+            variant="outline"
+            className="flex-1 min-w-[140px]"
+            onClick={() => setExtraApproversOpen(true)}
+            disabled={isSubmitting}
+          >
+            <UserPlus className="mr-2 h-4 w-4" />
+            Onaycı Ekle
+          </Button>
+        )}
         <Button
           variant="destructive"
           className="flex-1 min-w-[140px]"
@@ -487,6 +508,22 @@ signatureDataUrl,
           setConfirmOpen(false);
         }}
       />
+
+      {canAddExtraApprovers && (
+        <ExtraApproversDialog
+          open={extraApproversOpen}
+          onOpenChange={setExtraApproversOpen}
+          approval={approval}
+          initialNote={comment}
+          isSubmitting={isSubmitting}
+          onSubmit={async (input) => {
+            const ok = await handleAddExtraApprovers(input);
+            // Başarıda sayfa listeye yönlenir; hatada pencere açık kalır (seçimler korunur)
+            if (ok) setExtraApproversOpen(false);
+            return ok;
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -12,6 +12,9 @@ import { SignaturePanel } from "@/components/signature-panel";
 import { SignatureFont } from "@/lib/signature/types";
 import { RevisionNoticeForRequest } from "@/components/my-requests/revision-notice";
 import { RequestEditAttachments } from "@/components/my-requests/request-edit-attachments";
+import { ExtraApproversField } from "@/components/extra-approvers/extra-approvers-field";
+import { useExtraApproverSetup } from "@/components/extra-approvers/use-extra-approver-setup";
+import { useApproverCandidates } from "@/components/extra-approvers/use-approver-candidates";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -82,6 +85,13 @@ interface ApprovalLetterDetail {
   remaining_after_payment?: string | null;
 }
 
+// GET /api/my-requests/[id] → approvals (aktif tur) — Ek Onaycılar ön doldurması için
+interface EditApprovalRow {
+  sequence_order: number;
+  workflow_step?: { approver_type?: string } | null;
+  approver?: { id: string } | null;
+}
+
 export default function NewApprovalLetterPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -103,6 +113,12 @@ export default function NewApprovalLetterPage() {
   const [allowedMimeTypes, setAllowedMimeTypes] = useState<string[] | null>(null);
   const [maxFileSizeBytes, setMaxFileSizeBytes] = useState<number>(10485760);
   const [maxFiles, setMaxFiles] = useState<number>(5);
+  // Ek Onaycılar: talep sahibinin kendi seçimleri (yöneticinin kilitli eklemeleri hariç)
+  const [extraApproverIds, setExtraApproverIds] = useState<string[]>([]);
+  const [currentEmployeeId, setCurrentEmployeeId] = useState<string | null>(null);
+  const extraSetup = useExtraApproverSetup("APPROVAL_LETTER", editId);
+  const { candidates: approverCandidates, loading: loadingApproverCandidates } =
+    useApproverCandidates(extraSetup.enabled);
   const supabase = createClient();
 
   const form = useForm<ApprovalLetterFormValues>({
@@ -139,9 +155,10 @@ export default function NewApprovalLetterPage() {
         if (!user) return;
         const { data: appUser } = await supabase
           .from("app_users")
-          .select(`employee:employees(signature_text, signature_font)`)
+          .select(`employee_id, employee:employees(signature_text, signature_font)`)
           .eq("id", user.id)
           .single();
+        if (appUser?.employee_id) setCurrentEmployeeId(appUser.employee_id);
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const employee = appUser?.employee as any;
         if (employee) {
@@ -194,6 +211,7 @@ export default function NewApprovalLetterPage() {
         }
         const body = (await res.json()) as {
           approval_letter_request?: ApprovalLetterDetail | ApprovalLetterDetail[] | null;
+          approvals?: EditApprovalRow[];
         };
         // PostgREST 1:1 embed obje veya tek elemanlı dizi dönebilir
         const raw = body.approval_letter_request;
@@ -223,6 +241,15 @@ export default function NewApprovalLetterPage() {
           requested_payment_amount: f.requested_payment_amount ?? "",
           remaining_after_payment: f.remaining_after_payment ?? "",
         });
+
+        // Ek Onaycılar: aktif turdaki dinamik adım onaycıları (sıralı). Yöneticinin
+        // kilitli eklemeleri de burada olabilir; gönderimde ve seçicide ayıklanır.
+        setExtraApproverIds(
+          (body.approvals ?? [])
+            .filter((a) => a.workflow_step?.approver_type === "DYNAMIC_USER_LIST" && a.approver?.id)
+            .sort((a, b) => a.sequence_order - b.sequence_order)
+            .map((a) => a.approver!.id)
+        );
       } catch (err) {
         console.error("Edit data load error:", err);
         toast.error("Talep yüklenirken hata oluştu");
@@ -297,6 +324,12 @@ export default function NewApprovalLetterPage() {
   const hasValidSignature = Boolean(signatureInfo.signatureText && signatureInfo.signatureFont);
   const canSubmit = hasValidSignature && signatureAccepted;
 
+  // Kilitli (yöneticinin eklediği) kişiler talep sahibinin listesinden ayrı tutulur;
+  // sunucu onları her turda zaten ekler.
+  const lockedExtraIds = new Set(extraSetup.locked.map((l) => l.employee_id));
+  const ownExtraApproverIds = extraApproverIds.filter((id) => !lockedExtraIds.has(id));
+  const extraStepId = extraSetup.enabled ? extraSetup.dynamicStepId : null;
+
   const onSubmit = async (data: ApprovalLetterFormValues) => {
     setIsSubmitting(true);
     try {
@@ -316,6 +349,11 @@ export default function NewApprovalLetterPage() {
         remaining_payment: data.has_payment_table ? data.remaining_payment || undefined : undefined,
         requested_payment_amount: data.has_payment_table ? data.requested_payment_amount || undefined : undefined,
         remaining_after_payment: data.has_payment_table ? data.remaining_after_payment || undefined : undefined,
+        // Oluşturmada opsiyonel ek onaycılar (düzenlemede resubmit'e gider)
+        dynamic_approvers:
+          !isEditMode && extraStepId && ownExtraApproverIds.length > 0
+            ? { [extraStepId]: ownExtraApproverIds }
+            : undefined,
       };
 
       const url = isEditMode ? `/api/approval-letter/${editId}` : "/api/approval-letter";
@@ -333,11 +371,15 @@ export default function NewApprovalLetterPage() {
       }
 
       if (isEditMode) {
-        // Edit sonrası otomatik resubmit → talep onay akışına geri girer
+        // Edit sonrası otomatik resubmit → talep onay akışına geri girer.
+        // Ek onaycı yapılandırması varsa talep sahibinin listesi açıkça gönderilir
+        // (boş = kendi seçimi yok); yöneticinin kilitli eklemelerini sunucu ekler.
         const resubmitRes = await fetch(`/api/requests/${editId}/resubmit`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({}),
+          body: JSON.stringify(
+            extraStepId ? { dynamicApprovers: { [extraStepId]: ownExtraApproverIds } } : {}
+          ),
         });
         if (!resubmitRes.ok) {
           const err = await resubmitRes.json().catch(() => ({}));
@@ -666,6 +708,20 @@ export default function NewApprovalLetterPage() {
                     />
                   </CardContent>
                 </Card>
+              )}
+
+              {/* Ek Onaycılar — yalnız süreçte ek onaycı yapılandırması varsa */}
+              {extraSetup.enabled && (
+                <ExtraApproversField
+                  value={ownExtraApproverIds}
+                  onChange={setExtraApproverIds}
+                  candidates={approverCandidates}
+                  loadingCandidates={loadingApproverCandidates}
+                  managerStepName={extraSetup.managerStepName}
+                  locked={extraSetup.locked}
+                  excludeEmployeeIds={currentEmployeeId ? [currentEmployeeId] : []}
+                  disabled={isSubmitting}
+                />
               )}
 
               {/* Ek Dosyalar — edit modunda talep zaten var: ekler anında yüklenir/silinir */}

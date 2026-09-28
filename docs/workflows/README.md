@@ -15,6 +15,7 @@ Bu doküman, RT Enerji Workflow Engine V3'e yeni bir süreç eklemek isteyen gel
 9. [Checklist](#checklist)
 10. [Örnek Süreçler](#örnek-süreçler)
 11. [Dinamik Onaycılar (DYNAMIC_USER_LIST)](#dinamik-onaycılar-dynamic_user_list)
+12. [Ek Onaycı (Yöneticinin Zincire Kişi Eklemesi)](#ek-onaycı-yöneticinin-zincire-kişi-eklemesi)
 
 ---
 
@@ -646,6 +647,45 @@ import { UserMultiPicker } from "@/components/user-multi-picker";
 - Tüm talebin `status = REJECTED` olur (normal akışla aynı)
 - Kalan ilgili kişilere ve sonraki adımlara bildirim gönderilmez
 - Onay zincirinin geri kalan satırları PENDING kalır (audit için silinmez)
+
+---
+
+## Ek Onaycı (Yöneticinin Zincire Kişi Eklemesi)
+
+> 2026-09. Kapsam: yalnız Olur Yazısı (`APPROVAL_LETTER`). SQL: `sql/feature_olur_extra_approvers.sql`.
+
+Yetkili bir onaycı (Olur'da Genel Koordinatör adımı = Genel Müdür pozisyonu), **sırası
+geldiğinde** onay ekranındaki "Onaycı Ekle" ile zincire aktif çalışanlardan **zorunlu** onaycı
+ekler ve kendi aralarında sıralar. Eklenenler her zaman o onaycının **hemen önünde** onay verir.
+
+| Parça | Nerede |
+|---|---|
+| Yetki (adım bazlı) | `workflow_steps.can_add_extra_approvers = true` — isim/kişi değil adım/pozisyon |
+| Hedef adım | Bayraklı adımdan önceki en yakın APPROVAL fazı `DYNAMIC_USER_LIST` adımı ("Ek Onaycılar"); yoksa özellik kapalı (Süreç Tanımları ekranı hata gösterir) |
+| Kilitli ekler | `request_extra_approvers` — yöneticinin eklediği kişiler; talep sahibi çıkaramaz, sonraki revize turlarında da zincire girer |
+| Kod | `lib/workflow/extra-approvers-shared.ts` (saf) + `lib/workflow/extra-approvers.ts` (sunucu) |
+| Adaylar | `GET /api/approver-candidates` — yalnız ACTIVE + sistem hesabı (`app_users`) bağlı çalışanlar |
+
+**İki mod** (aynı pencere, "Belgede değişiklik gerekiyor mu?"):
+
+- **DIRECT** — `POST /api/approvals/[id]/add-approvers`. Belge değişmez; eklenenler MEVCUT turda
+  yöneticinin satırının önüne girer (`insert_extra_approvers_before` RPC: kaydırma + ekleme tek
+  transaction, talep satırı kilitli, yalnız service_role). `current_step` değişmez → ilk eklenen
+  kişiyi gösterir. Onlar onaylayınca sıra yöneticiye döner; önceki onaylar geçerli kalır.
+- **REVISION** — `POST /api/approvals/[id]/request-revision` + `extraApproverIds`. Kişiler kilitli
+  olarak kaydedilir; talep sahibi düzenleyip/yeniden gönderince resubmit yeni turu standart
+  onaycılar + talep sahibinin seçtikleri + kilitli ekler (en sonda, yöneticinin önünde) ile kurar.
+
+**Talep sahibi** de Olur oluştururken/düzenlerken aynı dinamik adıma opsiyonel ek onaycı seçebilir
+(`dynamic_approvers`, sunucuda doğrulanır). **Kurallar:** aynı kişi iki kez eklenemez; talep sahibi,
+yöneticinin kendisi ve zincirde zaten olan kişi eklenemez; talep başına en fazla 10 ek onaycı.
+Bayraklı süreçte `createApprovalChain` dinamik listedeki standart onaycıları/talep edeni düşürür
+(kişi imzasını asıl adımında atar). PDF (Olur) imza kolonlarını `sequence_order`'a göre dizer; ek
+onaycının başlığı kişinin güncel pozisyonudur.
+
+**Yeni sürece açmak:** Table Editor'dan (1) hedef adımdan önce `DYNAMIC_USER_LIST` adımı, (2) yetkili
+adımda `can_add_extra_approvers = true`. Kod tarafı genel; o sürecin formuna `ExtraApproversField`
+(`components/extra-approvers/`) eklenir ve PDF şablonu dinamik satırları `sequence_order` ile sıralamalıdır.
 
 ---
 

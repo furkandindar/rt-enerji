@@ -13,6 +13,8 @@ export interface UserMultiPickerEmployee {
   first_name: string;
   last_name: string;
   employee_no?: string | null;
+  /** Verilirse isim altında gösterilir (ek onaycı seçicisi) */
+  position_title?: string | null;
 }
 
 interface UserMultiPickerProps {
@@ -23,6 +25,14 @@ interface UserMultiPickerProps {
   placeholder?: string;
   disabled?: boolean;
   className?: string;
+  /**
+   * "popover" (varsayılan): arama listesi açılır pencerede.
+   * "inline": arama + liste doğrudan bileşen içinde — Dialog içinde kullanım için
+   * (Dialog'un scroll kilidi portal'daki popover listesinin tekerlekle kaymasını engeller).
+   */
+  variant?: "popover" | "inline";
+  /** Seçilebilecek en fazla kişi; dolunca ekleme kapanır */
+  maxSelected?: number;
 }
 
 export function UserMultiPicker({
@@ -33,6 +43,8 @@ export function UserMultiPicker({
   placeholder = "Kişi ara ve ekle...",
   disabled = false,
   className,
+  variant = "popover",
+  maxSelected,
 }: UserMultiPickerProps) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -66,11 +78,60 @@ export function UserMultiPicker({
       );
   }, [employees, excludedSet, search]);
 
+  const isFull = maxSelected !== undefined && value.length >= maxSelected;
+
   const addEmployee = (id: string) => {
-    if (value.includes(id)) return;
+    if (value.includes(id) || isFull) return;
     onChange([...value, id]);
     setSearch("");
   };
+
+  const searchInput = (autoFocus: boolean) => (
+    <div className="flex items-center gap-2 border-b px-3 py-2">
+      <Search className="h-4 w-4 text-muted-foreground shrink-0" />
+      <Input
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        placeholder="İsim veya sicil no..."
+        className="h-7 border-0 p-0 shadow-none focus-visible:ring-0"
+        autoFocus={autoFocus}
+        disabled={disabled || isFull}
+      />
+    </div>
+  );
+
+  const availableList = (
+    <>
+      {availableEmployees.length === 0 ? (
+        <p className="px-3 py-4 text-center text-sm text-muted-foreground">
+          {search ? "Eşleşen kişi yok" : "Eklenebilecek kişi kalmadı"}
+        </p>
+      ) : (
+        <ul className="py-1">
+          {availableEmployees.map((emp) => (
+            <li key={emp.id}>
+              <button
+                type="button"
+                onClick={() => addEmployee(emp.id)}
+                disabled={disabled || isFull}
+                className="w-full px-3 py-2 text-left text-sm hover:bg-accent disabled:pointer-events-none disabled:opacity-50 flex items-center justify-between gap-2"
+              >
+                <span className="min-w-0">
+                  <span className="block truncate">{emp.first_name} {emp.last_name}</span>
+                  {emp.position_title && (
+                    <span className="block truncate text-xs text-muted-foreground">{emp.position_title}</span>
+                  )}
+                </span>
+                {emp.employee_no && (
+                  <span className="text-xs text-muted-foreground shrink-0">#{emp.employee_no}</span>
+                )}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </>
+  );
 
   const removeEmployee = (id: string) => {
     onChange(value.filter((v) => v !== id));
@@ -97,7 +158,12 @@ export function UserMultiPicker({
                 className="flex items-center gap-2 rounded-md border bg-muted/30 px-2 py-1.5 text-sm"
               >
                 <span className="text-xs font-medium text-muted-foreground w-5 shrink-0">{index + 1}.</span>
-                <span className="flex-1 truncate">{name}</span>
+                <span className="flex-1 min-w-0">
+                  <span className="block truncate">{name}</span>
+                  {emp?.position_title && (
+                    <span className="block truncate text-xs text-muted-foreground">{emp.position_title}</span>
+                  )}
+                </span>
                 <div className="flex items-center gap-0.5">
                   <Button
                     type="button" variant="ghost" size="icon"
@@ -133,56 +199,34 @@ export function UserMultiPicker({
         </ul>
       )}
 
-      <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger asChild>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={disabled}
-            className="w-full justify-start text-muted-foreground font-normal"
-          >
-            <Plus className="mr-2 h-4 w-4" />
-            {placeholder}
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent className="w-(--radix-popover-trigger-width) p-0" align="start">
-          <div className="flex items-center gap-2 border-b px-3 py-2">
-            <Search className="h-4 w-4 text-muted-foreground shrink-0" />
-            <Input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="İsim veya sicil no..."
-              className="h-7 border-0 p-0 shadow-none focus-visible:ring-0"
-              autoFocus
-            />
-          </div>
-          <ScrollArea className="max-h-56">
-            {availableEmployees.length === 0 ? (
-              <p className="px-3 py-4 text-center text-sm text-muted-foreground">
-                {search ? "Eşleşen kişi yok" : "Eklenebilecek kişi kalmadı"}
-              </p>
-            ) : (
-              <ul className="py-1">
-                {availableEmployees.map((emp) => (
-                  <li key={emp.id}>
-                    <button
-                      type="button"
-                      onClick={() => addEmployee(emp.id)}
-                      className="w-full px-3 py-2 text-left text-sm hover:bg-accent flex items-center justify-between gap-2"
-                    >
-                      <span className="truncate">{emp.first_name} {emp.last_name}</span>
-                      {emp.employee_no && (
-                        <span className="text-xs text-muted-foreground shrink-0">#{emp.employee_no}</span>
-                      )}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </ScrollArea>
-        </PopoverContent>
-      </Popover>
+      {variant === "inline" ? (
+        <div className={cn("rounded-md border", (disabled || isFull) && "opacity-60")}>
+          {searchInput(false)}
+          <div className="max-h-48 overflow-y-auto overscroll-contain">{availableList}</div>
+        </div>
+      ) : (
+        <Popover open={open} onOpenChange={setOpen}>
+          <PopoverTrigger asChild>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={disabled || isFull}
+              className="w-full justify-start text-muted-foreground font-normal"
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              {placeholder}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-(--radix-popover-trigger-width) p-0" align="start">
+            {searchInput(true)}
+            <ScrollArea className="max-h-56">{availableList}</ScrollArea>
+          </PopoverContent>
+        </Popover>
+      )}
+      {isFull && (
+        <p className="text-xs text-muted-foreground">En fazla {maxSelected} kişi seçilebilir.</p>
+      )}
     </div>
   );
 }

@@ -44,8 +44,8 @@ export async function GET(
     );
     const target = managerStep ? resolveExtraApproverTarget(steps, managerStep.id) : null;
 
-    if (!target) {
-      return NextResponse.json({ enabled: false, dynamicStepId: null, locked: [] });
+    if (!managerStep || !target) {
+      return NextResponse.json({ enabled: false, dynamicStepId: null, managerStepName: null, locked: [] });
     }
 
     const locked = await loadLockedExtraApprovers(admin, requestId);
@@ -65,6 +65,7 @@ export async function GET(
     return NextResponse.json({
       enabled: true,
       dynamicStepId: target.dynamicStepId,
+      managerStepName: managerStep.name ?? null,
       locked: locked.map((l) => ({
         employee_id: l.employee_id,
         employee_name: nameById.get(l.employee_id) ?? null,

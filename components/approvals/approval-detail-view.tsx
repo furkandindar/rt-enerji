@@ -7,6 +7,7 @@ import { Download, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { WorkflowStepAttachmentConfig, RequestAttachment, PreviousStepAttachment } from "@/lib/workflow/types";
 import type { PendingApproval, ChecklistStatus, ChecklistItem, SignatureInfo } from "@/lib/approvals/types";
+import type { ExtraApproversSubmitInput } from "./extra-approvers-dialog";
 import { ApprovalStatusBadge } from "./status-badge";
 import { getRequesterFullName, getRequesterPosition } from "./utils";
 import { LeaveRequestDetails } from "./leave-request-details";
@@ -80,6 +81,7 @@ export interface ApprovalDetailViewProps {
   isSubmitting: boolean;
   handleDecision: (decision: "APPROVED" | "REJECTED") => Promise<void>;
   handleRequestRevision: () => void;
+  handleAddExtraApprovers: (input: ExtraApproversSubmitInput) => Promise<boolean>;
   handleDownloadPDF: (requestId: string) => void;
 }
 
@@ -133,6 +135,7 @@ export function ApprovalDetailView({
   isSubmitting,
   handleDecision,
   handleRequestRevision,
+  handleAddExtraApprovers,
   handleDownloadPDF,
 }: ApprovalDetailViewProps) {
   const [showPdfPreview, setShowPdfPreview] = useState(false);
@@ -147,6 +150,17 @@ export function ApprovalDetailView({
     !isStampApproval && ["PENDING", "AWAITING_COMPLETION"].includes(requestStatus);
 
   const isDecided = selectedApproval.status !== "PENDING";
+
+  // Karar yalnız aktif turda, sırası gelmiş satırda ve talep akışı canlıyken verilebilir
+  // (sunucu kuralıyla aynı: PATCH/revize/ek onaycı route'ları). Örn. yönetici ek onaycı
+  // eklediğinde kendi satırı PENDING kalır ama sıra eklenenlerdedir → eski bir linkten
+  // açılırsa butonlar yerine açıklama gösterilir.
+  const req = selectedApproval.request;
+  const isActionableRequest = ["PENDING", "AWAITING_COMPLETION"].includes(req.status);
+  const isActiveCycle = (selectedApproval.revision_cycle ?? 0) === (req.current_revision_cycle ?? 0);
+  const isMyTurn =
+    selectedApproval.sequence_order == null || selectedApproval.sequence_order === req.current_step;
+  const canTakeAction = isActionableRequest && isActiveCycle && isMyTurn;
 
   // Kaşeli onayda imza kanvasının arkasına gerçek kaşeyi koymak için (WYSIWYG):
   // kaşe görsel URL'i ve en/boy oranı.
@@ -357,7 +371,14 @@ export function ApprovalDetailView({
 
         {/* Onay İşlemleri - Sadece bekleyen onaylar için; vekalet (Faz B):
             GET viewer.can_act=false ise (atanmamış görüntüleyici) aksiyonlar gizli */}
-        {selectedApproval.status === "PENDING" && selectedApproval.viewer?.can_act !== false && (
+        {selectedApproval.status === "PENDING" && selectedApproval.viewer?.can_act !== false && !canTakeAction && (
+          <div className="rounded-md border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
+            {!isActionableRequest || !isActiveCycle
+              ? "Bu talep artık bu onay adımında işleme açık değil."
+              : "Bu adımda sıra henüz sizde değil; önceki onaycıların (varsa eklenen ek onaycıların) kararı bekleniyor. Sıra size geldiğinde bildirim alacaksınız."}
+          </div>
+        )}
+        {selectedApproval.status === "PENDING" && selectedApproval.viewer?.can_act !== false && canTakeAction && (
           <ApprovalActions
             approval={selectedApproval}
             isHrForm={isHrForm}
@@ -407,6 +428,7 @@ export function ApprovalDetailView({
             isSubmitting={isSubmitting}
             handleDecision={handleDecision}
             handleRequestRevision={handleRequestRevision}
+            handleAddExtraApprovers={handleAddExtraApprovers}
           />
         )}
 

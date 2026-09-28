@@ -174,6 +174,7 @@ function ApprovalDetailPageInner() {
         isSubmitting={approvals.isSubmitting}
         handleDecision={approvals.handleDecision}
         handleRequestRevision={approvals.handleRequestRevision}
+        handleAddExtraApprovers={approvals.handleAddExtraApprovers}
         handleDownloadPDF={approvals.handleDownloadPDF}
       />
     </div>

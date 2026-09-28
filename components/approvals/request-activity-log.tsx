@@ -14,6 +14,7 @@ import {
   Undo2,
   Ban,
   Pencil,
+  UserPlus,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -119,6 +120,7 @@ const LAST_ACTION_LABEL: Record<string, string> = {
   CANCELLED: "Talep iptal edildi",
   EDITED: "Talep düzenlendi",
   EDITED_BY_ADMIN: "Talep yönetici tarafından düzenlendi",
+  EXTRA_APPROVERS_ADDED: "Onay zincirine ek onaycı eklendi",
 };
 
 const LAST_ACTION_ICON: Record<string, { icon: LucideIcon; cls: string }> = {
@@ -126,6 +128,7 @@ const LAST_ACTION_ICON: Record<string, { icon: LucideIcon; cls: string }> = {
   CANCELLED: { icon: Ban, cls: "text-red-600" },
   EDITED: { icon: Pencil, cls: "text-muted-foreground" },
   EDITED_BY_ADMIN: { icon: Pencil, cls: "text-muted-foreground" },
+  EXTRA_APPROVERS_ADDED: { icon: UserPlus, cls: "text-primary" },
 };
 
 function buildEvents(req: ActivityRequest): ActivityEvent[] {

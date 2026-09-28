@@ -106,6 +106,7 @@ export interface PendingApproval {
   status: string;
   decided_at: string | null;
   sequence_order?: number;
+  revision_cycle?: number | null;
   /** Sadece pending liste: onaycının kuyruğuna düşüş anı (liste bu alana göre sıralı). */
   queued_at?: string | null;
   // Vekalet (Faz B): liste select'i `*` ile gelir; detay GET'i `viewer` ekler.
@@ -124,6 +125,10 @@ export interface PendingApproval {
     step_order: number;
     action_type: 'FILL_AND_SIGN' | 'SIGN_ONLY';
     form_section_key: string | null;
+    approver_type?: 'REQUESTER' | 'UNIT_HEAD' | 'STATIC_POSITION' | 'DYNAMIC_USER_LIST';
+    phase?: 'APPROVAL' | 'COMPLETION';
+    // Ek onaycı: bu adımın onaycısı zincire kişi ekleyebilir (detay GET'i workflow_steps(*) döner)
+    can_add_extra_approvers?: boolean;
   };
   request: {
     id: string;

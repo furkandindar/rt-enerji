@@ -10,6 +10,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { ActionType, ApproverType, StepCondition, WorkflowStepPhase } from './types';
+import { resolveExtraApproverTarget } from './extra-approvers-shared';
 
 // ============================================================================
 // Görünüm modeli
@@ -65,6 +66,8 @@ export interface ConfigStep {
   is_required: boolean;
   condition: StepCondition | null;
   static_position: ConfigPosition | null;
+  /** Bu adımın onaycısı zincire ek onaycı ekleyebilir (Olur — Genel Müdür) */
+  can_add_extra_approvers: boolean;
   attachments: ConfigStepAttachment[];
   warnings: ConfigWarning[];
 }
@@ -130,6 +133,7 @@ interface StepRow {
   is_required: boolean;
   condition: unknown;
   static_position_id: string | null;
+  can_add_extra_approvers?: boolean | null;
 }
 
 interface AttachmentRow {
@@ -252,7 +256,7 @@ export async function loadWorkflowConfigOverview(
       supabase
         .from('workflow_steps')
         .select(
-          'id, workflow_definition_id, step_order, name, approver_type, action_type, phase, form_section_key, is_required, condition, static_position_id'
+          'id, workflow_definition_id, step_order, name, approver_type, action_type, phase, form_section_key, is_required, condition, static_position_id, can_add_extra_approvers'
         )
         .order('step_order'),
       supabase
@@ -407,6 +411,13 @@ export async function loadWorkflowConfigOverview(
       if (!toActionType(s.action_type)) {
         warnings.push({ level: 'warning', message: 'action_type tanımsız; FILL_AND_SIGN varsayılır.' });
       }
+      if (s.can_add_extra_approvers === true && !resolveExtraApproverTarget(rawSteps, s.id)) {
+        warnings.push({
+          level: 'error',
+          message:
+            'Ek onaycı ekleyebilir işaretli ama öncesinde (onay fazında) Dinamik Liste adımı yok ya da adım tamamlama fazında; özellik kapalı.',
+        });
+      }
       return {
         id: s.id,
         step_order: s.step_order,
@@ -418,6 +429,7 @@ export async function loadWorkflowConfigOverview(
         is_required: s.is_required,
         condition: isStepCondition(s.condition) ? s.condition : null,
         static_position: staticPosition,
+        can_add_extra_approvers: s.can_add_extra_approvers === true,
         attachments: attachmentsByStep.get(s.id) ?? [],
         warnings,
       };
