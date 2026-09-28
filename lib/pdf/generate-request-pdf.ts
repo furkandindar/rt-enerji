@@ -15,6 +15,7 @@ import { ExpenseFormPDFTemplate } from './expense-form-pdf-template';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { SignatureFont, DEFAULT_SIGNATURE_FONT } from '@/lib/signature/types';
 import type { PdfApproval, SignatureInfo } from './types';
+import { getPositionTitlesByEmployee } from '@/lib/workflow/extra-approvers';
 
 interface GeneratePDFOptions {
   requestId: string;
@@ -258,12 +259,24 @@ export async function generateRequestPDF(
     }) as React.ReactElement<DocumentProps>;
   } else if (request.approval_letter_request) {
     // Olur Yazısı PDF'i
+    // Ek onaycı kolonları kişinin pozisyonuyla başlıklanır ("Proje Müdürü" gibi).
+    // Başlık okunamazsa PDF yine üretilir (adım adına düşer).
+    const extraApproverIds = approvals
+      .filter((a) => a.workflow_step?.approver_type === 'DYNAMIC_USER_LIST')
+      .map((a) => a.approver.id);
+    let extraApproverTitles: Record<string, string> = {};
+    try {
+      extraApproverTitles = await getPositionTitlesByEmployee(supabase, extraApproverIds);
+    } catch (titleError) {
+      console.error('Extra approver titles could not be loaded for PDF:', titleError);
+    }
     pdfDocument = React.createElement(ApprovalLetterPDFTemplate, {
       request,
       requester: request.requester,
       approvalLetterRequest: request.approval_letter_request,
       approvals,
       signatures,
+      extraApproverTitles,
     }) as React.ReactElement<DocumentProps>;
   } else if (request.finance_approval_cover_request) {
     // Onay Kapağı Finans PDF'i

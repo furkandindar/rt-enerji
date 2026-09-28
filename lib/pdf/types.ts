@@ -60,6 +60,9 @@ export interface PdfApproval {
   status: 'PENDING' | 'APPROVED' | 'REJECTED' | string;
   comment: string | null;
   decided_at?: string | null;
+  // Zincirdeki gerçek sıra (aktif tur içinde 1..N). DYNAMIC_USER_LIST adımında
+  // birden fazla satır aynı step_order'ı paylaşır → sıralama için bu kullanılmalı.
+  sequence_order?: number;
   workflow_step: PdfWorkflowStep;
   approver: PdfApprover;
   // Vekalet (Faz B): işlemi fiilen yapan (vekil); null = onaycının kendisi

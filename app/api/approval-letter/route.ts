@@ -1,7 +1,13 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { createApprovalChain, getWorkflowDefinitionByCode, notifyApprover, canStartWorkflow } from "@/lib/workflow";
-import type { CreateApprovalLetterInput } from "@/lib/workflow";
+import type { CreateApprovalLetterInput, CreateRequestDynamicApprovers } from "@/lib/workflow";
+import { createServiceRoleClient } from "@/lib/supabase/service-role";
+import { hasExtraApproverSupport } from "@/lib/workflow/extra-approvers-shared";
+import {
+  fetchWorkflowStepsForExtras,
+  sanitizeRequesterExtraApprovers,
+} from "@/lib/workflow/extra-approvers";
 
 // GET /api/approval-letter - Kullanıcının olur yazılarını listele
 export async function GET() {
@@ -98,6 +104,26 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Yazı içeriği gerekli" }, { status: 400 });
     }
 
+    // Opsiyonel ek onaycılar ("Ek Onaycılar" DYNAMIC_USER_LIST adımı). Yalnız süreçte
+    // ek onaycı yapılandırması varsa dikkate alınır; aday uygunluğu (aktif + sistem
+    // hesabı) app_users'a bağlı olduğu için service role ile doğrulanır.
+    let dynamicApprovers: CreateRequestDynamicApprovers | undefined;
+    if (body.dynamic_approvers) {
+      const admin = createServiceRoleClient();
+      const steps = await fetchWorkflowStepsForExtras(admin, workflowDef.id);
+      if (hasExtraApproverSupport(steps)) {
+        const sanitized = await sanitizeRequesterExtraApprovers(admin, {
+          steps,
+          requesterEmployeeId: appUser.employee_id,
+          input: body.dynamic_approvers,
+        });
+        if (!sanitized.ok) {
+          return NextResponse.json({ error: sanitized.error }, { status: 400 });
+        }
+        dynamicApprovers = sanitized.value;
+      }
+    }
+
     // Ana request kaydı oluştur
     const { data: newRequest, error: requestError } = await supabase
       .from("requests")
@@ -148,7 +174,9 @@ export async function POST(request: Request) {
         supabase,
         newRequest.id,
         workflowDef.id,
-        appUser.employee_id
+        appUser.employee_id,
+        undefined,
+        dynamicApprovers
       );
     } catch (approvalError) {
       await supabase.from("approval_letter_requests").delete().eq("request_id", newRequest.id);

@@ -1736,6 +1736,74 @@ export type Database = {
           },
         ]
       }
+      request_extra_approvers: {
+        Row: {
+          added_by_employee_id: string
+          added_in_cycle: number
+          created_at: string
+          employee_id: string
+          id: string
+          mode: string
+          note: string | null
+          request_id: string
+          sort_order: number
+          workflow_step_id: string
+        }
+        Insert: {
+          added_by_employee_id: string
+          added_in_cycle: number
+          created_at?: string
+          employee_id: string
+          id?: string
+          mode: string
+          note?: string | null
+          request_id: string
+          sort_order: number
+          workflow_step_id: string
+        }
+        Update: {
+          added_by_employee_id?: string
+          added_in_cycle?: number
+          created_at?: string
+          employee_id?: string
+          id?: string
+          mode?: string
+          note?: string | null
+          request_id?: string
+          sort_order?: number
+          workflow_step_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "request_extra_approvers_added_by_employee_id_fkey"
+            columns: ["added_by_employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "request_extra_approvers_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "request_extra_approvers_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "request_extra_approvers_workflow_step_id_fkey"
+            columns: ["workflow_step_id"]
+            isOneToOne: false
+            referencedRelation: "workflow_steps"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       request_form_requests: {
         Row: {
           amount: number | null
@@ -2498,6 +2566,7 @@ export type Database = {
         Row: {
           action_type: string | null
           approver_type: Database["public"]["Enums"]["approver_type"]
+          can_add_extra_approvers: boolean
           condition: Json | null
           created_at: string
           form_section_key: string | null
@@ -2512,6 +2581,7 @@ export type Database = {
         Insert: {
           action_type?: string | null
           approver_type: Database["public"]["Enums"]["approver_type"]
+          can_add_extra_approvers?: boolean
           condition?: Json | null
           created_at?: string
           form_section_key?: string | null
@@ -2526,6 +2596,7 @@ export type Database = {
         Update: {
           action_type?: string | null
           approver_type?: Database["public"]["Enums"]["approver_type"]
+          can_add_extra_approvers?: boolean
           condition?: Json | null
           created_at?: string
           form_section_key?: string | null
@@ -2586,6 +2657,16 @@ export type Database = {
         Returns: string
       }
       get_current_employee_id: { Args: never; Returns: string }
+      insert_extra_approvers_before: {
+        Args: {
+          p_added_by_employee_id: string
+          p_before_approval_id: string
+          p_dynamic_step_id: string
+          p_employee_ids: string[]
+          p_note?: string
+        }
+        Returns: number
+      }
       is_active_delegate_for: {
         Args: {
           p_delegator_employee_id: string

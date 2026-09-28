@@ -7,6 +7,14 @@ import {
   resetApprovalChain,
   type CreateRequestDynamicApprovers,
 } from "@/lib/workflow";
+import { createServiceRoleClient } from "@/lib/supabase/service-role";
+import { hasExtraApproverSupport } from "@/lib/workflow/extra-approvers-shared";
+import {
+  buildResubmitDynamicApprovers,
+  fetchWorkflowStepsForExtras,
+  loadLockedExtraApprovers,
+  sanitizeRequesterExtraApprovers,
+} from "@/lib/workflow/extra-approvers";
 
 // POST /api/requests/[id]/resubmit
 // DRAFT veya REVISION_REQUESTED durumdaki bir talebi yeniden gönderir:
@@ -60,6 +68,7 @@ export async function POST(
         status,
         requester_employee_id,
         current_revision_cycle,
+        workflow_definition_id,
         workflow_definition:workflow_definitions(name)
       `)
       .eq("id", requestId)
@@ -105,6 +114,37 @@ export async function POST(
         }
       }
       effectiveDynamic = Object.keys(dynamicMap).length > 0 ? dynamicMap : undefined;
+    }
+
+    // 4b. Ek onaycı desteği olan süreçlerde (Olur — can_add_extra_approvers):
+    //     - body'den gelen talep sahibi seçimi sunucuda doğrulanır (aktif + sistem hesabı);
+    //     - yöneticinin eklediği kilitli kişiler (request_extra_approvers) talep sahibi
+    //       listeden çıkarmış olsa bile her zaman yeni tura, yöneticinin hemen önüne eklenir.
+    //     Bayraksız süreçlerde (Finans/Muhasebe kapağı) davranış değişmez.
+    //     Tüm doğrulama zincir sıfırlanmadan (ilk yazmadan) önce yapılır.
+    const admin = createServiceRoleClient();
+    const steps = await fetchWorkflowStepsForExtras(admin, req.workflow_definition_id);
+    if (hasExtraApproverSupport(steps)) {
+      let base = effectiveDynamic;
+      if (body.dynamicApprovers) {
+        const locked = await loadLockedExtraApprovers(admin, requestId);
+        const sanitized = await sanitizeRequesterExtraApprovers(admin, {
+          steps,
+          requesterEmployeeId: req.requester_employee_id,
+          input: body.dynamicApprovers,
+          ignoreIds: locked.map((l) => l.employee_id),
+        });
+        if (!sanitized.ok) {
+          return NextResponse.json({ error: sanitized.error }, { status: 400 });
+        }
+        base = sanitized.value;
+      }
+      effectiveDynamic = await buildResubmitDynamicApprovers(admin, {
+        steps,
+        requestId,
+        requesterEmployeeId: req.requester_employee_id,
+        base,
+      });
     }
 
     // 5. Eski cycle'da APPROVED veren onaycıları topla (notification için, reset'ten ÖNCE)

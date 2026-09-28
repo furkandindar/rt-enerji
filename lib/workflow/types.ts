@@ -67,6 +67,9 @@ export interface WorkflowStep {
   form_section_key: string | null; // V3: Hangi form bölümü doldurulacak
   condition: StepCondition | null; // V4: Koşullu adım - null ise her zaman çalışır
   phase: WorkflowStepPhase; // V4: APPROVAL veya COMPLETION
+  // Ek onaycı: true ise bu adımın onaycısı zincire kişi ekleyebilir
+  // (sql/feature_olur_extra_approvers.sql). SQL öncesi kolon yok → undefined.
+  can_add_extra_approvers?: boolean;
   created_at: string;
 }
 
@@ -627,6 +630,8 @@ export interface CreateApprovalLetterInput {
   remaining_payment?: string;
   requested_payment_amount?: string;
   remaining_after_payment?: string;
+  // Opsiyonel ek onaycılar (DYNAMIC_USER_LIST "Ek Onaycılar" adımı; sunucuda doğrulanır)
+  dynamic_approvers?: CreateRequestDynamicApprovers;
 }
 
 // ============================================================================

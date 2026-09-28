@@ -107,6 +107,11 @@ interface ApprovalLetterPDFTemplateProps {
   approvalLetterRequest: ApprovalLetterRequest;
   approvals: PdfApproval[];
   signatures?: Record<string, SignatureInfo>;
+  /**
+   * Ek onaycı (DYNAMIC_USER_LIST) satırlarının kolon başlığı: onaycının güncel
+   * pozisyonu (employeeId → başlık). Yoksa adım adı ("Ek Onaycılar") kullanılır.
+   */
+  extraApproverTitles?: Record<string, string>;
 }
 
 export const ApprovalLetterPDFTemplate: React.FC<ApprovalLetterPDFTemplateProps> = ({
@@ -114,6 +119,7 @@ export const ApprovalLetterPDFTemplate: React.FC<ApprovalLetterPDFTemplateProps>
   approvalLetterRequest,
   approvals,
   signatures = {},
+  extraApproverTitles = {},
 }) => {
   const renderSignature = (employeeId: string, status?: string) => {
     if (status === 'REJECTED') {
@@ -130,12 +136,21 @@ export const ApprovalLetterPDFTemplate: React.FC<ApprovalLetterPDFTemplateProps>
     const columns: { title: string; name: string; employeeId: string; note: string; status?: string }[] = [
       { title: 'Hazırlayan', name: `${requester.first_name} ${requester.last_name}`, employeeId: requester.id, note: '' },
     ];
+    // Sıra: zincirdeki gerçek sıra (sequence_order). Ek onaycılar aynı adımda
+    // (aynı step_order) birden fazla satırdır; step_order'a göre sıralamak onları
+    // karıştırırdı. sequence_order yoksa (eski veri) step_order'a düşülür.
+    const orderKey = (a: PdfApproval) => a.sequence_order ?? a.workflow_step.step_order;
     const sortedApprovals = approvals
       .filter((a) => a.workflow_step.step_order > 1)
       .filter((a) => !(a.workflow_step.phase === 'COMPLETION' && a.workflow_step.form_section_key === 'ykb_signed_pdf'))
-      .sort((a, b) => a.workflow_step.step_order - b.workflow_step.step_order);
+      .sort((a, b) => orderKey(a) - orderKey(b));
     sortedApprovals.forEach((approval) => {
-      const positionTitle = approval.workflow_step.name || approval.workflow_step.static_position?.title || '';
+      const isExtraApprover = approval.workflow_step.approver_type === 'DYNAMIC_USER_LIST';
+      const positionTitle =
+        (isExtraApprover ? extraApproverTitles[approval.approver.id] : undefined) ||
+        approval.workflow_step.name ||
+        approval.workflow_step.static_position?.title ||
+        '';
       columns.push({
         title: positionTitle,
         name: `${approval.approver.first_name} ${approval.approver.last_name}`,

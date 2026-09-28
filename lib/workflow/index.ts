@@ -17,6 +17,7 @@ export {
   notifyRequestRejected,
   notifyRequestUpdated,
   notifyRevisionRequested,
+  notifyExtraApproversAdded,
   notifyDelegationAssigned,
   notifyDelegationCancelled,
   getUnreadNotificationCount,

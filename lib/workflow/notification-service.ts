@@ -374,6 +374,9 @@ export async function notifyRequestUpdated(
 /**
  * V5: Onaycı "revize iste" dediğinde talep edene
  * "düzeltmen gereken bir talep var" bildirimi gönderir.
+ *
+ * extraApproverNames: revizeyle birlikte onay zincirine eklenen kişiler (Olur —
+ * yönetici ek onaycı). Metne eklenir; yeniden gönderimde zincire otomatik girerler.
  */
 export async function notifyRevisionRequested(
   supabase: SupabaseClient,
@@ -382,14 +385,18 @@ export async function notifyRevisionRequested(
   workflowName: string,
   requestedByName: string,
   comment: string,
-  subject?: string
+  subject?: string,
+  extraApproverNames?: string[]
 ): Promise<void> {
   const userInfo = await getUserInfoByEmployeeId(supabase, requesterEmployeeId);
   if (!userInfo) return;
 
   const title = 'Revize İstendi';
   const subjectLine = subject ? `\nKonu: ${subject}` : '';
-  const message = `${workflowName} talebiniz için ${requestedByName} revize istedi. "${comment}"${subjectLine}`;
+  const extraLine = extraApproverNames?.length
+    ? `\nOnay zincirine eklenen kişiler: ${extraApproverNames.join(', ')} (yeniden gönderdiğinizde sırayla onay verecekler).`
+    : '';
+  const message = `${workflowName} talebiniz için ${requestedByName} revize istedi. "${comment}"${extraLine}${subjectLine}`;
   const type: NotificationType = 'REVISION_REQUESTED';
 
   await createNotification(supabase, {
@@ -414,6 +421,33 @@ export async function notifyRevisionRequested(
     );
     await sendNotificationEmail(payload);
   }
+}
+
+/**
+ * Ek onaycı (DIRECT mod): yönetici belgeyi revizeye göndermeden zincire kişi
+ * ekledi → talep edene bilgi (yalnız uygulama içi; talep sahibinin aksiyonu yok).
+ * Eklenen kişilere sıraları gelince standart notifyApprover gider.
+ */
+export async function notifyExtraApproversAdded(
+  supabase: SupabaseClient,
+  requesterEmployeeId: string,
+  requestId: string,
+  workflowName: string,
+  addedByName: string,
+  extraApproverNames: string[],
+  note?: string | null
+): Promise<void> {
+  const userInfo = await getUserInfoByEmployeeId(supabase, requesterEmployeeId);
+  if (!userInfo) return;
+
+  const noteLine = note?.trim() ? ` Not: "${note.trim()}"` : '';
+  await createNotification(supabase, {
+    userId: userInfo.id,
+    title: 'Onay Zincirine Ekleme',
+    message: `${workflowName} talebinize ${addedByName} tarafından ek onaycı eklendi: ${extraApproverNames.join(', ')}. Onayları sonrası talep ${addedByName} onayına döner.${noteLine}`,
+    type: 'REQUEST_UPDATED',
+    referenceId: requestId,
+  });
 }
 
 // ============================================================================

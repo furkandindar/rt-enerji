@@ -3,6 +3,7 @@
 
 import { SupabaseClient } from '@supabase/supabase-js';
 import { WorkflowStep, WorkflowDefinition, StepCondition, CreateRequestDynamicApprovers } from './types';
+import { hasExtraApproverSupport, type ExtraApproverStepLike } from './extra-approvers-shared';
 
 // ============================================================================
 // Types
@@ -382,6 +383,30 @@ export async function createApprovalChain(
       phase: step.phase,
       revision_cycle: cycle,
     });
+  }
+
+  // 2a. Ek onaycı desteği olan süreçlerde (workflow_steps.can_add_extra_approvers —
+  // Olur) DYNAMIC_USER_LIST satırları standart zincirle çakışamaz: talep eden veya
+  // standart bir adımın onaycısı olan kişi dinamik listeden düşer (imzasını asıl
+  // adımında atar, PDF'te iki kez görünmez); listede tekrar eden kişi bir kez kalır.
+  // UNIT_HEAD skip'inden ÖNCE çalışır: aksi halde "Birim Amiri" ek onaycı olarak da
+  // seçildiğinde kendi adımı düşer, imzası "Ek Onaycı" başlığına kayardı.
+  // Bayraksız süreçlerde (Finans/Muhasebe kapağı) davranış değişmez.
+  if (hasExtraApproverSupport(steps as ExtraApproverStepLike[])) {
+    const standardApprovers = new Set<string>([requesterEmployeeId]);
+    for (const a of approvals) {
+      if (a.approver_type !== 'DYNAMIC_USER_LIST') standardApprovers.add(a.approver_employee_id);
+    }
+    const seenDynamic = new Set<string>();
+    const deduped = approvals.filter((a) => {
+      if (a.approver_type !== 'DYNAMIC_USER_LIST') return true;
+      if (standardApprovers.has(a.approver_employee_id) || seenDynamic.has(a.approver_employee_id)) {
+        return false;
+      }
+      seenDynamic.add(a.approver_employee_id);
+      return true;
+    });
+    approvals.splice(0, approvals.length, ...deduped);
   }
 
   // 2b. Mükerrer onaycı skip (yalnız UNIT_HEAD): Escalation ile çözümlenen onaycı,
