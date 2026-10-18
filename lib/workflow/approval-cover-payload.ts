@@ -10,7 +10,7 @@ import type {
 
 const EXPENSE_AREAS = ['ANA_SAHA', 'ELEKTRIKSEL_KAPASITE_ARTISI', 'YEKA_1', 'YEKA_2'] as const;
 const FUNDING_SOURCES = ['KREDI', 'OZ_KAYNAK', 'NAKIT_FAZLASI', 'DIGER'] as const;
-const CAPACITY_TYPES = ['KAPASITE', 'ANASAHA', 'YEKA'] as const;
+const CAPACITY_TYPES = ['KAPASITE', 'ANASAHA', 'YEKA_1', 'YEKA_2'] as const;
 const CURRENCIES = ['TRY', 'USD', 'EUR'] as const;
 
 type CoverItemInput = {
@@ -22,7 +22,14 @@ type CoverItemInput = {
   payable_amount?: unknown;
   currency?: string;
   capacity_type?: string;
+  expense_area?: string;
 };
+
+// Satır bazındaki alan seçimi: muhasebe → capacity_type, finans → expense_area
+const ROW_AREA_RULES = {
+  capacity_type: { allowed: CAPACITY_TYPES as readonly string[], message: 'harcama alanı seçin' },
+  expense_area: { allowed: EXPENSE_AREAS as readonly string[], message: 'harcama alanı seçin' },
+} as const;
 
 function validateHeader(body: { subject?: string; document_no?: string; request_date?: string }): string | null {
   if (!body.subject?.trim()) return "Konu gerekli";
@@ -31,8 +38,9 @@ function validateHeader(body: { subject?: string; document_no?: string; request_
   return null;
 }
 
-function validateItems(items: unknown, withCapacityType: boolean): string | null {
+function validateItems(items: unknown, areaField: keyof typeof ROW_AREA_RULES): string | null {
   if (!Array.isArray(items) || items.length === 0) return "En az bir ödeme satırı zorunludur";
+  const areaRule = ROW_AREA_RULES[areaField];
   for (let i = 0; i < items.length; i++) {
     const it = items[i] as CoverItemInput;
     const row = `Satır ${i + 1}`;
@@ -40,9 +48,7 @@ function validateItems(items: unknown, withCapacityType: boolean): string | null
     if (!it.company_name?.trim()) return `${row}: firma adı gerekli`;
     if (!it.payee_name?.trim()) return `${row}: ödeme yapılacak firma/kurum gerekli`;
     if (!it.item_subject?.trim()) return `${row}: konu gerekli`;
-    if (withCapacityType && !CAPACITY_TYPES.includes(it.capacity_type as (typeof CAPACITY_TYPES)[number])) {
-      return `${row}: kapasite tipi seçin`;
-    }
+    if (!areaRule.allowed.includes(it[areaField] ?? '')) return `${row}: ${areaRule.message}`;
     if (typeof it.invoice_amount !== 'number' || it.invoice_amount < 0) {
       return `${row}: geçerli bir fatura tutarı girin`;
     }
@@ -69,7 +75,7 @@ export function validateFinanceCoverInput(body: CreateFinanceApprovalCoverInput)
   if (typeof body.has_rt_enerji_proforma !== 'boolean') return "RT Enerji proforma bilgisi gerekli";
   if (!EXPENSE_AREAS.includes(body.expense_area)) return "Geçerli bir harcama alanı seçin";
   if (!FUNDING_SOURCES.includes(body.funding_source)) return "Geçerli bir niteliği seçin";
-  return validateItems(body.items, false);
+  return validateItems(body.items, 'expense_area');
 }
 
 /** finance_approval_cover_requests satırı (request_id hariç). */
@@ -103,6 +109,7 @@ export function buildFinanceCoverItems(body: CreateFinanceApprovalCoverInput, fi
     company_name: it.company_name,
     payee_name: it.payee_name,
     item_subject: it.item_subject,
+    expense_area: it.expense_area,
     invoice_amount: it.invoice_amount,
     payable_amount: it.payable_amount,
     currency: it.currency,
@@ -130,7 +137,7 @@ export function validateAccountingCoverInput(body: CreateAccountingApprovalCover
   for (const [field, message] of ACCOUNTING_BOOLEAN_FIELDS) {
     if (typeof body[field] !== 'boolean') return message;
   }
-  return validateItems(body.items, true);
+  return validateItems(body.items, 'capacity_type');
 }
 
 /** accounting_approval_cover_requests satırı (request_id hariç). */

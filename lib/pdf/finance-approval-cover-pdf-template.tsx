@@ -41,6 +41,14 @@ const expenseAreaLabels: Record<string, string> = {
   YEKA_2: 'YEKA 2',
 };
 
+// Ödeme tablosundaki satır kolonu — muhasebe kapağındaki "K/A/YEKA" ile aynı kısaltmalar
+const expenseAreaShortLabels: Record<string, string> = {
+  ELEKTRIKSEL_KAPASITE_ARTISI: 'K',
+  ANA_SAHA: 'A',
+  YEKA_1: 'YEKA 1',
+  YEKA_2: 'YEKA 2',
+};
+
 const fundingSourceLabels: Record<string, string> = {
   KREDI: 'KREDİ',
   OZ_KAYNAK: 'ÖZ KAYNAK',
@@ -70,9 +78,10 @@ const styles = StyleSheet.create({
   // Column widths — sum must equal 100% (Konu en geniş: uzun poliçe/fatura açıklamaları sarmasın)
   colIdx:    { width: '4%' },
   colDate:   { width: '10%' },
-  colCompany:{ width: '16%' },
-  colPayee:  { width: '18%' },
-  colSubject:{ width: '28%' },
+  colCompany:{ width: '15%' },
+  colPayee:  { width: '17%' },
+  colSubject:{ width: '23%' },
+  colArea:   { width: '7%' },
   colInvoice:{ width: '12%' },
   colPayable:{ width: '12%' },
 
@@ -128,6 +137,7 @@ interface FinanceItem {
   company_name: string | null;
   payee_name: string | null;
   item_subject: string | null;
+  expense_area?: string | null;
   invoice_amount: number | string | null;
   payable_amount: number | string | null;
   currency?: string | null;
@@ -184,6 +194,11 @@ export const FinanceApprovalCoverPDFTemplate: React.FC<FinanceApprovalCoverPDFTe
 
   const items = [...(financeRequest.items || [])].sort((a, b) => (a.row_order ?? 0) - (b.row_order ?? 0));
   const totalPayableText = joinCurrencyTotals(sumItemsByCurrency(items), 'payable');
+  // Eski kayıtlarda satır alanı boş — başlıktaki Harcama Alanı tüm kapak için geçerli
+  const itemAreaText = (it: FinanceItem) => {
+    const area = it.expense_area || financeRequest.expense_area || '';
+    return expenseAreaShortLabels[area] ?? area;
+  };
 
   // Approval gruplaması: step_order'a göre
   const isYkbSignedPdf = (a: PdfApproval) =>
@@ -213,6 +228,7 @@ export const FinanceApprovalCoverPDFTemplate: React.FC<FinanceApprovalCoverPDFTe
             <View style={[styles.paymentHeaderCell, styles.colCompany]}><Text style={styles.paymentHeaderText}>FİRMA ADI</Text></View>
             <View style={[styles.paymentHeaderCell, styles.colPayee]}><Text style={styles.paymentHeaderText}>Ödeme Yapılacak{'\n'}Firma/Kurum</Text></View>
             <View style={[styles.paymentHeaderCell, styles.colSubject]}><Text style={styles.paymentHeaderText}>Konu</Text></View>
+            <View style={[styles.paymentHeaderCell, styles.colArea]}><Text style={styles.paymentHeaderText}>K/A/{'\n'}YEKA</Text></View>
             <View style={[styles.paymentHeaderCell, styles.colInvoice]}><Text style={styles.paymentHeaderText}>Fatura{'\n'}Tutarı</Text></View>
             <View style={[styles.paymentHeaderCell, styles.colPayable, { borderRightWidth: 0 }]}><Text style={styles.paymentHeaderText}>Ödenecek{'\n'}Tutar</Text></View>
           </View>
@@ -223,6 +239,7 @@ export const FinanceApprovalCoverPDFTemplate: React.FC<FinanceApprovalCoverPDFTe
               <View style={[styles.paymentCell, styles.colCompany]}><Text style={styles.paymentText}>{breakLongTokens(it.company_name)}</Text></View>
               <View style={[styles.paymentCell, styles.colPayee]}><Text style={styles.paymentText}>{breakLongTokens(it.payee_name)}</Text></View>
               <View style={[styles.paymentCell, styles.colSubject]}><Text style={styles.paymentText}>{breakLongTokens(it.item_subject)}</Text></View>
+              <View style={[styles.paymentCell, styles.colArea, { alignItems: 'center' }]}><Text style={styles.paymentText}>{itemAreaText(it)}</Text></View>
               <View style={[styles.paymentCell, styles.colInvoice, { alignItems: 'flex-end' }]}><Text style={styles.paymentText}>{formatMoney(Number(it.invoice_amount), it.currency)}</Text></View>
               <View style={[styles.paymentCellLast, styles.colPayable, { alignItems: 'flex-end' }]}><Text style={styles.paymentText}>{formatMoney(Number(it.payable_amount), it.currency)}</Text></View>
             </View>

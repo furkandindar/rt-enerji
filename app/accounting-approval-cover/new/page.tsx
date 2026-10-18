@@ -39,10 +39,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
+// Finans kapağının Harcama Alanı seçenekleriyle aynı ad ve sıra (DB kodları farklı)
 const CAPACITY_TYPE_OPTIONS = [
-  { value: "KAPASITE", label: "Kapasite" },
   { value: "ANASAHA", label: "Ana Saha" },
-  { value: "YEKA", label: "YEKA" },
+  { value: "KAPASITE", label: "Elektriksel Kapasite Artışı" },
+  { value: "YEKA_1", label: "YEKA 1" },
+  { value: "YEKA_2", label: "YEKA 2" },
 ] as const;
 
 /** Sözlükteki şirket adı ("Kiraz Enerji") kalemde büyük harfle saklanır ("KİRAZ ENERJİ") —
@@ -67,7 +69,7 @@ interface AccountingCoverEditData {
     company_name: string;
     payee_name: string;
     item_subject: string;
-    capacity_type: "KAPASITE" | "ANASAHA" | "YEKA";
+    capacity_type: "KAPASITE" | "ANASAHA" | "YEKA_1" | "YEKA_2";
     invoice_amount: number | string | null;
     payable_amount: number | string | null;
     currency: "TRY" | "USD" | "EUR";
@@ -101,7 +103,7 @@ const itemSchema = z.object({
   company_name: z.string().min(1, "Firma seçimi gerekli"),
   payee_name: z.string().min(1, "Ödeme yapılacak firma/kurum gerekli"),
   item_subject: z.string().min(1, "Konu gerekli"),
-  capacity_type: z.enum(["KAPASITE", "ANASAHA", "YEKA"], { message: "Kapasite tipi seçin" }),
+  capacity_type: z.enum(["KAPASITE", "ANASAHA", "YEKA_1", "YEKA_2"], { message: "Harcama alanı seçin" }),
   invoice_amount: amountString,
   payable_amount: amountString,
   currency: z.enum(["TRY", "USD", "EUR"], { message: "Para birimi seçin" }),
@@ -649,7 +651,7 @@ export default function NewAccountingApprovalCoverPage() {
                           name={`items.${index}.capacity_type`}
                           render={({ field }) => (
                             <FormItem className="min-w-0">
-                              <FormLabel className="text-xs">Kapasite</FormLabel>
+                              <FormLabel className="text-xs">Harcama Alanı</FormLabel>
                               <Select value={field.value} onValueChange={field.onChange}>
                                 <FormControl>
                                   <SelectTrigger className="w-full">

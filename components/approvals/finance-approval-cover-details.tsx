@@ -64,6 +64,7 @@ export function FinanceApprovalCoverDetails({
                   <th className="py-1.5 pr-2 font-medium">Firma</th>
                   <th className="py-1.5 pr-2 font-medium">Ödenecek</th>
                   <th className="py-1.5 pr-2 font-medium">Konu</th>
+                  <th className="py-1.5 pr-2 font-medium">Harcama Alanı</th>
                   <th className="py-1.5 pr-2 font-medium text-right">Fatura</th>
                   <th className="py-1.5 font-medium text-right">Ödenecek</th>
                 </tr>
@@ -77,6 +78,10 @@ export function FinanceApprovalCoverDetails({
                     <td className="py-1.5 pr-2">{it.company_name}</td>
                     <td className="py-1.5 pr-2">{it.payee_name}</td>
                     <td className="py-1.5 pr-2">{it.item_subject}</td>
+                    <td className="py-1.5 pr-2">
+                      {/* Eski kayıtlarda satır alanı boş — başlıktaki Harcama Alanı geçerli */}
+                      {financeExpenseAreaLabels[it.expense_area || finance.expense_area] || it.expense_area || finance.expense_area}
+                    </td>
                     <td className="py-1.5 pr-2 text-right whitespace-nowrap">
                       {formatMoney(it.invoice_amount, it.currency)}
                     </td>
@@ -86,7 +91,7 @@ export function FinanceApprovalCoverDetails({
                   </tr>
                 ))}
                 <tr className="font-semibold">
-                  <td colSpan={4} className="py-1.5 pr-2 text-right">Toplam</td>
+                  <td colSpan={5} className="py-1.5 pr-2 text-right">Toplam</td>
                   <td className="py-1.5 pr-2 text-right whitespace-nowrap">
                     {joinCurrencyTotals(currencyTotals, "invoice")}
                   </td>

@@ -732,6 +732,8 @@ export interface FinanceApprovalCoverItem {
   company_name: string;
   payee_name: string;
   item_subject: string;
+  // Satır bazında harcama alanı; null = eski kayıt (başlıktaki expense_area geçerli)
+  expense_area: FinanceExpenseArea | null;
   invoice_amount: number;
   payable_amount: number;
   currency: PaymentCurrency;
@@ -767,6 +769,7 @@ export interface CreateFinanceApprovalCoverItemInput {
   company_name: string;
   payee_name: string;
   item_subject: string;
+  expense_area: FinanceExpenseArea;
   invoice_amount: number;
   payable_amount: number;
   currency: PaymentCurrency;
@@ -798,10 +801,13 @@ export interface CreateFinanceApprovalCoverInput {
 // ONAY KAPAĞI MUHASEBE (Accounting Approval Cover) - Tipler
 // ============================================================================
 
+// Finansın FinanceExpenseArea'sı ile aynı 4 seçenek; yalnız DB kodları farklı
+// (KAPASITE = Elektriksel Kapasite Artışı, ANASAHA = Ana Saha)
 export type AccountingCapacityType =
   | 'KAPASITE'
   | 'ANASAHA'
-  | 'YEKA';
+  | 'YEKA_1'
+  | 'YEKA_2';
 
 export interface AccountingApprovalCoverItem {
   id: string;

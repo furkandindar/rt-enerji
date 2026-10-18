@@ -59,11 +59,18 @@ const amountString = z
   .min(1, "Tutar gerekli")
   .refine((v) => !isNaN(Number(v)) && Number(v) >= 0, "Geçerli bir tutar girin");
 
+// Başlıkta (tüm kapak) ve her ödeme satırında (K/A/YEKA kolonu) aynı seçenekler
+const expenseAreaSchema = z.enum(["ANA_SAHA", "ELEKTRIKSEL_KAPASITE_ARTISI", "YEKA_1", "YEKA_2"], {
+  message: "Harcama alanı seçin",
+});
+type ExpenseArea = z.infer<typeof expenseAreaSchema>;
+
 const itemSchema = z.object({
   item_date: z.string().min(1, "Tarih gerekli"),
   company_name: z.string().min(1, "Firma seçimi gerekli"),
   payee_name: z.string().min(1, "Ödeme yapılacak firma/kurum gerekli"),
   item_subject: z.string().min(1, "Konu gerekli"),
+  expense_area: expenseAreaSchema,
   invoice_amount: amountString,
   payable_amount: amountString,
   currency: z.enum(["TRY", "USD", "EUR"], { message: "Para birimi seçin" }),
@@ -76,9 +83,7 @@ const financeCoverSchema = z.object({
   account_available: z.enum(["yes", "no"], { message: "Seçim yapın" }),
   cash_flow_recorded: z.enum(["yes", "no"], { message: "Seçim yapın" }),
   has_rt_enerji_proforma: z.enum(["yes", "no"], { message: "Seçim yapın" }),
-  expense_area: z.enum(["ANA_SAHA", "ELEKTRIKSEL_KAPASITE_ARTISI", "YEKA_1", "YEKA_2"], {
-    message: "Harcama alanı seçin",
-  }),
+  expense_area: expenseAreaSchema,
   funding_source: z.enum(["KREDI", "OZ_KAYNAK", "NAKIT_FAZLASI", "DIGER"], {
     message: "Niteliği seçin",
   }),
@@ -134,6 +139,7 @@ interface FinanceCoverEditData {
     company_name: string;
     payee_name: string;
     item_subject: string;
+    expense_area: ExpenseArea | null;
     invoice_amount: number | string | null;
     payable_amount: number | string | null;
     currency: "TRY" | "USD" | "EUR";
@@ -203,6 +209,7 @@ export default function NewFinanceApprovalCoverPage() {
           company_name: "",
           payee_name: "",
           item_subject: "",
+          expense_area: undefined as unknown as ExpenseArea,
           invoice_amount: "0",
           payable_amount: "0",
           currency: "TRY",
@@ -388,6 +395,8 @@ export default function NewFinanceApprovalCoverPage() {
             company_name: it.company_name,
             payee_name: it.payee_name,
             item_subject: it.item_subject,
+            // Eski kayıtlarda satır alanı boş — başlıktaki Harcama Alanı ile doldur
+            expense_area: it.expense_area ?? f.expense_area,
             invoice_amount: String(it.invoice_amount ?? 0),
             payable_amount: String(it.payable_amount ?? 0),
             currency: it.currency,
@@ -429,6 +438,8 @@ export default function NewFinanceApprovalCoverPage() {
       company_name: "",
       payee_name: "",
       item_subject: "",
+      // Yeni satır başlıktaki Harcama Alanı ile başlar; gerekirse satırda değiştirilir
+      expense_area: form.getValues("expense_area"),
       invoice_amount: "0",
       payable_amount: "0",
       currency: "TRY",
@@ -471,6 +482,7 @@ export default function NewFinanceApprovalCoverPage() {
               company_name: it.company_name,
               payee_name: it.payee_name,
               item_subject: it.item_subject,
+              expense_area: it.expense_area,
               invoice_amount: Number(it.invoice_amount),
               payable_amount: Number(it.payable_amount),
               currency: it.currency,
@@ -641,20 +653,20 @@ export default function NewFinanceApprovalCoverPage() {
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
+                      <FormField
+                        control={form.control}
+                        name={`items.${index}.item_date`}
+                        render={({ field }) => (
+                          <FormItem className="md:max-w-[200px]">
+                            <FormLabel className="text-xs">Tarih</FormLabel>
+                            <FormControl>
+                              <Input type="date" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
                       <div className="grid grid-cols-1 md:grid-cols-6 gap-3">
-                        <FormField
-                          control={form.control}
-                          name={`items.${index}.item_date`}
-                          render={({ field }) => (
-                            <FormItem className="md:col-span-1">
-                              <FormLabel className="text-xs">Tarih</FormLabel>
-                              <FormControl>
-                                <Input type="date" {...field} />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
                         <FormField
                           control={form.control}
                           name={`items.${index}.company_name`}
@@ -690,6 +702,28 @@ export default function NewFinanceApprovalCoverPage() {
                               <FormControl>
                                 <Input placeholder="Firma/Kurum" {...field} />
                               </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name={`items.${index}.expense_area`}
+                          render={({ field }) => (
+                            <FormItem className="md:col-span-1 min-w-0">
+                              <FormLabel className="text-xs">Harcama Alanı</FormLabel>
+                              <Select value={field.value} onValueChange={field.onChange}>
+                                <FormControl>
+                                  <SelectTrigger className="w-full">
+                                    <SelectValue placeholder="Seçiniz" />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  {EXPENSE_AREA_OPTIONS.map((opt) => (
+                                    <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
                               <FormMessage />
                             </FormItem>
                           )}
@@ -857,7 +891,18 @@ export default function NewFinanceApprovalCoverPage() {
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Harcama Alanı</FormLabel>
-                        <Select value={field.value} onValueChange={field.onChange}>
+                        <Select
+                          value={field.value}
+                          onValueChange={(value) => {
+                            field.onChange(value);
+                            // Henüz alan seçilmemiş ödeme satırları başlıktaki seçimi alır
+                            form.getValues("items").forEach((it, i) => {
+                              if (!it.expense_area) {
+                                form.setValue(`items.${i}.expense_area`, value as ExpenseArea, { shouldValidate: true });
+                              }
+                            });
+                          }}
+                        >
                           <FormControl>
                             <SelectTrigger>
                               <SelectValue placeholder="Seçiniz" />

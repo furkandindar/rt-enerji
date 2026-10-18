@@ -88,16 +88,19 @@ export const financeFundingSourceLabels: Record<string, string> = {
   DIGER: "Diğer",
 };
 
+// Finans kapağının financeExpenseAreaLabels'ı ile aynı adlar (DB kodları farklı)
 export const accountingCapacityTypeLabels: Record<string, string> = {
-  KAPASITE: "Kapasite",
   ANASAHA: "Ana Saha",
-  YEKA: "YEKA",
+  KAPASITE: "Elektriksel Kapasite Artışı",
+  YEKA_1: "YEKA 1",
+  YEKA_2: "YEKA 2",
 };
 
 export const accountingCapacityTypeShortLabels: Record<string, string> = {
-  KAPASITE: "K",
   ANASAHA: "A",
-  YEKA: "YEKA",
+  KAPASITE: "K",
+  YEKA_1: "YEKA 1",
+  YEKA_2: "YEKA 2",
 };
 
 export const overtimeReasonLabels: Record<string, string> = {

@@ -274,6 +274,7 @@ export interface PendingApproval {
         company_name: string;
         payee_name: string;
         item_subject: string;
+        expense_area?: string | null;
         invoice_amount: number;
         payable_amount: number;
         currency?: string | null;

@@ -548,6 +548,7 @@ export type Database = {
           company_name: string
           created_at: string
           currency: Database["public"]["Enums"]["payment_currency"]
+          expense_area: Database["public"]["Enums"]["finance_expense_area"] | null
           finance_request_id: string
           id: string
           invoice_amount: number
@@ -561,6 +562,7 @@ export type Database = {
           company_name: string
           created_at?: string
           currency?: Database["public"]["Enums"]["payment_currency"]
+          expense_area?: Database["public"]["Enums"]["finance_expense_area"] | null
           finance_request_id: string
           id?: string
           invoice_amount: number
@@ -574,6 +576,7 @@ export type Database = {
           company_name?: string
           created_at?: string
           currency?: Database["public"]["Enums"]["payment_currency"]
+          expense_area?: Database["public"]["Enums"]["finance_expense_area"] | null
           finance_request_id?: string
           id?: string
           invoice_amount?: number
@@ -2685,7 +2688,7 @@ export type Database = {
       next_request_no: { Args: { p_year: number }; Returns: string }
     }
     Enums: {
-      accounting_capacity_type: "KAPASITE" | "ANASAHA" | "YEKA"
+      accounting_capacity_type: "KAPASITE" | "ANASAHA" | "YEKA_1" | "YEKA_2"
       approval_status:
         | "PENDING"
         | "APPROVED"
@@ -2863,7 +2866,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      accounting_capacity_type: ["KAPASITE", "ANASAHA", "YEKA"],
+      accounting_capacity_type: ["KAPASITE", "ANASAHA", "YEKA_1", "YEKA_2"],
       approval_status: [
         "PENDING",
         "APPROVED",

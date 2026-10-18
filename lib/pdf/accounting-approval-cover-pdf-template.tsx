@@ -37,10 +37,12 @@ const colors = {
 // Şirket kurucusu — sistem üzerinden onay vermiyor, PDF çıktısı alınıp fiziksel olarak imzalanıyor.
 const FOUNDER_NAME = 'RAMAZAN TAŞ';
 
+// Finans kapağındaki K/A/YEKA kolonuyla aynı kısaltmalar
 const capacityShortLabel: Record<string, string> = {
   KAPASITE: 'K',
   ANASAHA: 'A',
-  YEKA: 'YEKA',
+  YEKA_1: 'YEKA 1',
+  YEKA_2: 'YEKA 2',
 };
 
 const styles = StyleSheet.create({
@@ -64,8 +66,8 @@ const styles = StyleSheet.create({
   colDate:    { width: '10%' },
   colCompany: { width: '15%' },
   colPayee:   { width: '17%' },
-  colSubject: { width: '24%' },
-  colCap:     { width: '6%' },
+  colSubject: { width: '23%' },
+  colCap:     { width: '7%' },
   colInvoice: { width: '12%' },
   colPayable: { width: '12%' },
 

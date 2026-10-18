@@ -63,7 +63,7 @@ export function AccountingApprovalCoverDetails({
                   <th className="py-1.5 pr-2 font-medium">Firma</th>
                   <th className="py-1.5 pr-2 font-medium">Ödenecek</th>
                   <th className="py-1.5 pr-2 font-medium">Konu</th>
-                  <th className="py-1.5 pr-2 font-medium">Kapasite</th>
+                  <th className="py-1.5 pr-2 font-medium">Harcama Alanı</th>
                   <th className="py-1.5 pr-2 font-medium text-right">Fatura</th>
                   <th className="py-1.5 font-medium text-right">Ödenecek</th>
                 </tr>
