@@ -17,10 +17,12 @@ import {
   recordRevisionExtraApprovers,
   validateManagerExtraApprovers,
 } from "@/lib/workflow/extra-approvers";
+import { mentionContextLabel, parseMentionIds } from "@/lib/workflow/mentions-shared";
+import { scheduleMentions } from "@/lib/workflow/mentions";
 
 // POST /api/approvals/[id]/request-revision
 // Onaycı, sırası gelmiş PENDING onay kaydında "revize iste" der.
-// Body: { comment: string (zorunlu), extraApproverIds?: string[] }
+// Body: { comment: string (zorunlu), extraApproverIds?: string[], mentionedEmployeeIds?: string[] }
 //
 // Etki:
 //   - request_approvals[id].status = 'REVISION_REQUESTED', comment, decided_at = now
@@ -41,11 +43,18 @@ export async function POST(
     const body = (await request.json().catch(() => ({}))) as {
       comment?: string;
       extraApproverIds?: unknown;
+      mentionedEmployeeIds?: unknown;
     };
 
     const comment = (body.comment ?? "").trim();
     if (!comment) {
       return NextResponse.json({ error: "Comment is required" }, { status: 400 });
+    }
+
+    // @mention: biçim burada, uygunluk anma işlenirken doğrulanır
+    const mentionParse = parseMentionIds(body.mentionedEmployeeIds);
+    if (!mentionParse.ok) {
+      return NextResponse.json({ error: mentionParse.error }, { status: 400 });
     }
 
     // 1. Auth
@@ -236,19 +245,21 @@ export async function POST(
     await applyAuditStamp(supabase, req.id, "REVISION_REQUESTED", appUser.employee_id);
 
     // 7. Bildirim: talep edene REVISION_REQUESTED
+    const workflowName = req.workflow_definition?.name ?? "Talep";
+    let actorName = requestedByName;
     try {
-      const workflowName = req.workflow_definition?.name ?? "Talep";
+      if (acting.isDelegate && acting.onBehalfOfEmployeeId) {
+        actorName = formatActingName(
+          requestedByName || "Onaycı",
+          await getEmployeeFullName(supabase, acting.onBehalfOfEmployeeId)
+        );
+      }
       await notifyRevisionRequested(
         supabase,
         req.requester_employee_id,
         req.id,
         workflowName,
-        acting.isDelegate && acting.onBehalfOfEmployeeId
-          ? formatActingName(
-              requestedByName || "Onaycı",
-              await getEmployeeFullName(supabase, acting.onBehalfOfEmployeeId)
-            )
-          : requestedByName,
+        actorName,
         comment,
         undefined,
         extraApproverNames
@@ -256,6 +267,20 @@ export async function POST(
     } catch (notifErr) {
       console.error("[request-revision] notification dispatch failed:", notifErr);
     }
+
+    // 8. @mention: talep sahibi notu "Revize İstendi" bildiriminde zaten aldı
+    scheduleMentions({
+      requestId: req.id,
+      approvalId,
+      source: "DECISION",
+      note: comment,
+      mentionedEmployeeIds: mentionParse.ids,
+      actorEmployeeId: appUser.employee_id,
+      actorName: actorName || "Onaycı",
+      workflowName,
+      contextLabel: mentionContextLabel("DECISION", "REVISION_REQUESTED"),
+      alreadyNotifiedEmployeeIds: [req.requester_employee_id],
+    });
 
     return NextResponse.json({ success: true });
   } catch (err) {

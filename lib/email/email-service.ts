@@ -65,6 +65,7 @@ const TYPE_COLORS: Record<string, string> = {
   INFO: '#3b82f6',
   DELEGATION_ASSIGNED: '#8b5cf6',
   DELEGATION_CANCELLED: '#6b7280',
+  MENTIONED: '#0ea5e9',
 };
 
 const TYPE_PREFIXES: Record<string, string> = {
@@ -75,6 +76,21 @@ const TYPE_PREFIXES: Record<string, string> = {
   INFO: 'ℹ️ Bilgi',
   DELEGATION_ASSIGNED: '🤝 Vekalet',
   DELEGATION_CANCELLED: '🚫 Vekalet Sona Erdi',
+  MENTIONED: '💬 Sizden Bahsedildi',
+};
+
+/** Meta tablosundaki "kim yaptı" satırı (varsayılan: Onaylayan). */
+const DECIDED_BY_LABELS: Record<string, string> = {
+  REQUEST_REJECTED: 'Reddeden',
+  REVISION_REQUESTED: 'Revize İsteyen',
+  MENTIONED: 'Bahseden',
+};
+
+/** Not kutusunun etiketi (varsayılan: Onaycı Notu). */
+const COMMENT_LABELS: Record<string, string> = {
+  REQUEST_REJECTED: 'Red Gerekçesi',
+  REVISION_REQUESTED: 'Revize Notu',
+  MENTIONED: 'Not',
 };
 
 function escapeHtml(value: string): string {
@@ -172,7 +188,7 @@ function getEmailHtml(params: SendNotificationEmailParams): string {
   }
   if (decidedByName) {
     metaRows.push({
-      label: type === 'REQUEST_REJECTED' ? 'Reddeden' : 'Onaylayan',
+      label: DECIDED_BY_LABELS[type] ?? 'Onaylayan',
       value: decidedByName,
     });
   }
@@ -193,7 +209,7 @@ function getEmailHtml(params: SendNotificationEmailParams): string {
 
   const greeting = recipientName ? `<p style="margin: 0 0 12px; color: #111827; font-size: 16px;">Sayın <strong>${escapeHtml(recipientName)}</strong>,</p>` : '';
   const commentBlock = decisionComment
-    ? renderCommentBox(decisionComment, color, type === 'REQUEST_REJECTED' ? 'Red Gerekçesi' : 'Onaycı Notu')
+    ? renderCommentBox(decisionComment, color, COMMENT_LABELS[type] ?? 'Onaycı Notu')
     : '';
 
   return `

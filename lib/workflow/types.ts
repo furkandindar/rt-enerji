@@ -27,7 +27,9 @@ export type NotificationType =
   | 'REVISION_REQUESTED'
   // Vekalet (Faz B)
   | 'DELEGATION_ASSIGNED'
-  | 'DELEGATION_CANCELLED';
+  | 'DELEGATION_CANCELLED'
+  // @mention: notta anılan kişiye
+  | 'MENTIONED';
 
 // V3: Yeni action type
 export type ActionType = 'FILL_AND_SIGN' | 'SIGN_ONLY';

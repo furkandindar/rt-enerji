@@ -20,7 +20,8 @@ export interface Notification {
     | 'REQUEST_UPDATED'
     | 'REVISION_REQUESTED'
     | 'DELEGATION_ASSIGNED'
-    | 'DELEGATION_CANCELLED';
+    | 'DELEGATION_CANCELLED'
+    | 'MENTIONED';
   reference_id: string | null;
   is_read: boolean;
   created_at: string;
@@ -112,3 +113,23 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
   reset: () => set(initialState),
 }));
 
+
+/**
+ * Bildirime tıklanınca gidilecek sayfa (zil menüsü + bildirimler sayfası ortak).
+ * reference_id talep id'sidir; onaycı satırının id'si bilinmediğinden onaycıya
+ * gidenler onay listesine düşer.
+ */
+export function getNotificationHref(type: string, referenceId: string | null): string {
+  // Talep edene gidenler: kendi talep detayı
+  const requesterTypes = ["REQUEST_APPROVED", "REQUEST_REJECTED", "REQUEST_CANCELLED", "REVISION_REQUESTED"];
+  if (referenceId && requesterTypes.includes(type)) return `/my-requests/${referenceId}`;
+
+  // @mention: anılan kişi zincir dışında olabilir → tarafsız (RLS'li) talep detayı
+  if (referenceId && type === "MENTIONED") return `/requests/${referenceId}`;
+
+  // Vekalet bildirimleri: vekalet kartı profil sayfasında
+  if (type === "DELEGATION_ASSIGNED" || type === "DELEGATION_CANCELLED") return "/profile";
+
+  // Onaycıya gidenler (APPROVAL_REQUIRED, REQUEST_UPDATED)
+  return "/approvals";
+}

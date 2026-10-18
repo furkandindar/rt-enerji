@@ -19,6 +19,7 @@ import { SignatureCanvasPanel } from "@/components/signature-canvas-panel";
 import { AttachmentUploader } from "@/components/attachment-uploader";
 import { YkbSignedPdfUpload } from "@/components/approvals/ykb-signed-pdf-upload";
 import { ApproveConfirmDialog } from "@/components/approvals/approve-confirm-dialog";
+import { MentionTextarea } from "@/components/mentions/mention-textarea";
 import {
   ExtraApproversDialog,
   type ExtraApproversSubmitInput,
@@ -420,14 +421,17 @@ signatureDataUrl,
         />
       )}
 
-      {/* Yorum Alanı */}
+      {/* Yorum Alanı — @ ile talebi görebilen kişiler anılabilir (bildirim gider) */}
       <div className="space-y-2">
         <Label htmlFor="comment">Yorum (Red veya Revize için zorunlu)</Label>
-        <Input
+        <MentionTextarea
           id="comment"
+          requestId={requestId}
           placeholder="Yorumunuzu buraya yazın..."
           value={comment}
-          onChange={(e) => setComment(e.target.value)}
+          onChange={setComment}
+          rows={2}
+          disabled={isSubmitting}
         />
       </div>
 

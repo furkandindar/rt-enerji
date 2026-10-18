@@ -19,6 +19,8 @@ import {
   normalizeRevisionResponse,
   REVISION_RESPONSE_MAX_LENGTH,
 } from "@/lib/workflow/revision-response";
+import { mentionContextLabel, parseMentionIds } from "@/lib/workflow/mentions-shared";
+import { scheduleMentions } from "@/lib/workflow/mentions";
 
 // POST /api/requests/[id]/resubmit
 // DRAFT veya REVISION_REQUESTED durumdaki bir talebi yeniden gönderir:
@@ -29,6 +31,7 @@ import {
 //   - Yeni 1. onaycıya APPROVAL_REQUIRED bildirimi
 //   - revisionResponse (opsiyonel; yalnız REVISION_REQUESTED'dan ve talep sahibinden):
 //     "Revize Açıklaması" yeni turun ilk REQUESTER satırına comment olarak yazılır
+//   - mentionedEmployeeIds (opsiyonel): Revize Açıklaması'nda @ ile anılanlara bildirim
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -37,11 +40,12 @@ export async function POST(
     const supabase = await createClient();
     const { id: requestId } = await params;
 
-    // Body — opsiyonel: dynamicApprovers, formData, revisionResponse
+    // Body — opsiyonel: dynamicApprovers, formData, revisionResponse, mentionedEmployeeIds
     let body: {
       dynamicApprovers?: CreateRequestDynamicApprovers;
       formData?: Record<string, unknown>;
       revisionResponse?: unknown;
+      mentionedEmployeeIds?: unknown;
     } = {};
     try {
       body = await request.json();
@@ -113,6 +117,11 @@ export async function POST(
         { error: `Revize açıklaması en fazla ${REVISION_RESPONSE_MAX_LENGTH} karakter olabilir` },
         { status: 400 }
       );
+    }
+    // @mention: yalnız Revize Açıklaması kaydediliyorsa anlamlı (biçim burada doğrulanır)
+    const mentionParse = parseMentionIds(body.mentionedEmployeeIds);
+    if (!mentionParse.ok) {
+      return NextResponse.json({ error: mentionParse.error }, { status: 400 });
     }
 
     const previousCycle = req.current_revision_cycle ?? 0;
@@ -225,6 +234,8 @@ export async function POST(
     await applyAuditStamp(supabase, requestId, "RESUBMITTED", appUser.employee_id);
 
     // 9. Bildirimler
+    // Revize Açıklaması'nı (revize yazışması bloğuyla) e-postada zaten alanlar → @mention için.
+    const responseDeliveredTo = new Set<string>(previouslyApprovedSet);
     try {
       // 9a. Yeni cycle'ın ilk PENDING onaycısına APPROVAL_REQUIRED
       const { data: nextPending } = await supabase
@@ -245,6 +256,7 @@ export async function POST(
           requestId,
           workflowName
         );
+        responseDeliveredTo.add(nextPending.approver_employee_id);
       }
 
       // 9b. Eski cycle'da APPROVED veren onaycılara REQUEST_UPDATED
@@ -259,6 +271,31 @@ export async function POST(
       }
     } catch (notifErr) {
       console.error("[resubmit] notification dispatch failed:", notifErr);
+    }
+
+    // 10. @mention: Revize Açıklaması'nda anılanlar (not yeni turun ilk satırında)
+    if (revisionResponse && mentionParse.ids.length > 0) {
+      const { data: responseRow } = await supabase
+        .from("request_approvals")
+        .select("id")
+        .eq("request_id", requestId)
+        .eq("revision_cycle", newCycle)
+        .eq("sequence_order", 1)
+        .maybeSingle();
+      if (responseRow?.id) {
+        scheduleMentions({
+          requestId,
+          approvalId: responseRow.id,
+          source: "REVISION_RESPONSE",
+          note: revisionResponse,
+          mentionedEmployeeIds: mentionParse.ids,
+          actorEmployeeId: appUser.employee_id,
+          actorName: updaterName || "Talep sahibi",
+          workflowName,
+          contextLabel: mentionContextLabel("REVISION_RESPONSE"),
+          alreadyNotifiedEmployeeIds: [...responseDeliveredTo],
+        });
+      }
     }
 
     return NextResponse.json({ success: true, newCycle });

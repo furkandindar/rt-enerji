@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Textarea } from "@/components/ui/textarea";
+import { MentionTextarea } from "@/components/mentions/mention-textarea";
 import { UserMultiPicker } from "@/components/user-multi-picker";
 import { useApproverCandidates } from "@/components/extra-approvers/use-approver-candidates";
 import { MAX_EXTRA_APPROVERS } from "@/lib/workflow/extra-approvers-shared";
@@ -249,10 +249,13 @@ function ExtraApproversForm({
               "Eklenen kişilere not (opsiyonel)"
             )}
           </Label>
-          <Textarea
+          {/* @mention yalnız revize notunda: DIRECT notu bir onay/red/revize notu değil (kapsam dışı) */}
+          <MentionTextarea
             id="extra-approvers-note"
+            requestId={approval.request.id}
+            mentionsEnabled={mode === "REVISION"}
             value={note}
-            onChange={(e) => setNote(e.target.value)}
+            onChange={setNote}
             rows={3}
             placeholder={
               mode === "REVISION"

@@ -14,15 +14,18 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { useNotificationStore } from "@/lib/stores/notification-store";
+import { getNotificationHref, useNotificationStore } from "@/lib/stores/notification-store";
 
 const notificationTypeColors: Record<string, string> = {
   APPROVAL_REQUIRED: "bg-yellow-500",
   REQUEST_APPROVED: "bg-green-500",
   REQUEST_REJECTED: "bg-red-500",
   REQUEST_CANCELLED: "bg-gray-500",
+  REQUEST_UPDATED: "bg-blue-500",
+  REVISION_REQUESTED: "bg-orange-500",
   DELEGATION_ASSIGNED: "bg-violet-500",
   DELEGATION_CANCELLED: "bg-gray-500",
+  MENTIONED: "bg-sky-500",
 };
 
 export default function NotificationsPage() {
@@ -77,13 +80,17 @@ export default function NotificationsPage() {
   };
 
   // Bildirime tıklandığında
-  const handleNotificationClick = async (notificationId: string, isRead: boolean) => {
+  const handleNotificationClick = async (
+    notificationId: string,
+    isRead: boolean,
+    type: string,
+    referenceId: string | null
+  ) => {
     // Okunmamışsa okundu işaretle
     if (!isRead) {
       handleMarkAsRead(notificationId);
     }
-    // Approvals sayfasına git
-    router.push("/approvals");
+    router.push(getNotificationHref(type, referenceId));
   };
 
   if (isLoading || !isInitialized) {
@@ -126,7 +133,14 @@ export default function NotificationsPage() {
               className={`cursor-pointer transition-colors hover:bg-muted/50 ${
                 notification.is_read ? "opacity-60" : ""
               }`}
-              onClick={() => handleNotificationClick(notification.id, notification.is_read)}
+              onClick={() =>
+                handleNotificationClick(
+                  notification.id,
+                  notification.is_read,
+                  notification.type,
+                  notification.reference_id
+                )
+              }
             >
               <CardHeader className="pb-2">
                 <div className="flex items-center justify-between">

@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { useNotificationStore } from "@/lib/stores/notification-store";
+import { getNotificationHref, useNotificationStore } from "@/lib/stores/notification-store";
 
 const notificationTypeColors: Record<string, string> = {
   APPROVAL_REQUIRED: "bg-yellow-500",
@@ -27,6 +27,7 @@ const notificationTypeColors: Record<string, string> = {
   REVISION_REQUESTED: "bg-orange-500",
   DELEGATION_ASSIGNED: "bg-violet-500",
   DELEGATION_CANCELLED: "bg-gray-500",
+  MENTIONED: "bg-sky-500",
 };
 
 export function NotificationPopover() {
@@ -90,28 +91,7 @@ export function NotificationPopover() {
       handleMarkAsRead(notificationId);
     }
     setOpen(false);
-
-    // Talep edene gidenler: request detayı
-    const requesterTypes = [
-      "REQUEST_APPROVED",
-      "REQUEST_REJECTED",
-      "REQUEST_CANCELLED",
-      "REVISION_REQUESTED",
-    ];
-    if (referenceId && requesterTypes.includes(type)) {
-      router.push(`/my-requests/${referenceId}`);
-      return;
-    }
-
-    // Vekalet bildirimleri: vekalet kartı profil sayfasında
-    if (type === "DELEGATION_ASSIGNED" || type === "DELEGATION_CANCELLED") {
-      router.push("/profile");
-      return;
-    }
-
-    // Onaycıya gidenler (APPROVAL_REQUIRED, REQUEST_UPDATED):
-    // reference_id request_id'dir; approval id'sini bilmiyoruz. Onay listesine git.
-    router.push("/approvals");
+    router.push(getNotificationHref(type, referenceId));
   };
 
   return (

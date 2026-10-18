@@ -442,6 +442,97 @@ export async function notifyRevisionRequested(
 }
 
 /**
+ * @mention: anılan kişinin talepteki rolüne göre deep-link — sırası gelmiş onay
+ * satırı varsa onay ekranı, talep sahibiyse Taleplerim, değilse tarafsız detay
+ * sayfası (/requests/[id], RLS'li; anılabilenler zaten talebi görebilenlerdir).
+ */
+async function buildMentionCtaPath(employeeId: string, requestId: string): Promise<string> {
+  try {
+    const client = createEmailContextClient();
+    const { data: req } = await client
+      .from('requests')
+      .select('requester_employee_id, current_revision_cycle')
+      .eq('id', requestId)
+      .single();
+    if (req) {
+      const { data: pending } = await client
+        .from('request_approvals')
+        .select('id')
+        .eq('request_id', requestId)
+        .eq('approver_employee_id', employeeId)
+        .eq('revision_cycle', req.current_revision_cycle ?? 0)
+        .eq('status', 'PENDING')
+        .order('sequence_order', { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      if (pending?.id) return `/approvals/${pending.id}`;
+      if (req.requester_employee_id === employeeId) return `/my-requests/${requestId}`;
+    }
+  } catch (err) {
+    console.error('[notification] buildMentionCtaPath failed:', err);
+  }
+  return `/requests/${requestId}`;
+}
+
+const MENTION_EXCERPT_LENGTH = 140;
+
+/**
+ * @mention: notta anılan kişiye "sizden bahsedildi" bildirimi + e-posta (notun
+ * tamamı e-postada). Vekile fan-out yapılmaz — anma kişiye özeldir.
+ * @returns en az bir kanal (uygulama içi) ulaştıysa true
+ */
+export async function notifyMentioned(
+  supabase: SupabaseClient,
+  params: {
+    mentionedEmployeeId: string;
+    requestId: string;
+    workflowName: string;
+    mentionedByName: string;
+    note: string;
+    /** "onay notunda" | "red gerekçesinde" | "revize notunda" | "revize açıklamasında" */
+    contextLabel: string;
+  }
+): Promise<boolean> {
+  const userInfo = await getUserInfoByEmployeeId(supabase, params.mentionedEmployeeId);
+  if (!userInfo) return false;
+
+  const title = 'Bir Notta Sizden Bahsedildi';
+  const excerpt =
+    params.note.length > MENTION_EXCERPT_LENGTH
+      ? `${params.note.slice(0, MENTION_EXCERPT_LENGTH).trimEnd()}…`
+      : params.note;
+  const message = `${params.mentionedByName}, ${params.workflowName} talebindeki ${params.contextLabel} sizden bahsetti: "${excerpt}"`;
+  const type: NotificationType = 'MENTIONED';
+
+  await createNotification(supabase, {
+    userId: userInfo.id,
+    title,
+    message,
+    type,
+    referenceId: params.requestId,
+  });
+
+  if (userInfo.email) {
+    const ctaPath = await buildMentionCtaPath(params.mentionedEmployeeId, params.requestId);
+    const payload = await enrichEmailPayload(
+      params.requestId,
+      {
+        to: userInfo.email,
+        title,
+        message: `${params.mentionedByName}, ${params.workflowName} talebindeki ${params.contextLabel} sizden bahsetti.`,
+        type,
+        ctaPath,
+        ctaLabel: 'Talebi Görüntüle',
+      },
+      userInfo.fullName,
+      { decidedByName: params.mentionedByName, decisionComment: params.note }
+    );
+    await sendNotificationEmail(payload);
+  }
+  return true;
+}
+
+/**
  * Ek onaycı (DIRECT mod): yönetici belgeyi revizeye göndermeden zincire kişi
  * ekledi → talep edene bilgi (yalnız uygulama içi; talep sahibinin aksiyonu yok).
  * Eklenen kişilere sıraları gelince standart notifyApprover gider.

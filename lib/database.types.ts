@@ -1863,6 +1863,78 @@ export type Database = {
           },
         ]
       }
+      request_mentions: {
+        Row: {
+          approval_id: string
+          created_at: string
+          id: string
+          mentioned_by_employee_id: string
+          mentioned_employee_id: string
+          notified_at: string | null
+          notified_via: string | null
+          request_id: string
+          source: string
+        }
+        Insert: {
+          approval_id: string
+          created_at?: string
+          id?: string
+          mentioned_by_employee_id: string
+          mentioned_employee_id: string
+          notified_at?: string | null
+          notified_via?: string | null
+          request_id: string
+          source: string
+        }
+        Update: {
+          approval_id?: string
+          created_at?: string
+          id?: string
+          mentioned_by_employee_id?: string
+          mentioned_employee_id?: string
+          notified_at?: string | null
+          notified_via?: string | null
+          request_id?: string
+          source?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "request_mentions_approval_id_fkey"
+            columns: ["approval_id"]
+            isOneToOne: false
+            referencedRelation: "request_approvals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "request_mentions_approval_id_fkey"
+            columns: ["approval_id"]
+            isOneToOne: false
+            referencedRelation: "v_user_approval_history"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "request_mentions_mentioned_by_employee_id_fkey"
+            columns: ["mentioned_by_employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "request_mentions_mentioned_employee_id_fkey"
+            columns: ["mentioned_employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "request_mentions_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       requests: {
         Row: {
           completed_at: string | null
@@ -2659,6 +2731,12 @@ export type Database = {
         }
         Returns: string
       }
+      employees_who_can_view_request: {
+        Args: { p_employee_ids?: string[]; p_request_id: string }
+        Returns: {
+          employee_id: string
+        }[]
+      }
       get_current_employee_id: { Args: never; Returns: string }
       insert_extra_approvers_before: {
         Args: {
@@ -2719,6 +2797,7 @@ export type Database = {
         | "REVISION_REQUESTED"
         | "DELEGATION_ASSIGNED"
         | "DELEGATION_CANCELLED"
+        | "MENTIONED"
       overtime_reason_category:
         | "SHIFT_OUTSIDE"
         | "NON_CONTINUOUS"
@@ -2895,6 +2974,7 @@ export const Constants = {
         "REVISION_REQUESTED",
         "DELEGATION_ASSIGNED",
         "DELEGATION_CANCELLED",
+        "MENTIONED",
       ],
       overtime_reason_category: [
         "SHIFT_OUTSIDE",

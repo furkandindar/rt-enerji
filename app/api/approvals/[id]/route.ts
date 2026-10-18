@@ -22,6 +22,8 @@ import {
   formatActingName,
   NO_ACTING_RIGHTS,
 } from "@/lib/workflow/delegation";
+import { mentionContextLabel, parseMentionIds } from "@/lib/workflow/mentions-shared";
+import { scheduleMentions } from "@/lib/workflow/mentions";
 
 // PDF gen + merge + Storage upload + SharePoint enqueue (after()) zinciri
 // Vercel Pro default 60s'yi aşabilir; explicit set ediyoruz.
@@ -207,6 +209,12 @@ export async function PATCH(
 
     if (!decision || !['APPROVED', 'REJECTED'].includes(decision)) {
       return NextResponse.json({ error: "Invalid decision" }, { status: 400 });
+    }
+
+    // @mention: notta anılan kişiler (biçim burada, uygunluk anma işlenirken doğrulanır)
+    const mentionParse = parseMentionIds((body as { mentionedEmployeeIds?: unknown }).mentionedEmployeeIds);
+    if (!mentionParse.ok) {
+      return NextResponse.json({ error: mentionParse.error }, { status: 400 });
     }
 
     // 1. Mevcut kullanıcının employee_id'sini al
@@ -604,6 +612,10 @@ export async function PATCH(
       approverName = formatActingName(approverName, onBehalfName);
     }
 
+    // @mention: bu aksiyonda notu (comment) içeren asıl bildirimi alanlar —
+    // anıldılarsa ayrıca "sizden bahsedildi" bildirimi gitmez.
+    const commentDeliveredTo = new Set<string>();
+
     // 5. Request'i güncelle ve bildirim gönder
     if (decision === 'REJECTED') {
       // Reddedildi - talep reddedilir
@@ -668,6 +680,7 @@ export async function PATCH(
         stampSubject,
         { decidedByName: approverName, decisionComment: comment }
       );
+      commentDeliveredTo.add(requestData.requester_employee_id);
     } else {
       // Onaylandı - sonraki adıma geç veya tamamla
       // RLS, onaycıya sadece kendi satırını gösteriyor; iş akışı tamamlandı mı
@@ -949,6 +962,7 @@ export async function PATCH(
           stampSubject,
           { decidedByName: approverName, decisionComment: comment }
         );
+        commentDeliveredTo.add(requestData.requester_employee_id);
 
       } else if (isEnteringCompletionPhase) {
         // ================================================================
@@ -989,6 +1003,7 @@ export async function PATCH(
           stampSubject,
           { decidedByName: approverName, decisionComment: comment }
         );
+        commentDeliveredTo.add(requestData.requester_employee_id);
 
         // COMPLETION fazındaki ilk onaycıya bildirim gönder
         const nextApproval = allApprovals?.find(
@@ -1089,6 +1104,7 @@ export async function PATCH(
           stampSubject,
           { decidedByName: approverName, decisionComment: comment }
         );
+        commentDeliveredTo.add(requestData.requester_employee_id);
 
       } else {
         // ================================================================
@@ -1132,6 +1148,22 @@ export async function PATCH(
           );
         }
       }
+    }
+
+    // @mention: karar kaydedildi; anmalar yanıt döndükten sonra işlenir
+    if (comment?.trim()) {
+      scheduleMentions({
+        requestId: requestData.id,
+        approvalId: id,
+        source: 'DECISION',
+        note: comment,
+        mentionedEmployeeIds: mentionParse.ids,
+        actorEmployeeId: appUser.employee_id,
+        actorName: approverName,
+        workflowName,
+        contextLabel: mentionContextLabel('DECISION', decision),
+        alreadyNotifiedEmployeeIds: [...commentDeliveredTo],
+      });
     }
 
     // 6. Güncellenmiş approval'ı döndür

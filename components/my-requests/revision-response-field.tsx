@@ -1,7 +1,7 @@
 "use client";
 
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+import { MentionTextarea } from "@/components/mentions/mention-textarea";
 import type { RevisionResponseState } from "@/hooks/use-revision-response";
 import { REVISION_RESPONSE_MAX_LENGTH } from "@/lib/workflow/revision-response";
 
@@ -20,10 +20,11 @@ export function RevisionResponseField({ state, disabled }: RevisionResponseField
   return (
     <div className="space-y-2">
       <Label htmlFor="revision-response">Revize Açıklaması</Label>
-      <Textarea
+      <MentionTextarea
         id="revision-response"
+        requestId={state.requestId}
         value={state.value}
-        onChange={(e) => state.setValue(e.target.value)}
+        onChange={state.setValue}
         maxLength={REVISION_RESPONSE_MAX_LENGTH}
         rows={4}
         disabled={disabled}

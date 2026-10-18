@@ -8,13 +8,17 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useUser } from "@/lib/contexts/user-context";
+import { useMentionCandidates } from "@/hooks/use-mention-candidates";
+import { extractMentionedIds } from "@/lib/workflow/mentions-shared";
 
 export interface RevisionResponseState {
+  /** @mention aday listesi için */
+  requestId: string | null;
   visible: boolean;
   value: string;
   setValue: (value: string) => void;
   /** Resubmit body'sine yayılır; alan görünmüyorsa boş obje. */
-  payload: { revisionResponse?: string };
+  payload: { revisionResponse?: string; mentionedEmployeeIds?: string[] };
 }
 
 export function useRevisionResponse(requestId: string | null): RevisionResponseState {
@@ -45,10 +49,15 @@ export function useRevisionResponse(requestId: string | null): RevisionResponseS
     request?.status === "REVISION_REQUESTED" &&
     request.requesterId === employeeId;
 
+  // @mention: açıklamadaki "@Ad Soyad"lar (aday listesi yalnız anma kullanılınca istenir)
+  const { candidates } = useMentionCandidates(requestId, visible && value.includes("@"));
+  const mentionedEmployeeIds = visible ? extractMentionedIds(value, candidates) : [];
+
   return {
+    requestId,
     visible,
     value,
     setValue,
-    payload: visible ? { revisionResponse: value } : {},
+    payload: visible ? { revisionResponse: value, mentionedEmployeeIds } : {},
   };
 }

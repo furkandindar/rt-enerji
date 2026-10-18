@@ -19,6 +19,7 @@ import {
 import { parseContentDispositionFilename } from "@/lib/pdf/file-naming";
 import type { ExtraApproversSubmitInput } from "@/components/approvals/extra-approvers-dialog";
 import { normalizePageSize } from "@/components/ui/pagination-controls";
+import { resolveMentionedIds } from "@/hooks/use-mention-candidates";
 
 // Hangi liste fetch'i yapılacağını belirler. Bekleyen ve geçmiş artık ayrı
 // sayfalarda olduğu için aynı anda iki liste yüklenmiyor:
@@ -495,7 +496,13 @@ export function useApprovals(options: UseApprovalsOptions = {}) {
         travel_completion_fields?: { actual_departure_at: string; actual_return_at: string; summary: string };
         signature_data_url?: string;
         ykb_signed_pdf_path?: string;
-      } = { decision, comment };
+        mentionedEmployeeIds?: string[];
+      } = {
+        decision,
+        comment,
+        // @mention: nottaki "@Ad Soyad"lar (bildirim sunucuda doğrulanıp gönderilir)
+        mentionedEmployeeIds: await resolveMentionedIds(selectedApproval.request?.id, comment),
+      };
 
       // Stamp approval ise canvas imzasını gönder
       if (decision === "APPROVED" && requiresStampSignature && signatureDataUrl) {
@@ -581,7 +588,10 @@ export function useApprovals(options: UseApprovalsOptions = {}) {
       const response = await fetch(`/api/approvals/${selectedApproval.id}/request-revision`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ comment }),
+        body: JSON.stringify({
+          comment,
+          mentionedEmployeeIds: await resolveMentionedIds(selectedApproval.request?.id, comment),
+        }),
       });
 
       if (!response.ok) {
@@ -630,7 +640,11 @@ export function useApprovals(options: UseApprovalsOptions = {}) {
           : await fetch(`/api/approvals/${selectedApproval.id}/request-revision`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ comment: note, extraApproverIds: employeeIds }),
+              body: JSON.stringify({
+                comment: note,
+                extraApproverIds: employeeIds,
+                mentionedEmployeeIds: await resolveMentionedIds(selectedApproval.request?.id, note),
+              }),
             });
 
       if (!response.ok) {
