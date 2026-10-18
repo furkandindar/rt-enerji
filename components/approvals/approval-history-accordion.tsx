@@ -25,6 +25,7 @@ import {
 import type { Approval } from "@/lib/approvals/types";
 import { getApproverDisplayName } from "@/lib/approvals/types";
 import { ApprovalStatusBadge } from "./status-badge";
+import { isRevisionResponseRow } from "@/lib/workflow/revision-response";
 
 interface ApprovalHistoryAccordionProps {
   approvals: Approval[];
@@ -85,7 +86,12 @@ export function ApprovalHistoryAccordion({ approvals }: ApprovalHistoryAccordion
                                 </span>
                               </TooltipTrigger>
                               <TooltipContent className="max-w-[300px]">
-                                <p className="whitespace-pre-wrap">{approval.comment}</p>
+                                <p className="whitespace-pre-wrap">
+                                  {isRevisionResponseRow(approval) && (
+                                    <span className="font-medium">Revize açıklaması: </span>
+                                  )}
+                                  {approval.comment}
+                                </p>
                               </TooltipContent>
                             </Tooltip>
                           ) : (

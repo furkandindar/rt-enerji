@@ -12,6 +12,8 @@ import { SignaturePanel } from "@/components/signature-panel";
 import { SignatureFont } from "@/lib/signature/types";
 import type { CreateExpenseFormInput } from "@/lib/workflow";
 import { RevisionNoticeForRequest } from "@/components/my-requests/revision-notice";
+import { RevisionResponseField } from "@/components/my-requests/revision-response-field";
+import { useRevisionResponse } from "@/hooks/use-revision-response";
 import { RequestEditAttachments } from "@/components/my-requests/request-edit-attachments";
 
 import { Button } from "@/components/ui/button";
@@ -90,6 +92,7 @@ export default function NewExpenseFormPage() {
   const searchParams = useSearchParams();
   const editId = searchParams.get("edit");
   const isEditMode = !!editId;
+  const revisionResponse = useRevisionResponse(editId);
   const supabase = createClient();
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -431,7 +434,7 @@ export default function NewExpenseFormPage() {
         const resubmitRes = await fetch(`/api/requests/${editId}/resubmit`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({}),
+          body: JSON.stringify(revisionResponse.payload),
         });
         if (!resubmitRes.ok) {
           const err = await resubmitRes.json().catch(() => ({}));
@@ -850,6 +853,9 @@ export default function NewExpenseFormPage() {
                   </div>
                 </section>
               )}
+
+              {/* Revize Açıklaması — yalnız revize turunda, talep sahibine */}
+              <RevisionResponseField state={revisionResponse} disabled={isSubmitting} />
 
               {/* İmza Paneli */}
               <SignaturePanel

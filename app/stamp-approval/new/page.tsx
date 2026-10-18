@@ -20,6 +20,8 @@ import {
 } from "@/components/ui/select";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { RevisionNoticeForRequest } from "@/components/my-requests/revision-notice";
+import { RevisionResponseField } from "@/components/my-requests/revision-response-field";
+import { useRevisionResponse } from "@/hooks/use-revision-response";
 import type { StampPositionValue } from "@/components/stamp-position-picker";
 import {
   DEFAULT_PRESET,
@@ -107,6 +109,7 @@ export default function NewStampApprovalPage() {
   const searchParams = useSearchParams();
   const editId = searchParams.get("edit");
   const isEditMode = !!editId;
+  const revisionResponse = useRevisionResponse(editId);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [loadingEditData, setLoadingEditData] = useState<boolean>(isEditMode);
@@ -375,7 +378,7 @@ export default function NewStampApprovalPage() {
         const resubmitRes = await fetch(`/api/requests/${editId}/resubmit`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({}),
+          body: JSON.stringify(revisionResponse.payload),
         });
         if (!resubmitRes.ok) {
           const err = await resubmitRes.json().catch(() => ({}));
@@ -601,6 +604,9 @@ export default function NewStampApprovalPage() {
                 onChange={(e) => setDescription(e.target.value)}
               />
             </div>
+
+            {/* Revize Açıklaması — yalnız revize turunda, talep sahibine */}
+            <RevisionResponseField state={revisionResponse} disabled={isSubmitting} />
 
             {/* Butonlar */}
             <div className="flex gap-4">

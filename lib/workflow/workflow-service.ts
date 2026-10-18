@@ -290,6 +290,9 @@ function shouldSkipStep(
  *                           Liste boş/tanımsız olan DYNAMIC_USER_LIST adımları atlanır.
  * @param cycle - V5: Bu chain'in hangi revize turuna ait olduğunu belirtir. İlk submit'te 0 (default),
  *                resubmit'te artırılarak çağrılır. Eski cycle'ın kayıtları audit için silinmez.
+ * @param options.firstStepComment - Opsiyonel. Oto-onaylanan ilk REQUESTER satırının comment'i.
+ *                Resubmit'te talep sahibinin "Revize Açıklaması" buraya yazılır (tur başına ayrı
+ *                kayıt; onaycının revize notu önceki turun kendi satırında kalır).
  */
 export async function createApprovalChain(
   supabase: SupabaseClient,
@@ -298,7 +301,8 @@ export async function createApprovalChain(
   requesterEmployeeId: string,
   formData?: Record<string, unknown>,
   dynamicApprovers?: CreateRequestDynamicApprovers,
-  cycle: number = 0
+  cycle: number = 0,
+  options?: { firstStepComment?: string | null }
 ): Promise<void> {
 
   // 1. Workflow adımlarını al
@@ -382,6 +386,9 @@ export async function createApprovalChain(
       approver_type: step.approver_type, // Mükerrer-onaycı skip kontrolü için
       phase: step.phase,
       revision_cycle: cycle,
+      ...(isFirstRequesterStep && options?.firstStepComment
+        ? { comment: options.firstStepComment }
+        : {}),
     });
   }
 

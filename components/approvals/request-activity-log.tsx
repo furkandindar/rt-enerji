@@ -23,6 +23,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
+import { isRevisionResponseRow } from "@/lib/workflow/revision-response";
 
 // Bu component'in iki sayfada da kullanılması için minimum bağımlılıkla
 // yazıldı. my-requests Approval ve approvals Approval tipleri yapısal
@@ -77,6 +78,8 @@ interface ActivityEvent {
   title: string;
   actor?: string;
   comment?: string;
+  /** Yorumun önüne konan etiket (ör. talep sahibinin "Revize açıklaması"). */
+  commentLabel?: string;
   icon: LucideIcon;
   iconClass: string;
   kind: ActivityKind;
@@ -178,11 +181,16 @@ function buildEvents(req: ActivityRequest): ActivityEvent[] {
         kind: "submitted",
       });
     } else {
+      // Talep sahibinin Revize Açıklaması: turun ilk REQUESTER satırının comment'i
+      // (onaycının revize notu önceki turun "revize istedi" olayında ayrıca durur).
+      const response = cycleApprovals.find(isRevisionResponseRow);
       events.push({
         key: `resubmitted-${cycle}`,
         at: minCreatedAt,
         title: `Revize edilip yeniden gönderildi (Tur ${cycle + 1})`,
         actor: requesterName,
+        comment: response?.comment || undefined,
+        commentLabel: response?.comment ? "Revize açıklaması" : undefined,
         icon: RefreshCw,
         iconClass: "text-blue-600",
         kind: "resubmitted",
@@ -298,6 +306,9 @@ export function RequestActivityLog({ request }: RequestActivityLogProps) {
                     </p>
                     {ev.comment && (
                       <p className="mt-1 rounded bg-muted/50 px-2 py-1 text-sm whitespace-pre-wrap">
+                        {ev.commentLabel && (
+                          <span className="font-medium">{ev.commentLabel}: </span>
+                        )}
                         {ev.comment}
                       </p>
                     )}

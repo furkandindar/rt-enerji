@@ -11,6 +11,8 @@ import { createClient } from "@/lib/supabase/client";
 import { SignaturePanel } from "@/components/signature-panel";
 import { SignatureFont } from "@/lib/signature/types";
 import { RevisionNoticeForRequest } from "@/components/my-requests/revision-notice";
+import { RevisionResponseField } from "@/components/my-requests/revision-response-field";
+import { useRevisionResponse } from "@/hooks/use-revision-response";
 import { RequestEditAttachments } from "@/components/my-requests/request-edit-attachments";
 import { ExtraApproversField } from "@/components/extra-approvers/extra-approvers-field";
 import { useExtraApproverSetup } from "@/components/extra-approvers/use-extra-approver-setup";
@@ -97,6 +99,7 @@ export default function NewApprovalLetterPage() {
   const searchParams = useSearchParams();
   const editId = searchParams.get("edit");
   const isEditMode = !!editId;
+  const revisionResponse = useRevisionResponse(editId);
   const [loadingEditData, setLoadingEditData] = useState<boolean>(isEditMode);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [signatureAccepted, setSignatureAccepted] = useState(false);
@@ -377,9 +380,10 @@ export default function NewApprovalLetterPage() {
         const resubmitRes = await fetch(`/api/requests/${editId}/resubmit`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(
-            extraStepId ? { dynamicApprovers: { [extraStepId]: ownExtraApproverIds } } : {}
-          ),
+          body: JSON.stringify({
+            ...(extraStepId ? { dynamicApprovers: { [extraStepId]: ownExtraApproverIds } } : {}),
+            ...revisionResponse.payload,
+          }),
         });
         if (!resubmitRes.ok) {
           const err = await resubmitRes.json().catch(() => ({}));
@@ -778,6 +782,9 @@ export default function NewApprovalLetterPage() {
                   )}
                 </div>
               )}
+
+              {/* Revize Açıklaması — yalnız revize turunda, talep sahibine */}
+              <RevisionResponseField state={revisionResponse} disabled={isSubmitting} />
 
               {/* İmza Paneli */}
               {!loadingSignature && (

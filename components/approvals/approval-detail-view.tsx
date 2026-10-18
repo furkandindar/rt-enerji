@@ -25,6 +25,7 @@ import { ComparisonFormDetails } from "./comparison-form-details";
 import { ExpenseFormDetails } from "./expense-form-details";
 import { ApprovalHistoryAccordion } from "./approval-history-accordion";
 import { RequestActivityLog } from "./request-activity-log";
+import { RevisionResponseNotice } from "@/components/my-requests/revision-notice";
 import { ApprovalActions } from "./approval-actions";
 import { PdfViewerDialog } from "@/components/pdf-viewer-dialog";
 import { openPdfPreview } from "@/lib/pdf/open-preview";
@@ -241,6 +242,15 @@ export function ApprovalDetailView({
           <div className="rounded-md border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
             Bu onay adımı size atanmamış; yalnızca görüntüleyebilirsiniz.
           </div>
+        )}
+
+        {/* Revize yazışması: revize notu + talep sahibinin Revize Açıklaması (yazdıysa).
+            Yeni revize istenmişse önceki turun yazışması güncel durum değildir → gizli. */}
+        {selectedApproval.request.status !== "REVISION_REQUESTED" && (
+          <RevisionResponseNotice
+            allApprovals={selectedApproval.request.all_approvals ?? []}
+            currentCycle={selectedApproval.request.current_revision_cycle}
+          />
         )}
 
         {/* Kompakt ortak alanlar — 4 sütunlu responsive grid.

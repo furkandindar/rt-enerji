@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
-import { MessageSquareWarning } from "lucide-react";
+import { MessageSquareReply, MessageSquareWarning } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { getApproverDisplayName, type Approver, type WorkflowStep } from "@/lib/approvals/types";
 import { formatTrDateTime } from "@/lib/timezone";
+import { findRevisionExchange } from "@/lib/workflow/revision-response";
 
 // Revize bandı: talep REVISION_REQUESTED iken talep sahibine kimin, hangi
 // adımda, ne zaman ve hangi açıklamayla revize istediğini gösterir.
@@ -62,6 +63,64 @@ export function RevisionNotice({ approvals, action }: RevisionNoticeProps) {
           </div>
         </div>
         {action}
+      </div>
+    </div>
+  );
+}
+
+export interface RevisionExchangeApproval extends RevisionNoticeApproval {
+  sequence_order?: number;
+  revision_cycle?: number | null;
+}
+
+interface RevisionResponseNoticeProps {
+  /** Tüm cycle'ların onay kayıtları (detay uçlarındaki all_approvals). */
+  allApprovals: RevisionExchangeApproval[];
+  currentCycle: number | null | undefined;
+}
+
+/**
+ * Revize yazışması bandı: talep revize sonrası yeniden gönderildiyse onaycı
+ * ekranında önceki turun revize notunu ve talep sahibinin Revize Açıklaması'nı
+ * birlikte gösterir. Talep sahibi açıklama yazmadıysa hiçbir şey göstermez.
+ */
+export function RevisionResponseNotice({ allApprovals, currentCycle }: RevisionResponseNoticeProps) {
+  const { revision, response } = findRevisionExchange(allApprovals, currentCycle ?? 0);
+  if (!response) return null;
+
+  return (
+    <div className="rounded-lg border-2 border-sky-200 bg-sky-50 p-4 dark:border-sky-800 dark:bg-sky-950/50">
+      <div className="flex gap-3">
+        <MessageSquareReply className="mt-0.5 h-5 w-5 shrink-0 text-sky-600 dark:text-sky-400" />
+        <div className="min-w-0 flex-1 space-y-3">
+          <p className="text-sm font-semibold text-sky-900 dark:text-sky-100">
+            Revize sonrası yeniden gönderildi
+          </p>
+          {revision && (
+            <div className="space-y-1">
+              <p className="text-xs text-sky-800 dark:text-sky-200">
+                <span className="font-medium">Revize talebi</span>
+                {` · ${getApproverDisplayName(revision)}`}
+                {revision.decided_at ? ` · ${formatTrDateTime(revision.decided_at)}` : ""}
+              </p>
+              {revision.comment && (
+                <p className="whitespace-pre-wrap wrap-break-word text-sm text-sky-950 dark:text-sky-50">
+                  {revision.comment}
+                </p>
+              )}
+            </div>
+          )}
+          <div className="space-y-1">
+            <p className="text-xs text-sky-800 dark:text-sky-200">
+              <span className="font-medium">Talep sahibinin açıklaması</span>
+              {` · ${getApproverDisplayName(response)}`}
+              {response.decided_at ? ` · ${formatTrDateTime(response.decided_at)}` : ""}
+            </p>
+            <p className="whitespace-pre-wrap wrap-break-word text-sm text-sky-950 dark:text-sky-50">
+              {response.comment}
+            </p>
+          </div>
+        </div>
       </div>
     </div>
   );

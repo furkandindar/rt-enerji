@@ -7,6 +7,7 @@ import { sendNotificationEmail, type SendNotificationEmailParams } from '@/lib/e
 import { buildRequestEmailContext } from '@/lib/email/request-summary';
 import { formatTrDateTime } from '@/lib/timezone';
 import { getActiveDelegateIdsForRequest, getEmployeeFullName } from './delegation';
+import { createServiceRoleClient } from '@/lib/supabase/service-role';
 
 // ============================================================================
 // Types
@@ -55,18 +56,37 @@ async function getUserInfoByEmployeeId(
 }
 
 /**
+ * Bildirim e-postası bağlamı (adım/sıradaki onaycı, deep-link, revize yazışması)
+ * için salt-okuma client'ı. Bildirimi tetikleyen kişinin oturumu kullanılamaz:
+ * kısıtlı süreçlerde (is_restricted) request_approvals RLS'i onaycıya yalnız kendi
+ * satırlarını gösterir → "Adım 3/1", boş "Sıradaki", genel /approvals linki çıkıyordu.
+ * Alıcı zaten talebin onaycısı/sahibi/vekili olduğundan içerik yetki dışına çıkmaz.
+ * Oturumsuz (persistSession: false) olduğundan modül seviyesinde tek örnek paylaşılır.
+ */
+let emailContextClient: SupabaseClient | null = null;
+function createEmailContextClient(): SupabaseClient {
+  emailContextClient ??= createServiceRoleClient() as unknown as SupabaseClient;
+  return emailContextClient;
+}
+
+/** Revize yazışması (revize notu + Revize Açıklaması) yalnız onaycıya giden bildirimlerde. */
+const REVISION_EXCHANGE_EMAIL_TYPES: ReadonlySet<string> = new Set([
+  'APPROVAL_REQUIRED',
+  'REQUEST_UPDATED',
+]);
+
+/**
  * Email payload'ını request bağlamından zenginleştirir.
  * Helper hata verirse minimal payload döner — email gönderimi engellenmemeli.
  */
 async function enrichEmailPayload(
-  supabase: SupabaseClient,
   requestId: string,
   base: SendNotificationEmailParams,
   recipientName: string | null,
   extras?: DecisionExtras
 ): Promise<SendNotificationEmailParams> {
   try {
-    const ctx = await buildRequestEmailContext(supabase, requestId);
+    const ctx = await buildRequestEmailContext(createEmailContextClient(), requestId);
     if (!ctx) return base;
     return {
       ...base,
@@ -83,6 +103,10 @@ async function enrichEmailPayload(
       nextApproverName: ctx.nextApproverName || undefined,
       decidedByName: extras?.decidedByName,
       decisionComment: extras?.decisionComment,
+      revisionExchange:
+        REVISION_EXCHANGE_EMAIL_TYPES.has(base.type) && ctx.revisionExchange
+          ? ctx.revisionExchange
+          : undefined,
     };
   } catch (err) {
     console.error('[Email] enrichEmailPayload failed, sending minimal payload:', err);
@@ -136,7 +160,7 @@ export async function notifyApprover(
 
   // V5: Onaycının bu request'teki aktif PENDING approval id'sini bulup deep-link'e ekle.
   // Vekil için de aynı link geçerli: /approvals/[id] satırı RLS ile vekile açık.
-  const ctaPath = await buildApproverCtaPath(supabase, approverEmployeeId, requestId, 'PENDING');
+  const ctaPath = await buildApproverCtaPath(approverEmployeeId, requestId, 'PENDING');
 
   const userInfo = await getUserInfoByEmployeeId(supabase, approverEmployeeId);
   if (userInfo) {
@@ -152,7 +176,6 @@ export async function notifyApprover(
     // Email — zengin payload (helper hata verirse minimal payload ile fallback).
     if (userInfo.email) {
       const payload = await enrichEmailPayload(
-        supabase,
         requestId,
         { to: userInfo.email, title, message, type, ctaPath },
         userInfo.fullName
@@ -185,7 +208,6 @@ export async function notifyApprover(
       });
       if (delegateInfo.email) {
         const payload = await enrichEmailPayload(
-          supabase,
           requestId,
           { to: delegateInfo.email, title, message: delegateMessage, type, ctaPath },
           delegateInfo.fullName
@@ -202,15 +224,15 @@ export async function notifyApprover(
  * Onaycı için deep-link CTA path üretir.
  * Onaycının bu request'teki en güncel (aktif cycle) approval kaydını bulur ve
  * /approvals/[approvalId]'ye yönlendiren path döner. Bulamazsa /approvals listesine düşer.
+ * Alıcının satırı tetikleyenin RLS'ine görünmeyebilir → createEmailContextClient.
  */
 async function buildApproverCtaPath(
-  supabase: SupabaseClient,
   approverEmployeeId: string,
   requestId: string,
   status: 'PENDING' | 'APPROVED'
 ): Promise<string> {
   try {
-    const { data } = await supabase
+    const { data } = await createEmailContextClient()
       .from('request_approvals')
       .select('id')
       .eq('request_id', requestId)
@@ -255,7 +277,6 @@ export async function notifyRequestApproved(
 
   if (userInfo.email) {
     const payload = await enrichEmailPayload(
-      supabase,
       requestId,
       { to: userInfo.email, title, message, type, ctaPath: `/my-requests/${requestId}` },
       userInfo.fullName,
@@ -300,7 +321,6 @@ export async function notifyRequestRejected(
       decisionComment: extras?.decisionComment,
     };
     const payload = await enrichEmailPayload(
-      supabase,
       requestId,
       { to: userInfo.email, title, message, type, ctaPath: `/my-requests/${requestId}` },
       userInfo.fullName,
@@ -359,10 +379,9 @@ export async function notifyRequestUpdated(
 
   // V5: Bu kullanıcının request'teki en güncel APPROVED kaydına yönlendir
   // (genelde önceki cycle'da onay vermiş olduğu kayıt). Bulamazsa /approvals listesi.
-  const ctaPath = await buildApproverCtaPath(supabase, recipientEmployeeId, requestId, 'APPROVED');
+  const ctaPath = await buildApproverCtaPath(recipientEmployeeId, requestId, 'APPROVED');
   if (userInfo.email) {
     const payload = await enrichEmailPayload(
-      supabase,
       requestId,
       { to: userInfo.email, title, message, type, ctaPath },
       userInfo.fullName
@@ -413,7 +432,6 @@ export async function notifyRevisionRequested(
       decisionComment: comment,
     };
     const payload = await enrichEmailPayload(
-      supabase,
       requestId,
       { to: userInfo.email, title, message, type, ctaPath: `/my-requests/${requestId}` },
       userInfo.fullName,

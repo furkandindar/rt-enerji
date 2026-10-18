@@ -15,6 +15,10 @@ import {
   loadLockedExtraApprovers,
   sanitizeRequesterExtraApprovers,
 } from "@/lib/workflow/extra-approvers";
+import {
+  normalizeRevisionResponse,
+  REVISION_RESPONSE_MAX_LENGTH,
+} from "@/lib/workflow/revision-response";
 
 // POST /api/requests/[id]/resubmit
 // DRAFT veya REVISION_REQUESTED durumdaki bir talebi yeniden gönderir:
@@ -23,6 +27,8 @@ import {
 //   - status PENDING'e döner, submitted_at = now()
 //   - Eski cycle'da APPROVED veren onaycılara REQUEST_UPDATED bildirimi
 //   - Yeni 1. onaycıya APPROVAL_REQUIRED bildirimi
+//   - revisionResponse (opsiyonel; yalnız REVISION_REQUESTED'dan ve talep sahibinden):
+//     "Revize Açıklaması" yeni turun ilk REQUESTER satırına comment olarak yazılır
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -31,8 +37,12 @@ export async function POST(
     const supabase = await createClient();
     const { id: requestId } = await params;
 
-    // Body — opsiyonel: dynamicApprovers, formData
-    let body: { dynamicApprovers?: CreateRequestDynamicApprovers; formData?: Record<string, unknown> } = {};
+    // Body — opsiyonel: dynamicApprovers, formData, revisionResponse
+    let body: {
+      dynamicApprovers?: CreateRequestDynamicApprovers;
+      formData?: Record<string, unknown>;
+      revisionResponse?: unknown;
+    } = {};
     try {
       body = await request.json();
     } catch {
@@ -89,6 +99,20 @@ export async function POST(
     const isRequester = req.requester_employee_id === appUser.employee_id;
     if (!isRequester && appUser.role !== "ORG_ADMIN") {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    // Revize Açıklaması yalnız revize turunda ve yalnız talep sahibinden alınır: not
+    // talep sahibinin satırına yazıldığı için yazarı her zaman talep sahibidir (ORG_ADMIN
+    // başkası adına gönderirse arayüz alanı göstermez, burada da yok sayılır).
+    const revisionResponse =
+      req.status === "REVISION_REQUESTED" && isRequester
+        ? normalizeRevisionResponse(body.revisionResponse)
+        : null;
+    if (revisionResponse && revisionResponse.length > REVISION_RESPONSE_MAX_LENGTH) {
+      return NextResponse.json(
+        { error: `Revize açıklaması en fazla ${REVISION_RESPONSE_MAX_LENGTH} karakter olabilir` },
+        { status: 400 }
+      );
     }
 
     const previousCycle = req.current_revision_cycle ?? 0;
@@ -165,7 +189,9 @@ export async function POST(
     // 6. Approval chain'i sıfırla (service role içeride; cycle bump dahil)
     let newCycle: number;
     try {
-      const result = await resetApprovalChain(requestId, body.formData, effectiveDynamic);
+      const result = await resetApprovalChain(requestId, body.formData, effectiveDynamic, {
+        requesterComment: revisionResponse,
+      });
       newCycle = result.newCycle;
     } catch (err) {
       console.error("[resubmit] resetApprovalChain failed:", err);

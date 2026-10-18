@@ -15,7 +15,7 @@ RT Enerji'nin kurumsal onay süreçleri (14 workflow) + organizasyon yönetimi p
 ## Konvansiyonlar
 
 - **Tarih/saat:** DB'de gerçek UTC; gösterim Europe/Istanbul. Dönüşüm yalnız `lib/timezone.ts` helper'larıyla. Salt `date` kolonlarına timezone dönüşümü uygulanmaz.
-- **Revizyon döngüsü:** `request_approvals` okuyan her sorgu/PDF/e-posta `revision_cycle = requests.current_revision_cycle` filtresi ister; eski döngüler yalnız denetim izidir.
+- **Revizyon döngüsü:** `request_approvals` okuyan her sorgu/PDF/e-posta `revision_cycle = requests.current_revision_cycle` filtresi ister; eski döngüler yalnız denetim izidir. Bilinçli istisnalar yalnız geçmişi *gösteren* yerlerdir: Süreç Logu (`all_approvals`) ve revize yazışması (önceki turun revize notu ↔ bu turun Revize Açıklaması, `lib/workflow/revision-response.ts`; e-postada bir önceki tur okunur). Adım sayısı, sıradaki onaycı, PDF ve yetki kararları her zaman yalnız aktif turdan.
 - **Supabase client seçimi:** tarayıcı → `lib/supabase/client`; Server Component/route → `lib/supabase/server` (RLS'li); `lib/supabase/service-role` yalnız gerekçeli sunucu işlemlerinde (RLS bypass — bilinçli karar).
 - **Şema gerçeği `lib/database.types.ts`'tir.** `dev_schema.sql`/`prod_schema.sql` Nisan 2026 snapshot'ı — güncel değil. `sql/` klasörü elle uygulanan scriptlerin arşividir; migration runner yok. View değiştirirken `WITH (security_invoker = on)` açıkça tekrar edilmeli.
 - **Performans:** liste uçları hafif select (`lib/*/server-selects.ts`), detay uçları tip-farkındalıklı iki aşamalı fetch kullanır — bu deseni koru (13 join = statement timeout).

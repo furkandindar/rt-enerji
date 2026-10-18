@@ -148,6 +148,9 @@ async function buildConditionFormData(
  *  2. createApprovalChain yeni cycle ile çağrılır → yeni PENDING kayıtları insert edilir
  *  3. Eski cycle'ın request_approvals kayıtları **silinmez** (audit için korunur)
  *
+ * options.requesterComment: talep sahibinin "Revize Açıklaması"; yeni cycle'ın
+ * oto-onaylanan ilk REQUESTER satırına comment olarak yazılır (insert anında).
+ *
  * Service role client kullanır çünkü:
  *  - request_approvals'a insert: başkasının onay kaydı oluşturmamız gerekiyor
  *  - mevcut RLS policy buna izin vermez (insert policy sadece requester'ın ilk submit'i için)
@@ -157,7 +160,8 @@ async function buildConditionFormData(
 export async function resetApprovalChain(
   requestId: string,
   formData?: Record<string, unknown>,
-  dynamicApprovers?: CreateRequestDynamicApprovers
+  dynamicApprovers?: CreateRequestDynamicApprovers,
+  options?: { requesterComment?: string | null }
 ): Promise<{ newCycle: number }> {
   const serviceSupabase = createServiceRoleClient();
 
@@ -197,7 +201,8 @@ export async function resetApprovalChain(
     req.requester_employee_id,
     effectiveFormData,
     dynamicApprovers,
-    newCycle
+    newCycle,
+    { firstStepComment: options?.requesterComment ?? null }
   );
 
   return { newCycle };

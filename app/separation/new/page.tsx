@@ -11,6 +11,8 @@ import { createClient } from "@/lib/supabase/client";
 import { SignaturePanel } from "@/components/signature-panel";
 import { SignatureFont } from "@/lib/signature/types";
 import { RevisionNoticeForRequest } from "@/components/my-requests/revision-notice";
+import { RevisionResponseField } from "@/components/my-requests/revision-response-field";
+import { useRevisionResponse } from "@/hooks/use-revision-response";
 import { format } from "date-fns";
 import { tr } from "date-fns/locale";
 
@@ -72,6 +74,7 @@ export default function NewSeparationPage() {
   const isEditMode = !!editId;
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [loadingEditData, setLoadingEditData] = useState<boolean>(isEditMode);
+  const revisionResponse = useRevisionResponse(editId);
   const [signatureAccepted, setSignatureAccepted] = useState(false);
   const [signatureInfo, setSignatureInfo] = useState<SignatureInfo>({
     signatureText: null,
@@ -210,7 +213,7 @@ export default function NewSeparationPage() {
         const resubmitRes = await fetch(`/api/requests/${editId}/resubmit`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({}),
+          body: JSON.stringify(revisionResponse.payload),
         });
         if (!resubmitRes.ok) {
           const err = await resubmitRes.json().catch(() => ({}));
@@ -340,6 +343,15 @@ export default function NewSeparationPage() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Revize Açıklaması — yalnız revize turunda, talep sahibine */}
+          {revisionResponse.visible && (
+            <Card>
+              <CardContent className="pt-6">
+                <RevisionResponseField state={revisionResponse} disabled={isSubmitting} />
+              </CardContent>
+            </Card>
+          )}
 
           {!loadingSignature && (
             <SignaturePanel

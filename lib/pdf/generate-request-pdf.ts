@@ -16,6 +16,7 @@ import { SupabaseClient } from '@supabase/supabase-js';
 import { SignatureFont, DEFAULT_SIGNATURE_FONT } from '@/lib/signature/types';
 import type { PdfApproval, SignatureInfo } from './types';
 import { getPositionTitlesByEmployee } from '@/lib/workflow/extra-approvers';
+import { isRevisionResponseRow } from '@/lib/workflow/revision-response';
 
 interface GeneratePDFOptions {
   requestId: string;
@@ -138,6 +139,11 @@ export async function generateRequestPDF(
   const approvals: PdfApproval[] = ((request.approvals || []) as Array<PdfApproval & { revision_cycle?: number }>)
     .filter((approval) => (approval.revision_cycle ?? 0) === activeCycle)
     .map((approval) => {
+      // Talep sahibinin Revize Açıklaması süreç iletişimidir, belge içeriği değil:
+      // şablonlar onay comment'ini "not" olarak bastığı için burada tek merkezden düşülür.
+      if (isRevisionResponseRow(approval)) {
+        approval = { ...approval, comment: null };
+      }
       const step = approval.workflow_step;
       if (step?.phase === 'COMPLETION' && step?.form_section_key === 'ykb_signed_pdf') {
         return {

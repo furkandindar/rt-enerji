@@ -11,6 +11,8 @@ import { createClient } from "@/lib/supabase/client";
 import { SignaturePanel } from "@/components/signature-panel";
 import { SignatureFont } from "@/lib/signature/types";
 import { RevisionNoticeForRequest } from "@/components/my-requests/revision-notice";
+import { RevisionResponseField } from "@/components/my-requests/revision-response-field";
+import { useRevisionResponse } from "@/hooks/use-revision-response";
 import { format, eachDayOfInterval } from "date-fns";
 import { tr } from "date-fns/locale";
 
@@ -163,6 +165,7 @@ export default function NewLeaveRequestPage() {
   const searchParams = useSearchParams();
   const editId = searchParams.get("edit");
   const isEditMode = !!editId;
+  const revisionResponse = useRevisionResponse(editId);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [loadingEditData, setLoadingEditData] = useState<boolean>(isEditMode);
   const [signatureAccepted, setSignatureAccepted] = useState(false);
@@ -369,7 +372,7 @@ export default function NewLeaveRequestPage() {
         const resubmitRes = await fetch(`/api/requests/${editId}/resubmit`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({}),
+          body: JSON.stringify(revisionResponse.payload),
         });
         if (!resubmitRes.ok) {
           const err = await resubmitRes.json().catch(() => ({}));
@@ -661,6 +664,9 @@ export default function NewLeaveRequestPage() {
                   </FormItem>
                 )}
               />
+
+              {/* Revize Açıklaması — yalnız revize turunda, talep sahibine */}
+              <RevisionResponseField state={revisionResponse} disabled={isSubmitting} />
 
               {/* İmza Paneli */}
               {!loadingSignature && (

@@ -19,6 +19,14 @@ export interface EmailDetailRow {
   value: string;
 }
 
+/** Önceki turun revize notu + bu turun talep sahibi Revize Açıklaması. */
+export interface RevisionExchangeEmail {
+  requestedByName: string | null;
+  requestNote: string | null;
+  responseByName: string | null;
+  responseNote: string;
+}
+
 export interface SendNotificationEmailParams {
   to: string;
   title: string;
@@ -40,6 +48,7 @@ export interface SendNotificationEmailParams {
   nextApproverName?: string;
   decidedByName?: string;
   decisionComment?: string;
+  revisionExchange?: RevisionExchangeEmail; // Yalnız onaycıya giden bildirimlerde verilir
   ctaPath?: string;                // Örn: '/approvals' veya '/my-requests'
   ctaLabel?: string;
 }
@@ -125,13 +134,26 @@ function renderCommentBox(comment: string, color: string, label: string): string
   `;
 }
 
+function renderRevisionExchange(exchange: RevisionExchangeEmail): string {
+  const byLine = (label: string, name: string | null) => (name ? `${label} — ${name}` : label);
+  const requestBox = exchange.requestNote
+    ? renderCommentBox(exchange.requestNote, '#f97316', byLine('Revize Talebi', exchange.requestedByName))
+    : '';
+  const responseBox = renderCommentBox(
+    exchange.responseNote,
+    '#3b82f6',
+    byLine('Talep Sahibinin Revize Açıklaması', exchange.responseByName)
+  );
+  return requestBox + responseBox;
+}
+
 function getEmailHtml(params: SendNotificationEmailParams): string {
   const {
     title, message, type, appUrl,
     recipientName, requesterName, requesterPosition,
     workflowName, requestId, submittedAt,
     details, currentStep, totalSteps, nextApproverName,
-    decidedByName, decisionComment,
+    decidedByName, decisionComment, revisionExchange,
     ctaPath, ctaLabel,
   } = params;
 
@@ -199,6 +221,7 @@ function getEmailHtml(params: SendNotificationEmailParams): string {
       ` : ''}
 
       ${stepLine}
+      ${revisionExchange ? renderRevisionExchange(revisionExchange) : ''}
       ${commentBlock}
 
       <div style="text-align: center; margin-top: 28px;">

@@ -12,6 +12,8 @@ import { SignaturePanel } from "@/components/signature-panel";
 import { SignatureFont } from "@/lib/signature/types";
 import { utcToIstanbulInput } from "@/lib/timezone";
 import { RevisionNoticeForRequest } from "@/components/my-requests/revision-notice";
+import { RevisionResponseField } from "@/components/my-requests/revision-response-field";
+import { useRevisionResponse } from "@/hooks/use-revision-response";
 import { RequestEditAttachments } from "@/components/my-requests/request-edit-attachments";
 import { PendingAttachmentsField, showFailedUploadsToast } from "@/components/pending-attachments-field";
 import { uploadPendingFiles } from "@/lib/attachments/upload-attachment";
@@ -83,6 +85,7 @@ export default function NewTravelAssignmentPage() {
   const searchParams = useSearchParams();
   const editId = searchParams.get("edit");
   const isEditMode = !!editId;
+  const revisionResponse = useRevisionResponse(editId);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [loadingEditData, setLoadingEditData] = useState<boolean>(isEditMode);
   const [signatureAccepted, setSignatureAccepted] = useState(false);
@@ -306,7 +309,7 @@ export default function NewTravelAssignmentPage() {
         const resubmitRes = await fetch(`/api/requests/${editId}/resubmit`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({}),
+          body: JSON.stringify(revisionResponse.payload),
         });
         if (!resubmitRes.ok) {
           const err = await resubmitRes.json().catch(() => ({}));
@@ -668,6 +671,9 @@ export default function NewTravelAssignmentPage() {
                   disabled={isSubmitting}
                 />
               )}
+
+              {/* Revize Açıklaması — yalnız revize turunda, talep sahibine */}
+              <RevisionResponseField state={revisionResponse} disabled={isSubmitting} />
 
               {/* İmza Paneli */}
               {!loadingSignature && (

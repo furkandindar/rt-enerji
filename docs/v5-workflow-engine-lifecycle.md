@@ -42,6 +42,8 @@ request_approvals.revision_cycle smallint DEFAULT 0
 - `requests.current_revision_cycle` artırılır (0 → 1)
 - Yeni `request_approvals` kayıtları `revision_cycle = 1` ile insert edilir
 - Eski `revision_cycle = 0` kayıtları **dokunulmaz** (audit)
+- Talep sahibinin opsiyonel **Revize Açıklaması** (`POST /api/requests/[id]/resubmit` body `revisionResponse`; yalnız `REVISION_REQUESTED`'dan ve yalnız talep sahibinden — başkasından gelen yok sayılır) yeni cycle'ın oto-onaylanan ilk REQUESTER satırının `comment`'ine insert anında yazılır. Onaycının revize notu önceki cycle'ın kendi satırında kalır → her tur için not + cevap ayrı kayıt. Tek kaynak `lib/workflow/revision-response.ts`. Görünürlük: Süreç Logu, onaycı/talep detayındaki bant (`RevisionResponseNotice`), onaycıya giden `APPROVAL_REQUIRED` / `REQUEST_UPDATED` e-postaları. **PDF'e girmez** (`generate-request-pdf.ts` tek merkezden düşer). Tüm düzenleme ekranlarında `useRevisionResponse(editId)` + `RevisionResponseField` (yeni forma eklerken: hook + alan + resubmit body'sine `...revisionResponse.payload`).
+- Bildirim e-postası bağlamı (adım X/Y, sıradaki onaycı, deep-link, revize yazışması) service-role salt-okuma ile kurulur: kısıtlı süreçlerde `request_approvals` RLS'i bildirimi tetikleyen onaycıya yalnız kendi satırlarını gösterdiği için eskiden "Adım 3/1" ve genel `/approvals` linki çıkıyordu.
 
 **Aktif kayıtları filtreleme:**
 ```sql

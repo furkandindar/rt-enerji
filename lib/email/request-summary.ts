@@ -2,9 +2,11 @@
 // üretir. notification-service.ts içinden tek noktadan çağrılır.
 
 import { SupabaseClient } from '@supabase/supabase-js';
-import type { EmailDetailRow } from './email-service';
+import type { EmailDetailRow, RevisionExchangeEmail } from './email-service';
 import { buildWorkflowDetails } from './workflow-details';
 import { APP_TZ } from '@/lib/timezone';
+import { getApproverDisplayName, type Approval } from '@/lib/approvals/types';
+import { findRevisionExchange } from '@/lib/workflow/revision-response';
 
 // ============================================================================
 // Types
@@ -21,6 +23,8 @@ export interface RequestEmailContext {
   currentStep: number;
   totalSteps: number;
   nextApproverName: string | null;
+  /** Aktif tur revize sonrası açıldıysa ve talep sahibi açıklama yazdıysa dolu. */
+  revisionExchange: RevisionExchangeEmail | null;
 }
 
 // ============================================================================
@@ -117,29 +121,52 @@ export async function buildRequestEmailContext(
   const requesterPosition = primaryPosition?.position?.title || null;
 
   // 2) Onay zinciri (adım sayıları, sıradaki onaycı)
-  // V5: Sadece aktif cycle — eski cycle audit için tutuluyor.
+  // V5: Adım/sıradaki hesabı yalnız aktif cycle'dan. Aktif cycle revize sonrası
+  // açıldıysa önceki cycle da okunur — yalnız revize yazışması (revize notu) için.
   const activeCycle = (req as { current_revision_cycle?: number }).current_revision_cycle ?? 0;
-  const { data: approvals } = await supabase
+  const cycles = activeCycle > 0 ? [activeCycle - 1, activeCycle] : [activeCycle];
+  const { data: approvalRows } = await supabase
     .from('request_approvals')
     .select(`
-      sequence_order, status,
-      approver:employees!request_approvals_approver_employee_id_fkey(first_name, last_name)
+      sequence_order, status, comment, decided_at, revision_cycle,
+      workflow_step:workflow_steps(step_order, name, approver_type, phase, form_section_key),
+      approver:employees!request_approvals_approver_employee_id_fkey(id, first_name, last_name),
+      acted_by:employees!acted_by_employee_id(id, first_name, last_name)
     `)
     .eq('request_id', requestId)
-    .eq('revision_cycle', activeCycle)
+    .in('revision_cycle', cycles)
     .order('sequence_order', { ascending: true });
 
-  const totalSteps = approvals?.length || 0;
+  const allRows = (approvalRows ?? []) as unknown as Approval[];
+  const approvals = allRows.filter((a) => (a.revision_cycle ?? 0) === activeCycle);
+
+  const totalSteps = approvals.length;
   const currentStep = (req as { current_step?: number }).current_step || 1;
 
-  const next = approvals?.find(
-    (a) => (a as { sequence_order: number; status: string }).sequence_order === currentStep
-      && (a as { status: string }).status === 'PENDING'
-  ) as { approver?: { first_name?: string; last_name?: string } } | undefined;
+  const next = approvals.find(
+    (a) => a.sequence_order === currentStep && a.status === 'PENDING'
+  );
 
   const nextApproverName = next?.approver
     ? `${next.approver.first_name || ''} ${next.approver.last_name || ''}`.trim() || null
     : null;
+
+  // 2b) Revize yazışması: talep sahibi bu turda Revize Açıklaması yazdıysa.
+  // Ayrı try: bu blok hata verirse yalnız yazışma düşer, e-postanın geri kalanı zengin kalır.
+  let revisionExchange: RevisionExchangeEmail | null = null;
+  try {
+    const exchange = findRevisionExchange(allRows, activeCycle);
+    if (exchange.response?.comment) {
+      revisionExchange = {
+        requestedByName: exchange.revision ? getApproverDisplayName(exchange.revision) : null,
+        requestNote: exchange.revision?.comment ?? null,
+        responseByName: getApproverDisplayName(exchange.response),
+        responseNote: exchange.response.comment,
+      };
+    }
+  } catch (err) {
+    console.error('[Email] revision exchange build failed:', err);
+  }
 
   // 3) Workflow özeti (form-spesifik)
   const details = await buildWorkflowDetails(supabase, requestId, workflowCode);
@@ -155,5 +182,6 @@ export async function buildRequestEmailContext(
     currentStep,
     totalSteps,
     nextApproverName,
+    revisionExchange,
   };
 }

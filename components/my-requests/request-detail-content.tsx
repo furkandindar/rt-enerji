@@ -39,7 +39,8 @@ import { RequestActivityLog } from "@/components/approvals/request-activity-log"
 import { StampStatusSummary } from "@/components/approvals/stamp-status-summary";
 import { ApprovalStatusBadge, RequestStatusBadge } from "@/components/approvals/status-badge";
 import { RequestLifecycleActions } from "@/components/my-requests/request-lifecycle-actions";
-import { RevisionNotice } from "@/components/my-requests/revision-notice";
+import { RevisionNotice, RevisionResponseNotice } from "@/components/my-requests/revision-notice";
+import { isRevisionResponseRow } from "@/lib/workflow/revision-response";
 import type {
   RequestStatus as RequestLifecycleActionsStatus,
   ApprovalStatus as RequestLifecycleActionsApprovalStatus,
@@ -513,6 +514,15 @@ export function RequestDetailContent({
       {selectedRequest?.status === "REVISION_REQUESTED" && (
         <div className="px-4 pt-4">
           <RevisionNotice approvals={selectedRequest.approvals ?? []} />
+        </div>
+      )}
+      {/* Revize yazışması: yeni revize istenmişse yukarıdaki bant öncelikli, bu gizli */}
+      {selectedRequest && selectedRequest.status !== "REVISION_REQUESTED" && (
+        <div className="px-4 pt-4 empty:hidden">
+          <RevisionResponseNotice
+            allApprovals={selectedRequest.all_approvals ?? []}
+            currentCycle={selectedRequest.current_revision_cycle}
+          />
         </div>
       )}
       {selectedRequest && (
@@ -1558,7 +1568,12 @@ export function RequestDetailContent({
                                         </span>
                                       </TooltipTrigger>
                                       <TooltipContent className="max-w-[300px]">
-                                        <p className="whitespace-pre-wrap">{approval.comment}</p>
+                                        <p className="whitespace-pre-wrap">
+                                          {isRevisionResponseRow(approval) && (
+                                            <span className="font-medium">Revize açıklaması: </span>
+                                          )}
+                                          {approval.comment}
+                                        </p>
                                       </TooltipContent>
                                     </Tooltip>
                                   ) : (
