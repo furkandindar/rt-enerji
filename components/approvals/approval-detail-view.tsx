@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import type { WorkflowStepAttachmentConfig, RequestAttachment, PreviousStepAttachment } from "@/lib/workflow/types";
 import type { PendingApproval, ChecklistStatus, ChecklistItem, SignatureInfo } from "@/lib/approvals/types";
 import type { ExtraApproversSubmitInput } from "./extra-approvers-dialog";
+import type { RevisionChoice } from "./revision-request-dialog";
 import { ApprovalStatusBadge } from "./status-badge";
 import { getRequesterFullName, getRequesterPosition } from "./utils";
 import { LeaveRequestDetails } from "./leave-request-details";
@@ -25,7 +26,7 @@ import { ComparisonFormDetails } from "./comparison-form-details";
 import { ExpenseFormDetails } from "./expense-form-details";
 import { ApprovalHistoryAccordion } from "./approval-history-accordion";
 import { RequestActivityLog } from "./request-activity-log";
-import { RevisionResponseNotice } from "@/components/my-requests/revision-notice";
+import { RevisionAssignmentNotice, RevisionResponseNotice } from "@/components/my-requests/revision-notice";
 import { ApprovalActions } from "./approval-actions";
 import { PdfViewerDialog } from "@/components/pdf-viewer-dialog";
 import { openPdfPreview } from "@/lib/pdf/open-preview";
@@ -81,7 +82,7 @@ export interface ApprovalDetailViewProps {
   canApprove: boolean;
   isSubmitting: boolean;
   handleDecision: (decision: "APPROVED" | "REJECTED") => Promise<void>;
-  handleRequestRevision: () => void;
+  handleRequestRevision: (choice?: RevisionChoice) => Promise<void>;
   handleAddExtraApprovers: (input: ExtraApproversSubmitInput) => Promise<boolean>;
   handleDownloadPDF: (requestId: string) => void;
 }
@@ -244,13 +245,21 @@ export function ApprovalDetailView({
           </div>
         )}
 
-        {/* Revize yazışması: revize notu + talep sahibinin Revize Açıklaması (yazdıysa).
-            Yeni revize istenmişse önceki turun yazışması güncel durum değildir → gizli. */}
+        {/* Revize yazışması: revize notu + talep sahibinin Revize Açıklaması (yazdıysa) ya da
+            ara adım sorumlusunun düzeltmesi. Revize sorumlusu düzeltirken "düzeltme bekleniyor"
+            bandı. Yeni revize istenmişse önceki turun yazışması güncel durum değildir → gizli. */}
         {selectedApproval.request.status !== "REVISION_REQUESTED" && (
-          <RevisionResponseNotice
-            allApprovals={selectedApproval.request.all_approvals ?? []}
-            currentCycle={selectedApproval.request.current_revision_cycle}
-          />
+          <>
+            <RevisionAssignmentNotice
+              allApprovals={selectedApproval.request.all_approvals ?? []}
+              currentCycle={selectedApproval.request.current_revision_cycle}
+              viewerApprovalId={selectedApproval.id}
+            />
+            <RevisionResponseNotice
+              allApprovals={selectedApproval.request.all_approvals ?? []}
+              currentCycle={selectedApproval.request.current_revision_cycle}
+            />
+          </>
         )}
 
         {/* Kompakt ortak alanlar — 4 sütunlu responsive grid.

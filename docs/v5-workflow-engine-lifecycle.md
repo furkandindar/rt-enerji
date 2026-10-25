@@ -93,6 +93,23 @@ Onaycı sırası geldiğinde "Revize İste" diyebilir.
 - `requests.status = 'REVISION_REQUESTED'`, `current_step = 1`
 - **Zincir HEMEN sıfırlanmaz** — resubmit anında sıfırlanır
 
+**Revize sorumlusu (2026-10-25):** Revizeyi isteyen, talebi kimin düzelteceğini seçer (`components/approvals/revision-request-dialog.tsx`; body `revisionTargetApprovalId`, `revisionReturnMode`). Aday kuralı client + server ortak: `lib/workflow/revision-target.ts` → `getRevisionTargetCandidates` (aktif turda kendisinden önce gelen, onaylı, onay fazındaki, kendisine ait olmayan satırlar; 1. adım REQUESTER satırı = "talep sahibi" seçeneği). Seçim + mod revize satırına yazılır (`revision_target_approval_id` — NULL = talep sahibi, `revision_return_mode` — NULL = `RESTART_FROM_TARGET`).
+
+| Sorumlu | Ne olur |
+|---|---|
+| Talep sahibi (varsayılan) | Yukarıdaki akış: `REVISION_REQUESTED`, Düzenle → yeniden gönder. |
+| Ara adım | Talep `REVISION_REQUESTED`'a düşmez. `rewindApprovalChain` (`lifecycle.ts`) önceki turu **kopyalayarak** hemen yeni tur açar (onaycı yeniden çözülmez — yolda olan zincir gibi), talep `PENDING` kalır, `current_step` = sorumlunun sırası. Sorumlu Bekleyen Onaylar'da görür, bölümünü (checklist zaten dolu gelir) düzeltip onaylar ya da daha geriye revize ister / reddeder. |
+
+**Düzeltme sonrası mod** (sorumlu ile revizeyi isteyen arasında adım varsa seçilir — adımların birbirine bağlı olup olmadığını revizeyi isteyen bilir):
+- `RESTART_FROM_TARGET` (varsayılan): sorumludan sonraki adımlar yeniden onaylar. Talep sahibi için = bugünkü "zincir baştan".
+- `RETURN_TO_REVIEWER`: aradaki onaylar yeni tura **taşınır**; düzeltme sonrası talep doğrudan revizeyi isteyene döner. Talep sahibine verilen revizede resubmit'te uygulanır (`createApprovalChain` `carryOverFrom`: yeni zincirde aynı adım + aynı kişiyle yer alan önceki onay taşınır; talep sahibinin eklediği yeni kişi yine onaylar).
+
+**Taşınan satır:** `status = 'APPROVED'`, orijinal `decided_at` / `comment` / `acted_by_employee_id`, `carried_over_from_id` = asıl karar satırı (zincirleme taşımada da ilk asıl karar). İlerleme motoru onaylı satırları zaten atladığı için motor değişmedi; PDF imzaları aktif turdan, taşınan satırlar orijinal imzalarıyla basılır. Süreç Logu ve Onay Geçmişi (`v_user_approval_history`) taşınan satırı ikinci karar olarak göstermez; onay geçmişi tablolarında "önceki turdan" etiketi çıkar. 1. adım gönderim satırının notu (Revize Açıklaması) taşınmaz.
+
+**Görünürlük / bildirim:** sorumluya `APPROVAL_REQUIRED` tipinde "Revize İstendi — Düzeltmeniz Bekleniyor" (uygulama içi + e-posta, aktif vekile de; `notifyRevisionAssigned`), talep sahibine yalnız uygulama içi bilgi. Düzeltme sürerken `RevisionAssignmentNotice`, sonrasında `RevisionResponseNotice` (yazışma `findRevisionExchange` → `responseKind: 'ASSIGNEE'` = turun taşınmamış ilk satırı). Olur'daki "Onaycı Ekle → revizeyle" akışı yalnız talep sahibine gönderilir (sunucu ara adım + ek onaycıyı reddeder).
+
+**Hata güvenliği:** yeni tur satırları tur numarası artırılmadan eklenir (görünmez), sonra talep koşullu update ile (`current_revision_cycle` hâlâ beklenen değerdeyse) yeni tura geçer; başarısızsa eklenen satırlar silinir ve revize kararı `PENDING`'e geri alınır.
+
 ### 2.6 Resubmit (Yeniden Gönder)
 
 Talep eden, `DRAFT` veya `REVISION_REQUESTED` durumdayken düzenleyip yeniden gönderir.

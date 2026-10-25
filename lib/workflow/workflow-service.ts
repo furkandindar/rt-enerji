@@ -29,6 +29,64 @@ interface OrganizationalUnit {
   parent_id: string | null;
 }
 
+/** createApprovalChain'in insert öncesi kurduğu satır (yardımcı alanlar insert'ten önce çıkarılır). */
+interface ChainApprovalDraft {
+  request_id: string;
+  workflow_step_id: string;
+  approver_employee_id: string;
+  status: string;
+  decided_at: string | null;
+  sequence_order: number;
+  action_type: string;
+  approver_type: string;
+  phase: string;
+  revision_cycle: number;
+  comment?: string | null;
+  acted_by_employee_id?: string | null;
+  carried_over_from_id?: string;
+}
+
+/**
+ * Revize sonrası yeni tura taşınabilecek önceki tur satırı (bkz.
+ * createApprovalChain options.carryOverFrom ve lifecycle.rewindApprovalChain).
+ */
+export interface CarryOverSourceRow {
+  id: string;
+  workflow_step_id: string;
+  approver_employee_id: string;
+  status: string;
+  decided_at: string | null;
+  comment: string | null;
+  acted_by_employee_id: string | null;
+  carried_over_from_id: string | null;
+}
+
+/**
+ * Önceki turun satırını yeni turda "taşınmış onay" olarak işaretler: karar,
+ * orijinal an/not/vekil bilgisiyle aynen kalır; carried_over_from_id asıl karar
+ * satırını gösterir (zincirleme taşımada da ilk asıl karar).
+ * Talep sahibinin gönderim satırının (1. adım REQUESTER) notu yalnız o turun
+ * Revize Açıklaması'dır — yeni tura taşınmaz.
+ */
+export function buildCarriedApprovalFields(
+  source: CarryOverSourceRow,
+  isRequesterSubmissionRow: boolean
+): {
+  status: 'APPROVED';
+  decided_at: string | null;
+  comment: string | null;
+  acted_by_employee_id: string | null;
+  carried_over_from_id: string;
+} {
+  return {
+    status: 'APPROVED',
+    decided_at: source.decided_at,
+    comment: isRequesterSubmissionRow ? null : source.comment,
+    acted_by_employee_id: source.acted_by_employee_id,
+    carried_over_from_id: source.carried_over_from_id ?? source.id,
+  };
+}
+
 // ============================================================================
 // Helper Functions
 // ============================================================================
@@ -293,6 +351,11 @@ function shouldSkipStep(
  * @param options.firstStepComment - Opsiyonel. Oto-onaylanan ilk REQUESTER satırının comment'i.
  *                Resubmit'te talep sahibinin "Revize Açıklaması" buraya yazılır (tur başına ayrı
  *                kayıt; onaycının revize notu önceki turun kendi satırında kalır).
+ * @param options.carryOverFrom - Opsiyonel. Önceki turun satırları. Verilirse (resubmit, revize
+ *                "doğrudan bana dönsün" modunda) önceki turda onay vermiş ve yeni zincirde AYNI
+ *                adım + AYNI kişiyle yer alan bekleyen satırlar yeniden onay beklemez, taşınır.
+ *                Zincirde yeni olan kişi (ör. eklenen İlgili Kişi) yine onaylar. 1. satır bu
+ *                gönderimin kendisidir, taşınmaz.
  */
 export async function createApprovalChain(
   supabase: SupabaseClient,
@@ -302,7 +365,7 @@ export async function createApprovalChain(
   formData?: Record<string, unknown>,
   dynamicApprovers?: CreateRequestDynamicApprovers,
   cycle: number = 0,
-  options?: { firstStepComment?: string | null }
+  options?: { firstStepComment?: string | null; carryOverFrom?: CarryOverSourceRow[] }
 ): Promise<void> {
 
   // 1. Workflow adımlarını al
@@ -317,7 +380,7 @@ export async function createApprovalChain(
   }
 
   // 2. Her adım için onaycı(lar)ı belirle ve approval kayıtları oluştur
-  const approvals = [];
+  const approvals: ChainApprovalDraft[] = [];
   let sequenceCounter = 0; // DYNAMIC_USER_LIST adımları dahil mutlak sıra
 
   for (const step of steps) {
@@ -456,6 +519,28 @@ export async function createApprovalChain(
         futureApproval.status = 'APPROVED';
         futureApproval.decided_at = now;
       }
+    }
+  }
+
+  // 3b. Revize sonrası taşıma (resubmit, "doğrudan bana dönsün"): önceki turda
+  // onaylamış ve yeni zincirde aynı adım + aynı kişiyle yer alan bekleyen satır
+  // yeniden onay beklemez. Revizeyi isteyenin satırı önceki turda
+  // REVISION_REQUESTED olduğundan taşınmaz → akış doğrudan ona döner. Adım 5'teki
+  // current_step hesabı baştaki ardışık onayları atlar; ilerleme motoru da
+  // aradaki onaylı satırları atlar.
+  if (options?.carryOverFrom?.length) {
+    const approvedByKey = new Map<string, CarryOverSourceRow>();
+    for (const row of options.carryOverFrom) {
+      if (row.status === 'APPROVED') {
+        approvedByKey.set(`${row.workflow_step_id}:${row.approver_employee_id}`, row);
+      }
+    }
+    for (let i = 1; i < approvals.length; i++) {
+      const draft = approvals[i];
+      if (draft.status !== 'PENDING') continue;
+      const source = approvedByKey.get(`${draft.workflow_step_id}:${draft.approver_employee_id}`);
+      if (!source) continue;
+      Object.assign(draft, buildCarriedApprovalFields(source, false));
     }
   }
 

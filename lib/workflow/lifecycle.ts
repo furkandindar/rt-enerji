@@ -2,7 +2,12 @@
 
 import { SupabaseClient } from '@supabase/supabase-js';
 import { createServiceRoleClient } from '@/lib/supabase/service-role';
-import { createApprovalChain } from './workflow-service';
+import {
+  createApprovalChain,
+  buildCarriedApprovalFields,
+  type CarryOverSourceRow,
+} from './workflow-service';
+import type { RevisionReturnMode } from './revision-target';
 import type {
   Request,
   RequestApproval,
@@ -150,6 +155,8 @@ async function buildConditionFormData(
  *
  * options.requesterComment: talep sahibinin "Revize Açıklaması"; yeni cycle'ın
  * oto-onaylanan ilk REQUESTER satırına comment olarak yazılır (insert anında).
+ * options.carryOverFrom: önceki turun satırları — revizeyi isteyen "doğrudan bana
+ * dönsün" dediyse verilir; geçerli onaylar yeni tura taşınır (createApprovalChain).
  *
  * Service role client kullanır çünkü:
  *  - request_approvals'a insert: başkasının onay kaydı oluşturmamız gerekiyor
@@ -161,7 +168,7 @@ export async function resetApprovalChain(
   requestId: string,
   formData?: Record<string, unknown>,
   dynamicApprovers?: CreateRequestDynamicApprovers,
-  options?: { requesterComment?: string | null }
+  options?: { requesterComment?: string | null; carryOverFrom?: CarryOverSourceRow[] }
 ): Promise<{ newCycle: number }> {
   const serviceSupabase = createServiceRoleClient();
 
@@ -202,10 +209,190 @@ export async function resetApprovalChain(
     effectiveFormData,
     dynamicApprovers,
     newCycle,
-    { firstStepComment: options?.requesterComment ?? null }
+    {
+      firstStepComment: options?.requesterComment ?? null,
+      carryOverFrom: options?.carryOverFrom,
+    }
   );
 
   return { newCycle };
+}
+
+// ============================================================================
+// Ara adıma revize (revize sorumlusu talep sahibi değil)
+// ============================================================================
+
+interface RewindSourceRow extends CarryOverSourceRow {
+  sequence_order: number;
+  workflow_step?: { approver_type?: string | null } | null;
+}
+
+/**
+ * Yeni turun satırlarını önceki turdan kurar (saf fonksiyon). Zincir yapısı
+ * AYNEN kopyalanır — onaycı yeniden çözülmez, form değişmediği için koşullu /
+ * dinamik / ek onaycı satırları da aynı kalır (yolda olan zincir hiçbir zaman
+ * yeniden çözülmez; tam sıfırlama yalnız talep sahibi yeniden gönderince olur).
+ *
+ *   - sorumludan önceki satırlar: taşınır (hepsi onaylıdır);
+ *   - sorumlunun satırı: PENDING (düzeltip yeniden onaylar);
+ *   - sonrası: RETURN_TO_REVIEWER'da önceki turda onaylı olanlar taşınır (aradaki
+ *     adımlar + ileri SIGN_ONLY oto-onayları), diğerleri PENDING. Revizeyi
+ *     isteyenin satırı REVISION_REQUESTED olduğundan her iki modda PENDING kalır.
+ */
+export function planRewindRows(
+  rows: RewindSourceRow[],
+  target: { id: string; sequence_order: number },
+  mode: RevisionReturnMode
+): Array<{
+  workflow_step_id: string;
+  approver_employee_id: string;
+  sequence_order: number;
+  status: 'PENDING' | 'APPROVED';
+  decided_at: string | null;
+  comment: string | null;
+  acted_by_employee_id: string | null;
+  carried_over_from_id?: string;
+}> {
+  return [...rows]
+    .sort((a, b) => a.sequence_order - b.sequence_order)
+    .map((row) => {
+      const base = {
+        workflow_step_id: row.workflow_step_id,
+        approver_employee_id: row.approver_employee_id,
+        sequence_order: row.sequence_order,
+      };
+      const carry =
+        row.id !== target.id &&
+        row.status === 'APPROVED' &&
+        (row.sequence_order < target.sequence_order || mode === 'RETURN_TO_REVIEWER');
+      if (carry) {
+        const isRequesterSubmission =
+          row.sequence_order === 1 && row.workflow_step?.approver_type === 'REQUESTER';
+        return { ...base, ...buildCarriedApprovalFields(row, isRequesterSubmission) };
+      }
+      return {
+        ...base,
+        status: 'PENDING' as const,
+        decided_at: null,
+        comment: null,
+        acted_by_employee_id: null,
+      };
+    });
+}
+
+export type RevisionRewindErrorCode = 'STATE_CHANGED' | 'TARGET_NOT_FOUND' | 'WRITE_FAILED';
+
+export class RevisionRewindError extends Error {
+  readonly code: RevisionRewindErrorCode;
+  constructor(message: string, code: RevisionRewindErrorCode) {
+    super(message);
+    this.name = 'RevisionRewindError';
+    this.code = code;
+  }
+}
+
+/**
+ * Revizeyi ara adıma gönderir: önceki tur kopyalanarak yeni tur açılır, talep
+ * sorumlunun adımında PENDING olarak devam eder (REVISION_REQUESTED'a düşmez,
+ * talep sahibinin yeniden göndermesi beklenmez).
+ *
+ * Çağıran, revizeyi isteyenin satırını önceden REVISION_REQUESTED yapmış olmalı
+ * (aksi halde o satır yeni turda zaten PENDING kopyalanır, sorun olmaz ama
+ * eşzamanlı onay engellenmemiş olur). Hata olursa yeni tur hiç görünür olmaz:
+ *   1. Bu tur numarasıyla kalmış yetim satırlar temizlenir (önceki bir denemenin
+ *      çökmesinden; current_revision_cycle henüz eski turda olduğundan hiçbir
+ *      ekranda görünmezler ama sonraki tur kurulumunda UNIQUE çakışması yaratırlar).
+ *   2. Yeni tur satırları eklenir — tur numarası artırılmadan görünmez.
+ *   3. Talep, tur hâlâ beklenen değerdeyken (koşullu update) yeni tura geçirilir;
+ *      başarısızsa eklenen satırlar geri silinir.
+ *
+ * Service role: başkalarının onay satırları oluşturulur (resetApprovalChain ile aynı gerekçe).
+ */
+export async function rewindApprovalChain(
+  requestId: string,
+  params: { targetApprovalId: string; mode: RevisionReturnMode; expectedCycle: number }
+): Promise<{ newCycle: number; targetSequence: number; targetEmployeeId: string }> {
+  const serviceSupabase = createServiceRoleClient();
+  const { expectedCycle, mode } = params;
+
+  const { data: rows, error: rowsError } = await serviceSupabase
+    .from('request_approvals')
+    .select(`
+      id,
+      workflow_step_id,
+      approver_employee_id,
+      status,
+      decided_at,
+      comment,
+      acted_by_employee_id,
+      carried_over_from_id,
+      sequence_order,
+      workflow_step:workflow_steps(approver_type)
+    `)
+    .eq('request_id', requestId)
+    .eq('revision_cycle', expectedCycle)
+    .order('sequence_order', { ascending: true });
+
+  if (rowsError || !rows?.length) {
+    throw new RevisionRewindError(
+      `Failed to load approval chain: ${rowsError?.message ?? 'empty'}`,
+      'WRITE_FAILED'
+    );
+  }
+
+  const sourceRows = rows as unknown as RewindSourceRow[];
+  const target = sourceRows.find((r) => r.id === params.targetApprovalId);
+  if (!target) {
+    throw new RevisionRewindError('Revision target is not in the active chain', 'TARGET_NOT_FOUND');
+  }
+
+  const newCycle = expectedCycle + 1;
+  const planned = planRewindRows(sourceRows, target, mode);
+
+  // 1. Yetim satır temizliği (yalnız henüz açılmamış tur numarası)
+  await serviceSupabase
+    .from('request_approvals')
+    .delete()
+    .eq('request_id', requestId)
+    .eq('revision_cycle', newCycle);
+
+  // 2. Yeni tur satırları
+  const { error: insertError } = await serviceSupabase.from('request_approvals').insert(
+    planned.map((row) => ({ ...row, request_id: requestId, revision_cycle: newCycle }))
+  );
+  if (insertError) {
+    throw new RevisionRewindError(`Failed to insert rewind chain: ${insertError.message}`, 'WRITE_FAILED');
+  }
+
+  // 3. Talebi yeni tura geçir (tur değişmediyse)
+  const { data: bumped, error: bumpError } = await serviceSupabase
+    .from('requests')
+    .update({
+      current_revision_cycle: newCycle,
+      current_step: target.sequence_order,
+      status: 'PENDING',
+    })
+    .eq('id', requestId)
+    .eq('current_revision_cycle', expectedCycle)
+    .select('id');
+
+  if (bumpError || !bumped?.length) {
+    await serviceSupabase
+      .from('request_approvals')
+      .delete()
+      .eq('request_id', requestId)
+      .eq('revision_cycle', newCycle);
+    throw new RevisionRewindError(
+      `Failed to switch request to rewind cycle: ${bumpError?.message ?? 'cycle changed'}`,
+      bumpError ? 'WRITE_FAILED' : 'STATE_CHANGED'
+    );
+  }
+
+  return {
+    newCycle,
+    targetSequence: target.sequence_order,
+    targetEmployeeId: target.approver_employee_id,
+  };
 }
 
 // ============================================================================

@@ -21,6 +21,8 @@ import {
 } from "@/lib/workflow/revision-response";
 import { mentionContextLabel, parseMentionIds } from "@/lib/workflow/mentions-shared";
 import { scheduleMentions } from "@/lib/workflow/mentions";
+import { revisionReturnModeOf } from "@/lib/workflow/revision-target";
+import type { CarryOverSourceRow } from "@/lib/workflow/workflow-service";
 
 // POST /api/requests/[id]/resubmit
 // DRAFT veya REVISION_REQUESTED durumdaki bir talebi yeniden gönderir:
@@ -32,6 +34,8 @@ import { scheduleMentions } from "@/lib/workflow/mentions";
 //   - revisionResponse (opsiyonel; yalnız REVISION_REQUESTED'dan ve talep sahibinden):
 //     "Revize Açıklaması" yeni turun ilk REQUESTER satırına comment olarak yazılır
 //   - mentionedEmployeeIds (opsiyonel): Revize Açıklaması'nda @ ile anılanlara bildirim
+//   - Revizeyi isteyen "doğrudan bana dönsün" (RETURN_TO_REVIEWER) dediyse önceki turun
+//     geçerli onayları yeni tura taşınır; talep doğrudan revizeyi isteyene döner
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -180,6 +184,36 @@ export async function POST(
       });
     }
 
+    // 4c. Revizeyi isteyen "doğrudan bana dönsün" dediyse (talep sahibine verilmiş son
+    //     revize kararında RETURN_TO_REVIEWER) önceki turun satırları taşıma kaynağıdır:
+    //     aynı adım + aynı kişiyle yeni zincirde yer alan onaylar yeniden beklenmez.
+    //     Talep sahibi bu arada İlgili Kişi gibi listeleri değiştirdiyse yeni kişiler
+    //     yine onaylar (createApprovalChain carryOverFrom).
+    let carryOverFrom: CarryOverSourceRow[] | undefined;
+    if (req.status === "REVISION_REQUESTED") {
+      const { data: prevRows, error: prevRowsError } = await admin
+        .from("request_approvals")
+        .select(
+          "id, workflow_step_id, approver_employee_id, status, decided_at, comment, acted_by_employee_id, carried_over_from_id, revision_target_approval_id, revision_return_mode"
+        )
+        .eq("request_id", requestId)
+        .eq("revision_cycle", previousCycle);
+      if (prevRowsError) {
+        // Taşıma okunamazsa güvenli taraf: zincir baştan (bugünkü davranış)
+        console.error("[resubmit] previous cycle load failed, full restart:", prevRowsError);
+      }
+      const latestRevision = (prevRows ?? [])
+        .filter((r) => r.status === "REVISION_REQUESTED")
+        .sort((a, b) => (b.decided_at ?? "").localeCompare(a.decided_at ?? ""))[0];
+      if (
+        latestRevision &&
+        !latestRevision.revision_target_approval_id &&
+        revisionReturnModeOf(latestRevision.revision_return_mode) === "RETURN_TO_REVIEWER"
+      ) {
+        carryOverFrom = (prevRows ?? []) as CarryOverSourceRow[];
+      }
+    }
+
     // 5. Eski cycle'da APPROVED veren onaycıları topla (notification için, reset'ten ÖNCE)
     const { data: prevApproved } = await supabase
       .from("request_approvals")
@@ -200,6 +234,7 @@ export async function POST(
     try {
       const result = await resetApprovalChain(requestId, body.formData, effectiveDynamic, {
         requesterComment: revisionResponse,
+        carryOverFrom,
       });
       newCycle = result.newCycle;
     } catch (err) {
@@ -232,6 +267,23 @@ export async function POST(
 
     // 8. Audit stamp
     await applyAuditStamp(supabase, requestId, "RESUBMITTED", appUser.employee_id);
+
+    // 8b. Taşımalı turda onayı taşınan (yeniden işlem yapmayacak) onaycılara "onay
+    //     zinciri yeniden başlatıldı" bildirimi gitmez — revizeyi isteyen değişikliği
+    //     onları ilgilendirmiyor diye doğrudan dönüşü seçti.
+    if (carryOverFrom) {
+      const { data: newRows } = await admin
+        .from("request_approvals")
+        .select("approver_employee_id, status")
+        .eq("request_id", requestId)
+        .eq("revision_cycle", newCycle);
+      const stillActing = new Set(
+        (newRows ?? []).filter((r) => r.status === "PENDING").map((r) => r.approver_employee_id)
+      );
+      for (const employeeId of [...previouslyApprovedSet]) {
+        if (!stillActing.has(employeeId)) previouslyApprovedSet.delete(employeeId);
+      }
+    }
 
     // 9. Bildirimler
     // Revize Açıklaması'nı (revize yazışması bloğuyla) e-postada zaten alanlar → @mention için.

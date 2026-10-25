@@ -25,6 +25,8 @@ export interface RevisionExchangeEmail {
   requestNote: string | null;
   responseByName: string | null;
   responseNote: string;
+  /** REQUESTER: talep sahibinin Revize Açıklaması; ASSIGNEE: ara adımdaki revize sorumlusunun notu. */
+  responseKind?: 'REQUESTER' | 'ASSIGNEE';
 }
 
 export interface SendNotificationEmailParams {
@@ -48,6 +50,8 @@ export interface SendNotificationEmailParams {
   nextApproverName?: string;
   decidedByName?: string;
   decisionComment?: string;
+  decidedByLabel?: string;         // Meta satırı etiketi (varsayılan: DECIDED_BY_LABELS / 'Onaylayan')
+  commentLabel?: string;           // Not kutusu etiketi (varsayılan: COMMENT_LABELS / 'Onaycı Notu')
   revisionExchange?: RevisionExchangeEmail; // Yalnız onaycıya giden bildirimlerde verilir
   ctaPath?: string;                // Örn: '/approvals' veya '/my-requests'
   ctaLabel?: string;
@@ -158,7 +162,10 @@ function renderRevisionExchange(exchange: RevisionExchangeEmail): string {
   const responseBox = renderCommentBox(
     exchange.responseNote,
     '#3b82f6',
-    byLine('Talep Sahibinin Revize Açıklaması', exchange.responseByName)
+    byLine(
+      exchange.responseKind === 'ASSIGNEE' ? 'Revize Sorumlusunun Açıklaması' : 'Talep Sahibinin Revize Açıklaması',
+      exchange.responseByName
+    )
   );
   return requestBox + responseBox;
 }
@@ -169,7 +176,7 @@ function getEmailHtml(params: SendNotificationEmailParams): string {
     recipientName, requesterName, requesterPosition,
     workflowName, requestId, submittedAt,
     details, currentStep, totalSteps, nextApproverName,
-    decidedByName, decisionComment, revisionExchange,
+    decidedByName, decisionComment, decidedByLabel, commentLabel, revisionExchange,
     ctaPath, ctaLabel,
   } = params;
 
@@ -188,7 +195,7 @@ function getEmailHtml(params: SendNotificationEmailParams): string {
   }
   if (decidedByName) {
     metaRows.push({
-      label: DECIDED_BY_LABELS[type] ?? 'Onaylayan',
+      label: decidedByLabel ?? DECIDED_BY_LABELS[type] ?? 'Onaylayan',
       value: decidedByName,
     });
   }
@@ -209,7 +216,7 @@ function getEmailHtml(params: SendNotificationEmailParams): string {
 
   const greeting = recipientName ? `<p style="margin: 0 0 12px; color: #111827; font-size: 16px;">Sayın <strong>${escapeHtml(recipientName)}</strong>,</p>` : '';
   const commentBlock = decisionComment
-    ? renderCommentBox(decisionComment, color, COMMENT_LABELS[type] ?? 'Onaycı Notu')
+    ? renderCommentBox(decisionComment, color, commentLabel ?? COMMENT_LABELS[type] ?? 'Onaycı Notu')
     : '';
 
   return `

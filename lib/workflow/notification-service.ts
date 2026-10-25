@@ -30,6 +30,9 @@ interface UserInfo {
 export interface DecisionExtras {
   decidedByName?: string;
   decisionComment?: string;
+  /** E-posta meta satırı / not kutusu etiketi (varsayılan: türe göre). */
+  decidedByLabel?: string;
+  commentLabel?: string;
 }
 
 // ============================================================================
@@ -103,6 +106,8 @@ async function enrichEmailPayload(
       nextApproverName: ctx.nextApproverName || undefined,
       decidedByName: extras?.decidedByName,
       decisionComment: extras?.decisionComment,
+      decidedByLabel: extras?.decidedByLabel,
+      commentLabel: extras?.commentLabel,
       revisionExchange:
         REVISION_EXCHANGE_EMAIL_TYPES.has(base.type) && ctx.revisionExchange
           ? ctx.revisionExchange
@@ -151,11 +156,16 @@ export async function notifyApprover(
   requesterName: string,
   requestId: string,
   workflowName: string,
-  subject?: string
+  subject?: string,
+  // Revize sorumlusuna giden bildirim gibi özel metinler (tip, deep-link ve vekil
+  // fan-out aynı kalır). message verilirse vekile "(X adına vekaleten)" eklenir.
+  content?: { title: string; message: string; extras?: DecisionExtras; ctaLabel?: string }
 ): Promise<void> {
-  const title = 'Onay Bekleyen Talep';
+  const title = content?.title ?? 'Onay Bekleyen Talep';
   const subjectLine = subject ? `\nKonu: ${subject}` : '';
-  const message = `${requesterName} tarafından oluşturulan ${workflowName} süreci onayınızı bekliyor.${subjectLine}`;
+  const message =
+    content?.message ??
+    `${requesterName} tarafından oluşturulan ${workflowName} süreci onayınızı bekliyor.${subjectLine}`;
   const type = 'APPROVAL_REQUIRED';
 
   // V5: Onaycının bu request'teki aktif PENDING approval id'sini bulup deep-link'e ekle.
@@ -177,8 +187,9 @@ export async function notifyApprover(
     if (userInfo.email) {
       const payload = await enrichEmailPayload(
         requestId,
-        { to: userInfo.email, title, message, type, ctaPath },
-        userInfo.fullName
+        { to: userInfo.email, title, message, type, ctaPath, ctaLabel: content?.ctaLabel },
+        userInfo.fullName,
+        content?.extras
       );
       await sendNotificationEmail(payload);
     }
@@ -194,7 +205,9 @@ export async function notifyApprover(
     const approverName =
       userInfo?.fullName ?? (await getEmployeeFullName(supabase, approverEmployeeId));
     const onBehalf = approverName ? `${approverName} adına vekaleten` : 'vekaleten';
-    const delegateMessage = `${requesterName} tarafından oluşturulan ${workflowName} süreci onayınızı bekliyor (${onBehalf}).${subjectLine}`;
+    const delegateMessage = content?.message
+      ? `${content.message} (${onBehalf})`
+      : `${requesterName} tarafından oluşturulan ${workflowName} süreci onayınızı bekliyor (${onBehalf}).${subjectLine}`;
 
     for (const delegateId of delegateIds) {
       const delegateInfo = await getUserInfoByEmployeeId(supabase, delegateId);
@@ -209,8 +222,9 @@ export async function notifyApprover(
       if (delegateInfo.email) {
         const payload = await enrichEmailPayload(
           requestId,
-          { to: delegateInfo.email, title, message: delegateMessage, type, ctaPath },
-          delegateInfo.fullName
+          { to: delegateInfo.email, title, message: delegateMessage, type, ctaPath, ctaLabel: content?.ctaLabel },
+          delegateInfo.fullName,
+          content?.extras
         );
         await sendNotificationEmail(payload);
       }
@@ -405,7 +419,10 @@ export async function notifyRevisionRequested(
   requestedByName: string,
   comment: string,
   subject?: string,
-  extraApproverNames?: string[]
+  extraApproverNames?: string[],
+  // Revizeyi isteyen "doğrudan bana dönsün" dediyse yeniden gönderimde zincir ona atlar
+  // (vekaleten istendiyse asıl onaycının adı)
+  returnsToName?: string | null
 ): Promise<void> {
   const userInfo = await getUserInfoByEmployeeId(supabase, requesterEmployeeId);
   if (!userInfo) return;
@@ -415,7 +432,10 @@ export async function notifyRevisionRequested(
   const extraLine = extraApproverNames?.length
     ? `\nOnay zincirine eklenen kişiler: ${extraApproverNames.join(', ')} (yeniden gönderdiğinizde sırayla onay verecekler).`
     : '';
-  const message = `${workflowName} talebiniz için ${requestedByName} revize istedi. "${comment}"${extraLine}${subjectLine}`;
+  const returnLine = returnsToName
+    ? `\nYeniden gönderdiğinizde talep önceki onaylar korunarak doğrudan ${returnsToName} onayına dönecek.`
+    : '';
+  const message = `${workflowName} talebiniz için ${requestedByName} revize istedi. "${comment}"${extraLine}${returnLine}${subjectLine}`;
   const type: NotificationType = 'REVISION_REQUESTED';
 
   await createNotification(supabase, {
@@ -439,6 +459,67 @@ export async function notifyRevisionRequested(
     );
     await sendNotificationEmail(payload);
   }
+}
+
+/**
+ * Revize sorumlusu (ara adım) bildirimi: sorumluya talebin onay ekranına götüren
+ * "düzeltmeniz bekleniyor" bildirimi + e-posta. APPROVAL_REQUIRED tipiyle gider
+ * (zil → Bekleyen Onaylar, e-posta → satırın onay ekranı); aktif vekile de iletilir.
+ */
+export async function notifyRevisionAssigned(
+  supabase: SupabaseClient,
+  params: {
+    assigneeEmployeeId: string;
+    requestId: string;
+    workflowName: string;
+    requestedByName: string;
+    comment: string;
+    /** RETURN_TO_REVIEWER: düzeltme sonrası doğrudan bu kişiye döner. */
+    returnsToName: string | null;
+  }
+): Promise<void> {
+  const { assigneeEmployeeId, requestId, workflowName, requestedByName, comment, returnsToName } = params;
+  const flowLine = returnsToName
+    ? `Düzeltip onayladığınızda talep doğrudan ${returnsToName} onayına dönecek.`
+    : 'Onayınızdan sonra zincir sizden itibaren sırayla devam edecek.';
+  await notifyApprover(supabase, assigneeEmployeeId, requestedByName, requestId, workflowName, undefined, {
+    title: 'Revize İstendi — Düzeltmeniz Bekleniyor',
+    message: `${requestedByName}, ${workflowName} talebinde düzeltme için revizeyi size gönderdi. "${comment}"\n${flowLine}`,
+    extras: {
+      decidedByName: requestedByName,
+      decisionComment: comment,
+      decidedByLabel: 'Revize İsteyen',
+      commentLabel: 'Revize Notu',
+    },
+    ctaLabel: 'Talebi İncele ve Düzelt',
+  });
+}
+
+/**
+ * Revize ara adıma gönderildiğinde talep sahibine bilgi (yalnız uygulama içi —
+ * talep sahibinden işlem beklenmiyor, e-posta gürültüsü yapılmaz).
+ */
+export async function notifyRequesterRevisionAssigned(
+  supabase: SupabaseClient,
+  params: {
+    requesterEmployeeId: string;
+    requestId: string;
+    workflowName: string;
+    requestedByName: string;
+    assigneeLabel: string;
+    comment: string;
+  }
+): Promise<void> {
+  const userInfo = await getUserInfoByEmployeeId(supabase, params.requesterEmployeeId);
+  if (!userInfo) return;
+  const type: NotificationType = 'REVISION_REQUESTED';
+  await createNotification(supabase, {
+    userId: userInfo.id,
+    title: 'Revize İstendi',
+    message: `${params.workflowName} talebiniz için ${params.requestedByName} revize istedi; düzeltme sorumlusu: ${params.assigneeLabel}. Sizden işlem beklenmiyor. "${params.comment}"`,
+    type,
+    referenceId: params.requestId,
+  });
 }
 
 /**

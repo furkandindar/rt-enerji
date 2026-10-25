@@ -45,6 +45,12 @@ export interface Approval {
   // Vekalet (Faz B): işlemi fiilen yapan kişi; null = approver'ın kendisi
   acted_by_employee_id?: string | null;
   acted_by?: Approver | null;
+  // Revize sorumlusu: önceki turdan taşınan onayda asıl karar satırı (yeniden onay beklemez)
+  carried_over_from_id?: string | null;
+  // REVISION_REQUESTED satırında seçilen sorumlunun satırı (NULL = talep sahibi) ve
+  // düzeltme sonrası akış (NULL = RESTART_FROM_TARGET)
+  revision_target_approval_id?: string | null;
+  revision_return_mode?: string | null;
 }
 
 // COMPLETION/ykb_signed_pdf adımında PDF'i yükleyen kişi (asistan) sadece teknik

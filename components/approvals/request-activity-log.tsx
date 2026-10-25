@@ -15,6 +15,7 @@ import {
   Ban,
   Pencil,
   UserPlus,
+  Wrench,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -23,7 +24,12 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-import { isRevisionResponseRow } from "@/lib/workflow/revision-response";
+import {
+  findCycleOwnFirstRow,
+  isAssigneeRevisionCycle,
+  isRevisionResponseRow,
+} from "@/lib/workflow/revision-response";
+import { revisionReturnModeOf } from "@/lib/workflow/revision-target";
 
 // Bu component'in iki sayfada da kullanılması için minimum bağımlılıkla
 // yazıldı. my-requests Approval ve approvals Approval tipleri yapısal
@@ -52,6 +58,11 @@ export interface ActivityApproval {
     first_name?: string | null;
     last_name?: string | null;
   } | null;
+  // Revize sorumlusu: önceki turdan taşınan onay (log'da ikinci kez gösterilmez) ve
+  // revize kararında seçilen sorumlu + düzeltme sonrası akış
+  carried_over_from_id?: string | null;
+  revision_target_approval_id?: string | null;
+  revision_return_mode?: string | null;
 }
 
 export interface ActivityRequest {
@@ -68,6 +79,7 @@ type ActivityKind =
   | "created"
   | "submitted"
   | "resubmitted"
+  | "reassigned"
   | "decision"
   | "last_action"
   | "completed";
@@ -98,6 +110,11 @@ function getApproverName(a: ActivityApproval): string {
     if (actor) return `${actor} (${name} adına vekaleten)`;
   }
   return name;
+}
+
+/** Onaycının yalın adı (vekil eki olmadan) — "revize istedi → Ad Soyad" gibi kısa metinler için. */
+function getPlainApproverName(a: ActivityApproval): string {
+  return `${a.approver?.first_name ?? ""} ${a.approver?.last_name ?? ""}`.trim() || "Bilinmiyor";
 }
 
 function getRequesterName(req: ActivityRequest): string {
@@ -180,15 +197,30 @@ function buildEvents(req: ActivityRequest): ActivityEvent[] {
         iconClass: "text-blue-600",
         kind: "submitted",
       });
+    } else if (isAssigneeRevisionCycle(cycleApprovals, cycle)) {
+      // Revize ara adıma gönderildi: tur talep sahibi göndermeden, revize kararıyla açıldı
+      const assignee = findCycleOwnFirstRow(cycleApprovals, cycle);
+      events.push({
+        key: `reassigned-${cycle}`,
+        at: minCreatedAt,
+        title: `Revize sorumlusuna gönderildi (Tur ${cycle + 1})`,
+        actor: assignee
+          ? `${getApproverName(assignee)}${assignee.workflow_step?.name ? ` · ${assignee.workflow_step.name}` : ""}`
+          : undefined,
+        icon: Wrench,
+        iconClass: "text-orange-600",
+        kind: "reassigned",
+      });
     } else {
       // Talep sahibinin Revize Açıklaması: turun ilk REQUESTER satırının comment'i
       // (onaycının revize notu önceki turun "revize istedi" olayında ayrıca durur).
       const response = cycleApprovals.find(isRevisionResponseRow);
+      const keptApprovals = cycleApprovals.some((a) => !!a.carried_over_from_id);
       events.push({
         key: `resubmitted-${cycle}`,
         at: minCreatedAt,
         title: `Revize edilip yeniden gönderildi (Tur ${cycle + 1})`,
-        actor: requesterName,
+        actor: keptApprovals ? `${requesterName} · önceki onaylar korundu` : requesterName,
         comment: response?.comment || undefined,
         commentLabel: response?.comment ? "Revize açıklaması" : undefined,
         icon: RefreshCw,
@@ -202,8 +234,11 @@ function buildEvents(req: ActivityRequest): ActivityEvent[] {
   // REQUESTER auto-approve'u atla — onu zaten "Onaya gönderildi" temsil ediyor.
   // Sonraki adımlardaki REQUESTER kararları (örn. çok-adımlı formda talep
   // sahibinin manuel doldurup imzaladığı adım) gösterilsin.
+  // Önceki turdan taşınan onay yeni bir karar değildir (asıl karar kendi turunda listelenir).
+  const approvalById = new Map(approvals.map((a) => [a.id, a]));
   for (const a of approvals) {
     if (!a.decided_at) continue;
+    if (a.carried_over_from_id) continue;
     if (
       a.workflow_step?.approver_type === "REQUESTER" &&
       (a.sequence_order ?? 0) === 1
@@ -213,11 +248,23 @@ function buildEvents(req: ActivityRequest): ActivityEvent[] {
     if (!DECISION_LABEL[a.status]) continue;
 
     const icon = DECISION_ICON[a.status];
+    let title = `${getApproverName(a)} ${DECISION_LABEL[a.status]}`;
+    let actor = a.workflow_step?.name ?? undefined;
+    if (a.status === "REVISION_REQUESTED") {
+      // Revize sorumlusu (seçildiyse) ve "doğrudan bana dönsün" akışı
+      const target = a.revision_target_approval_id
+        ? approvalById.get(a.revision_target_approval_id)
+        : undefined;
+      if (target) title += ` → ${getPlainApproverName(target)}`;
+      if (revisionReturnModeOf(a.revision_return_mode) === "RETURN_TO_REVIEWER") {
+        actor = `${actor ? `${actor} · ` : ""}düzeltme sonrası doğrudan kendisine döner`;
+      }
+    }
     events.push({
       key: `decision-${a.id}`,
       at: a.decided_at,
-      title: `${getApproverName(a)} ${DECISION_LABEL[a.status]}`,
-      actor: a.workflow_step?.name ?? undefined,
+      title,
+      actor,
       comment: a.comment || undefined,
       icon: icon.icon,
       iconClass: icon.cls,

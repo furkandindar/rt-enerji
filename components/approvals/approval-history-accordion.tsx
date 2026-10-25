@@ -76,6 +76,10 @@ export function ApprovalHistoryAccordion({ approvals }: ApprovalHistoryAccordion
                           {approval.decided_at
                             ? format(new Date(approval.decided_at), "d MMM yyyy HH:mm", { locale: tr })
                             : "-"}
+                          {/* Revize sorumlusu akışında önceki turdan korunan onay */}
+                          {approval.carried_over_from_id && (
+                            <span className="block text-[11px]">önceki turdan</span>
+                          )}
                         </TableCell>
                         <TableCell className="max-w-[90px] text-xs">
                           {approval.comment ? (

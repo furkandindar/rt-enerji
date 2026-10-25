@@ -1,16 +1,24 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
-import { MessageSquareReply, MessageSquareWarning } from "lucide-react";
+import { MessageSquareReply, MessageSquareWarning, Wrench } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { getApproverDisplayName, type Approver, type WorkflowStep } from "@/lib/approvals/types";
 import { formatTrDateTime } from "@/lib/timezone";
-import { findRevisionExchange } from "@/lib/workflow/revision-response";
+import {
+  findCycleOwnFirstRow,
+  findRevisionExchange,
+  isAssigneeRevisionCycle,
+} from "@/lib/workflow/revision-response";
+import { revisionReturnModeOf } from "@/lib/workflow/revision-target";
 
 // Revize bandı: talep REVISION_REQUESTED iken talep sahibine kimin, hangi
 // adımda, ne zaman ve hangi açıklamayla revize istediğini gösterir.
 // Detay ekranında (onaylar zaten yüklü) RevisionNotice, düzenleme formunda
 // (yalnız requestId var) RevisionNoticeForRequest kullanılır.
+// Revize ara adıma (revize sorumlusu) gönderildiyse talep REVISION_REQUESTED'a
+// düşmez: düzeltme sürerken RevisionAssignmentNotice, düzeltme sonrası
+// RevisionResponseNotice (sorumlunun açıklamasıyla) gösterilir.
 
 export interface RevisionNoticeApproval {
   status: string;
@@ -19,6 +27,7 @@ export interface RevisionNoticeApproval {
   workflow_step: WorkflowStep;
   approver: Approver;
   acted_by?: Approver | null;
+  revision_return_mode?: string | null;
 }
 
 /** Aktif cycle onaylarından en son verilen revize kararını bulur. */
@@ -60,6 +69,13 @@ export function RevisionNotice({ approvals, action }: RevisionNoticeProps) {
                 {revision.comment}
               </p>
             )}
+            {revisionReturnModeOf(revision.revision_return_mode) === "RETURN_TO_REVIEWER" && (
+              <p className="pt-1 text-xs text-amber-800 dark:text-amber-200">
+                Yeniden gönderdiğinizde önceki onaylar korunur; talep doğrudan{" "}
+                {revision.approver ? `${revision.approver.first_name} ${revision.approver.last_name}` : "revizeyi isteyen"}{" "}
+                onayına döner.
+              </p>
+            )}
           </div>
         </div>
         {action}
@@ -69,8 +85,76 @@ export function RevisionNotice({ approvals, action }: RevisionNoticeProps) {
 }
 
 export interface RevisionExchangeApproval extends RevisionNoticeApproval {
+  id?: string;
   sequence_order?: number;
   revision_cycle?: number | null;
+  carried_over_from_id?: string | null;
+}
+
+/** Ara adım revizesinde düzeltme sonrası talebin nereye gideceğini anlatan cümle. */
+function assigneeFlowText(revision: RevisionExchangeApproval | null, viewerIsAssignee: boolean): string | null {
+  if (!revision) return null;
+  const reviewer = revision.approver ? `${revision.approver.first_name} ${revision.approver.last_name}` : "revizeyi isteyen";
+  if (revisionReturnModeOf(revision.revision_return_mode) === "RETURN_TO_REVIEWER") {
+    return viewerIsAssignee
+      ? `Düzeltip onayladığınızda talep doğrudan ${reviewer} onayına dönecek; aradaki onaylar korunuyor.`
+      : `Düzeltme sonrası talep doğrudan ${reviewer} onayına dönecek; aradaki onaylar korunuyor.`;
+  }
+  return viewerIsAssignee
+    ? "Onayınızdan sonra zincir sizden itibaren sırayla devam edecek."
+    : "Düzeltme sonrası zincir sorumludan itibaren sırayla devam edecek.";
+}
+
+interface RevisionAssignmentNoticeProps {
+  /** Tüm cycle'ların onay kayıtları (detay uçlarındaki all_approvals). */
+  allApprovals: RevisionExchangeApproval[];
+  currentCycle: number | null | undefined;
+  /** Görüntüleyenin onay satırı (onay ekranı); sorumlu kendisiyse metin ona hitap eder. */
+  viewerApprovalId?: string | null;
+}
+
+/**
+ * Revize ara adıma gönderildi ve sorumlu henüz düzeltmedi: sorumluya "sizden
+ * düzeltme bekleniyor", diğerlerine (talep sahibi vb.) kimde olduğunu gösterir.
+ */
+export function RevisionAssignmentNotice({ allApprovals, currentCycle, viewerApprovalId }: RevisionAssignmentNoticeProps) {
+  const cycle = currentCycle ?? 0;
+  if (!isAssigneeRevisionCycle(allApprovals, cycle)) return null;
+  const assigneeRow = findCycleOwnFirstRow(allApprovals, cycle);
+  if (!assigneeRow || assigneeRow.status !== "PENDING") return null;
+  const { revision } = findRevisionExchange(allApprovals, cycle);
+  const viewerIsAssignee = !!viewerApprovalId && assigneeRow.id === viewerApprovalId;
+  const flowText = assigneeFlowText(revision, viewerIsAssignee);
+
+  return (
+    <div className="rounded-lg border-2 border-amber-200 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-950/50">
+      <div className="flex gap-3">
+        <Wrench className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" />
+        <div className="min-w-0 flex-1 space-y-1">
+          <p className="text-sm font-semibold text-amber-900 dark:text-amber-100">
+            {viewerIsAssignee
+              ? "Revize istendi — sizden düzeltme bekleniyor"
+              : `Revize istendi — düzeltme sorumlusu: ${getApproverDisplayName(assigneeRow)}${
+                  assigneeRow.workflow_step?.name ? ` (${assigneeRow.workflow_step.name})` : ""
+                }`}
+          </p>
+          {revision && (
+            <p className="text-xs text-amber-800 dark:text-amber-200">
+              {getApproverDisplayName(revision)}
+              {revision.workflow_step?.name ? ` · ${revision.workflow_step.name}` : ""}
+              {revision.decided_at ? ` · ${formatTrDateTime(revision.decided_at)}` : ""}
+            </p>
+          )}
+          {revision?.comment && (
+            <p className="whitespace-pre-wrap wrap-break-word pt-1 text-sm text-amber-950 dark:text-amber-50">
+              {revision.comment}
+            </p>
+          )}
+          {flowText && <p className="pt-1 text-xs text-amber-800 dark:text-amber-200">{flowText}</p>}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 interface RevisionResponseNoticeProps {
@@ -83,19 +167,56 @@ interface RevisionResponseNoticeProps {
  * Revize yazışması bandı: talep revize sonrası yeniden gönderildiyse onaycı
  * ekranında önceki turun revize notunu ve talep sahibinin Revize Açıklaması'nı
  * birlikte gösterir. Talep sahibi açıklama yazmadıysa hiçbir şey göstermez.
+ * Revize ara adıma gönderildiyse sorumlu düzeltip onayladıktan sonra gösterilir
+ * (sorumlunun notu varsa onunla; yoksa yalnız revize notu + kimin düzelttiği).
  */
 export function RevisionResponseNotice({ allApprovals, currentCycle }: RevisionResponseNoticeProps) {
-  const { revision, response } = findRevisionExchange(allApprovals, currentCycle ?? 0);
+  const cycle = currentCycle ?? 0;
+  const { revision, response, responseKind } = findRevisionExchange(allApprovals, cycle);
+  if (responseKind === "ASSIGNEE") {
+    const assigneeRow = findCycleOwnFirstRow(allApprovals, cycle);
+    if (!assigneeRow || assigneeRow.status !== "APPROVED") return null;
+    return (
+      <RevisionExchangeBand
+        title="Revize sorumlusu düzeltti"
+        revision={revision}
+        responseLabel="Revize sorumlusunun açıklaması"
+        responder={assigneeRow}
+        responseText={response?.comment ?? null}
+      />
+    );
+  }
   if (!response) return null;
+  return (
+    <RevisionExchangeBand
+      title="Revize sonrası yeniden gönderildi"
+      revision={revision}
+      responseLabel="Talep sahibinin açıklaması"
+      responder={response}
+      responseText={response.comment}
+    />
+  );
+}
 
+function RevisionExchangeBand({
+  title,
+  revision,
+  responseLabel,
+  responder,
+  responseText,
+}: {
+  title: string;
+  revision: RevisionExchangeApproval | null;
+  responseLabel: string;
+  responder: RevisionExchangeApproval;
+  responseText: string | null;
+}) {
   return (
     <div className="rounded-lg border-2 border-sky-200 bg-sky-50 p-4 dark:border-sky-800 dark:bg-sky-950/50">
       <div className="flex gap-3">
         <MessageSquareReply className="mt-0.5 h-5 w-5 shrink-0 text-sky-600 dark:text-sky-400" />
         <div className="min-w-0 flex-1 space-y-3">
-          <p className="text-sm font-semibold text-sky-900 dark:text-sky-100">
-            Revize sonrası yeniden gönderildi
-          </p>
+          <p className="text-sm font-semibold text-sky-900 dark:text-sky-100">{title}</p>
           {revision && (
             <div className="space-y-1">
               <p className="text-xs text-sky-800 dark:text-sky-200">
@@ -112,13 +233,17 @@ export function RevisionResponseNotice({ allApprovals, currentCycle }: RevisionR
           )}
           <div className="space-y-1">
             <p className="text-xs text-sky-800 dark:text-sky-200">
-              <span className="font-medium">Talep sahibinin açıklaması</span>
-              {` · ${getApproverDisplayName(response)}`}
-              {response.decided_at ? ` · ${formatTrDateTime(response.decided_at)}` : ""}
+              <span className="font-medium">{responseLabel}</span>
+              {` · ${getApproverDisplayName(responder)}`}
+              {responder.decided_at ? ` · ${formatTrDateTime(responder.decided_at)}` : ""}
             </p>
-            <p className="whitespace-pre-wrap wrap-break-word text-sm text-sky-950 dark:text-sky-50">
-              {response.comment}
-            </p>
+            {responseText ? (
+              <p className="whitespace-pre-wrap wrap-break-word text-sm text-sky-950 dark:text-sky-50">
+                {responseText}
+              </p>
+            ) : (
+              <p className="text-sm italic text-sky-800 dark:text-sky-200">Açıklama yazılmadan onaylandı.</p>
+            )}
           </div>
         </div>
       </div>
@@ -151,6 +276,7 @@ export function RevisionNoticeForRequest({ requestId }: { requestId: string | nu
           status,
           comment,
           decided_at,
+          revision_return_mode,
           workflow_step:workflow_steps(step_order, name, approver_type, phase, form_section_key),
           approver:employees!approver_employee_id(id, first_name, last_name),
           acted_by:employees!acted_by_employee_id(id, first_name, last_name)

@@ -18,6 +18,7 @@ import {
 } from "./constants";
 import { parseContentDispositionFilename } from "@/lib/pdf/file-naming";
 import type { ExtraApproversSubmitInput } from "@/components/approvals/extra-approvers-dialog";
+import type { RevisionChoice } from "@/components/approvals/revision-request-dialog";
 import { normalizePageSize } from "@/components/ui/pagination-controls";
 import { resolveMentionedIds } from "@/hooks/use-mention-candidates";
 
@@ -575,8 +576,9 @@ export function useApprovals(options: UseApprovalsOptions = {}) {
     }
   };
 
-  // V5: Onaycı "revize iste" diyor — comment zorunlu, request_approvals → REVISION_REQUESTED
-  const handleRequestRevision = async () => {
+  // V5: Onaycı "revize iste" diyor — comment zorunlu, request_approvals → REVISION_REQUESTED.
+  // choice: revize sorumlusu + düzeltme sonrası akış (yoksa talep sahibi, bugünkü akış).
+  const handleRequestRevision = async (choice?: RevisionChoice) => {
     if (!selectedApproval) return;
     if (!comment.trim()) {
       toast.error("Revize için yorum zorunludur");
@@ -591,6 +593,8 @@ export function useApprovals(options: UseApprovalsOptions = {}) {
         body: JSON.stringify({
           comment,
           mentionedEmployeeIds: await resolveMentionedIds(selectedApproval.request?.id, comment),
+          revisionTargetApprovalId: choice?.targetApprovalId ?? null,
+          revisionReturnMode: choice?.returnMode,
         }),
       });
 
@@ -599,7 +603,11 @@ export function useApprovals(options: UseApprovalsOptions = {}) {
         throw new Error(error.error || "Revize istenemedi");
       }
 
-      toast.success("Revize istendi");
+      toast.success(
+        choice?.targetApprovalId
+          ? `Revize ${choice.targetName ?? "seçilen sorumlu"} için gönderildi`
+          : "Revize istendi"
+      );
       setSelectedApproval(null);
       setComment("");
       fetchApprovals();

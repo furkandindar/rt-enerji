@@ -77,7 +77,10 @@ const REQUEST_BASE_DETAIL_SELECT = `
       id,
       first_name,
       last_name
-    )
+    ),
+    carried_over_from_id,
+    revision_target_approval_id,
+    revision_return_mode
   )
 `;
 

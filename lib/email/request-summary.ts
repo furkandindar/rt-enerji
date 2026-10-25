@@ -128,7 +128,7 @@ export async function buildRequestEmailContext(
   const { data: approvalRows } = await supabase
     .from('request_approvals')
     .select(`
-      sequence_order, status, comment, decided_at, revision_cycle,
+      sequence_order, status, comment, decided_at, revision_cycle, carried_over_from_id,
       workflow_step:workflow_steps(step_order, name, approver_type, phase, form_section_key),
       approver:employees!request_approvals_approver_employee_id_fkey(id, first_name, last_name),
       acted_by:employees!acted_by_employee_id(id, first_name, last_name)
@@ -162,6 +162,7 @@ export async function buildRequestEmailContext(
         requestNote: exchange.revision?.comment ?? null,
         responseByName: getApproverDisplayName(exchange.response),
         responseNote: exchange.response.comment,
+        responseKind: exchange.responseKind,
       };
     }
   } catch (err) {

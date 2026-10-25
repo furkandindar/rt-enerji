@@ -32,6 +32,8 @@ export {
   canCancelRequest,
   canRequestRevision,
   resetApprovalChain,
+  rewindApprovalChain,
+  RevisionRewindError,
   applyAuditStamp,
   ACTIONABLE_REQUEST_STATUSES,
 } from './lifecycle';

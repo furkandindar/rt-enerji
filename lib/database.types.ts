@@ -1614,12 +1614,15 @@ export type Database = {
         Row: {
           acted_by_employee_id: string | null
           approver_employee_id: string
+          carried_over_from_id: string | null
           comment: string | null
           created_at: string
           decided_at: string | null
           id: string
           request_id: string
           revision_cycle: number
+          revision_return_mode: string | null
+          revision_target_approval_id: string | null
           sequence_order: number
           status: Database["public"]["Enums"]["approval_status"]
           workflow_step_id: string
@@ -1627,12 +1630,15 @@ export type Database = {
         Insert: {
           acted_by_employee_id?: string | null
           approver_employee_id: string
+          carried_over_from_id?: string | null
           comment?: string | null
           created_at?: string
           decided_at?: string | null
           id?: string
           request_id: string
           revision_cycle?: number
+          revision_return_mode?: string | null
+          revision_target_approval_id?: string | null
           sequence_order: number
           status?: Database["public"]["Enums"]["approval_status"]
           workflow_step_id: string
@@ -1640,12 +1646,15 @@ export type Database = {
         Update: {
           acted_by_employee_id?: string | null
           approver_employee_id?: string
+          carried_over_from_id?: string | null
           comment?: string | null
           created_at?: string
           decided_at?: string | null
           id?: string
           request_id?: string
           revision_cycle?: number
+          revision_return_mode?: string | null
+          revision_target_approval_id?: string | null
           sequence_order?: number
           status?: Database["public"]["Enums"]["approval_status"]
           workflow_step_id?: string
@@ -1656,6 +1665,13 @@ export type Database = {
             columns: ["acted_by_employee_id"]
             isOneToOne: false
             referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "request_approvals_carried_over_from_id_fkey"
+            columns: ["carried_over_from_id"]
+            isOneToOne: false
+            referencedRelation: "request_approvals"
             referencedColumns: ["id"]
           },
           {
@@ -1670,6 +1686,13 @@ export type Database = {
             columns: ["request_id"]
             isOneToOne: false
             referencedRelation: "requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "request_approvals_revision_target_approval_id_fkey"
+            columns: ["revision_target_approval_id"]
+            isOneToOne: false
+            referencedRelation: "request_approvals"
             referencedColumns: ["id"]
           },
           {

@@ -39,7 +39,11 @@ import { RequestActivityLog } from "@/components/approvals/request-activity-log"
 import { StampStatusSummary } from "@/components/approvals/stamp-status-summary";
 import { ApprovalStatusBadge, RequestStatusBadge } from "@/components/approvals/status-badge";
 import { RequestLifecycleActions } from "@/components/my-requests/request-lifecycle-actions";
-import { RevisionNotice, RevisionResponseNotice } from "@/components/my-requests/revision-notice";
+import {
+  RevisionAssignmentNotice,
+  RevisionNotice,
+  RevisionResponseNotice,
+} from "@/components/my-requests/revision-notice";
 import { isRevisionResponseRow } from "@/lib/workflow/revision-response";
 import type {
   RequestStatus as RequestLifecycleActionsStatus,
@@ -103,6 +107,10 @@ export interface Approval {
   revision_cycle?: number | null;
   workflow_step: WorkflowStep;
   approver: Approver;
+  // Revize sorumlusu: önceki turdan taşınan onay / revize kararının sorumlusu ve akışı
+  carried_over_from_id?: string | null;
+  revision_target_approval_id?: string | null;
+  revision_return_mode?: string | null;
 }
 
 export interface SalaryAdvanceRequest {
@@ -516,9 +524,14 @@ export function RequestDetailContent({
           <RevisionNotice approvals={selectedRequest.approvals ?? []} />
         </div>
       )}
-      {/* Revize yazışması: yeni revize istenmişse yukarıdaki bant öncelikli, bu gizli */}
+      {/* Revize yazışması / ara adım sorumlusu bandı: yeni revize istenmişse yukarıdaki
+          bant öncelikli, bunlar gizli */}
       {selectedRequest && selectedRequest.status !== "REVISION_REQUESTED" && (
-        <div className="px-4 pt-4 empty:hidden">
+        <div className="space-y-4 px-4 pt-4 empty:hidden">
+          <RevisionAssignmentNotice
+            allApprovals={selectedRequest.all_approvals ?? []}
+            currentCycle={selectedRequest.current_revision_cycle}
+          />
           <RevisionResponseNotice
             allApprovals={selectedRequest.all_approvals ?? []}
             currentCycle={selectedRequest.current_revision_cycle}
@@ -1558,6 +1571,10 @@ export function RequestDetailContent({
                                   {approval.decided_at
                                     ? format(new Date(approval.decided_at), "d MMM yyyy HH:mm", { locale: tr })
                                     : "-"}
+                                  {/* Revize sorumlusu akışında önceki turdan korunan onay */}
+                                  {approval.carried_over_from_id && (
+                                    <span className="block text-[11px]">önceki turdan</span>
+                                  )}
                                 </TableCell>
                                 <TableCell className="max-w-[90px] text-xs">
                                   {approval.comment ? (

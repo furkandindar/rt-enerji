@@ -19,6 +19,11 @@ import { SignatureCanvasPanel } from "@/components/signature-canvas-panel";
 import { AttachmentUploader } from "@/components/attachment-uploader";
 import { YkbSignedPdfUpload } from "@/components/approvals/ykb-signed-pdf-upload";
 import { ApproveConfirmDialog } from "@/components/approvals/approve-confirm-dialog";
+import {
+  RevisionRequestDialog,
+  needsRevisionTargetDialog,
+  type RevisionChoice,
+} from "@/components/approvals/revision-request-dialog";
 import { MentionTextarea } from "@/components/mentions/mention-textarea";
 import {
   ExtraApproversDialog,
@@ -101,7 +106,7 @@ interface ApprovalActionsProps {
   canApprove: boolean;
   isSubmitting: boolean;
   handleDecision: (decision: "APPROVED" | "REJECTED") => Promise<void>;
-  handleRequestRevision: () => void;
+  handleRequestRevision: (choice?: RevisionChoice) => Promise<void>;
   handleAddExtraApprovers: (input: ExtraApproversSubmitInput) => Promise<boolean>;
 }
 
@@ -157,6 +162,7 @@ signatureDataUrl,
   handleAddExtraApprovers,
 }: ApprovalActionsProps) {
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [revisionOpen, setRevisionOpen] = useState(false);
   const [extraApproversOpen, setExtraApproversOpen] = useState(false);
   // Ek onaycı: adım bayrağı (workflow_steps.can_add_extra_approvers — Olur'da Genel Müdür).
   // Yetki sunucuda yeniden doğrulanır; buton yalnız kolaylık.
@@ -472,7 +478,11 @@ signatureDataUrl,
         <Button
           variant="outline"
           className="flex-1 min-w-[140px] border-orange-500 text-orange-700 hover:bg-orange-50 hover:text-orange-800"
-          onClick={() => handleRequestRevision()}
+          onClick={() => {
+            // Seçilebilecek sorumlu / akış yoksa (ör. 2. adım) bugünkü gibi doğrudan talep sahibine
+            if (needsRevisionTargetDialog(approval)) setRevisionOpen(true);
+            else void handleRequestRevision();
+          }}
           disabled={isSubmitting || !comment.trim()}
         >
           {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -510,6 +520,19 @@ signatureDataUrl,
           await handleDecision("APPROVED");
           // Başarıda sayfa listeye yönlenir; hata toast'la bildirilir, pencere kapanır
           setConfirmOpen(false);
+        }}
+      />
+
+      <RevisionRequestDialog
+        open={revisionOpen}
+        onOpenChange={setRevisionOpen}
+        approval={approval}
+        comment={comment}
+        isSubmitting={isSubmitting}
+        onConfirm={async (choice) => {
+          await handleRequestRevision(choice);
+          // Başarıda sayfa listeye yönlenir; hata toast'la bildirilir, pencere kapanır
+          setRevisionOpen(false);
         }}
       />
 
