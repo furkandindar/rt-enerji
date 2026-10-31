@@ -1,5 +1,6 @@
 import React from 'react';
 import { renderToBuffer, DocumentProps } from '@react-pdf/renderer';
+import { PDFDocument } from 'pdf-lib';
 import { RequestPDFTemplate } from './request-pdf-template';
 import { SalaryAdvancePDFTemplate } from './salary-advance-pdf-template';
 import { OvertimePDFTemplate } from './overtime-pdf-template';
@@ -216,6 +217,8 @@ export async function generateRequestPDF(
 
   // PDF template'i oluştur - workflow tipine göre farklı template kullan
   let pdfDocument: React.ReactElement<DocumentProps>;
+  // Tek sayfa olması gereken formun sıkı düzeni: normal render taşarsa kullanılır (aşağıda)
+  let compactFallback: React.ReactElement<DocumentProps> | null = null;
 
   if (request.overtime_request) {
     // Fazla Mesai PDF'i
@@ -229,21 +232,31 @@ export async function generateRequestPDF(
     }) as React.ReactElement<DocumentProps>;
   } else if (request.onboarding_request) {
     // İşe Giriş Takip Formu PDF'i
-    pdfDocument = React.createElement(OnboardingPDFTemplate, {
+    const onboardingProps = {
       request,
       requester: request.requester,
       onboardingRequest: request.onboarding_request,
       approvals,
       signatures,
+    };
+    pdfDocument = React.createElement(OnboardingPDFTemplate, onboardingProps) as React.ReactElement<DocumentProps>;
+    compactFallback = React.createElement(OnboardingPDFTemplate, {
+      ...onboardingProps,
+      density: 'compact',
     }) as React.ReactElement<DocumentProps>;
   } else if (request.separation_request) {
     // İşten Çıkış Takip Formu PDF'i
-    pdfDocument = React.createElement(SeparationPDFTemplate, {
+    const separationProps = {
       request,
       requester: request.requester,
       separationRequest: request.separation_request,
       approvals,
       signatures,
+    };
+    pdfDocument = React.createElement(SeparationPDFTemplate, separationProps) as React.ReactElement<DocumentProps>;
+    compactFallback = React.createElement(SeparationPDFTemplate, {
+      ...separationProps,
+      density: 'compact',
     }) as React.ReactElement<DocumentProps>;
   } else if (request.request_form_request) {
     // Talep Formu PDF'i
@@ -342,7 +355,16 @@ export async function generateRequestPDF(
   }
 
   // PDF'i buffer'a render et
-  const pdfBuffer = await renderToBuffer(pdfDocument);
+  let pdfBuffer = await renderToBuffer(pdfDocument);
+
+  // Kâğıda basılıp ıslak imzalanan tek sayfalık form taşarsa (uzun açıklamalar) sıkı
+  // düzende yeniden render: imza bandı 2. sayfaya düşmesin. Yalnız taşmada ikinci render.
+  if (compactFallback) {
+    const pageCount = (await PDFDocument.load(pdfBuffer)).getPageCount();
+    if (pageCount > 1) {
+      pdfBuffer = await renderToBuffer(compactFallback);
+    }
+  }
 
   return Buffer.from(pdfBuffer);
 }

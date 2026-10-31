@@ -3,7 +3,8 @@ import { redirect } from "next/navigation";
 import { loadWorkflowConfigOverview } from "@/lib/workflow/config-overview";
 import { WorkflowConfigView } from "./_components/workflow-config-view";
 
-// /workflow-definitions — ORG_ADMIN: süreç tanımları, adımlar ve onaycılar (salt okunur, Faz 1).
+// /workflow-definitions — ORG_ADMIN: süreç tanımları, adımlar ve onaycılar. Salt okunur;
+// tek istisna sabit pozisyonlu adımın pozisyonu (Faz 2a, PATCH /api/workflow-steps/[id]).
 //
 // Veri sunucuda derlenir (lib/workflow/config-overview.ts) ve istemciye hazır
 // görünüm modeli olarak gider. Layout'taki AdminPageWrapper görsel guard'dır;

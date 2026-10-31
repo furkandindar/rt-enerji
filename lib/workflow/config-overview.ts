@@ -1,16 +1,20 @@
-// Süreç Tanımları (admin, salt okunur) — Faz 1.
+// Süreç Tanımları (admin) — görünüm modeli.
 //
 // workflow_definitions + workflow_steps + workflow_initiators + workflow_step_attachments
 // tablolarını, sabit pozisyonların güncel sahipleriyle birlikte tek bir görünüm
 // modeline derler. Onay motorunun (workflow-service.ts) onaycı çözümleme kurallarına
-// göre yapılandırma uyarıları da burada üretilir; UI yalnız gösterir.
+// göre yapılandırma uyarıları da burada üretilir; UI yalnız gösterir. Faz 2a: sabit
+// pozisyonlu adımın pozisyonu panelden değiştirilebilir — seçim listesi
+// (assignable_positions) ve adım değişiklik logu (workflow_step_changes) da burada yüklenir;
+// yazma PATCH /api/workflow-steps/[id] üzerinden.
 //
-// Yalnız SELECT yapar; yazma yok. RLS: bu tablolar tüm authenticated kullanıcılara
+// Yalnız SELECT yapar. RLS: konfigürasyon tabloları tüm authenticated kullanıcılara
 // açıktır, ancak sayfa/route seviyesinde ORG_ADMIN kontrolü yapılır.
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { ActionType, ApproverType, StepCondition, WorkflowStepPhase } from './types';
 import { resolveExtraApproverTarget } from './extra-approvers-shared';
+import { positionAssignmentBlocker } from './step-position-rules';
 
 // ============================================================================
 // Görünüm modeli
@@ -38,6 +42,7 @@ export interface ConfigUnitRef {
 export interface ConfigPosition {
   id: string;
   title: string;
+  job_code: string | null;
   is_active: boolean;
   is_unit_head: boolean;
   location: string | null;
@@ -55,6 +60,17 @@ export interface ConfigStepAttachment {
   allowed_mime_types: string[] | null;
 }
 
+/** Adımın pozisyon/ad değişikliği (workflow_step_changes, trigger yazar) */
+export interface ConfigStepChange {
+  created_at: string;
+  /** Değiştiren çalışan; NULL = Table Editor / SQL */
+  changed_by: string | null;
+  old_position_title: string | null;
+  new_position_title: string | null;
+  old_name: string | null;
+  new_name: string | null;
+}
+
 export interface ConfigStep {
   id: string;
   step_order: number;
@@ -69,6 +85,8 @@ export interface ConfigStep {
   /** Bu adımın onaycısı zincire ek onaycı ekleyebilir (Olur — Genel Müdür) */
   can_add_extra_approvers: boolean;
   attachments: ConfigStepAttachment[];
+  /** En son değişiklik (log tablosu yoksa ya da kayıt yoksa null) */
+  last_change: ConfigStepChange | null;
   warnings: ConfigWarning[];
 }
 
@@ -100,9 +118,17 @@ export interface UnitHeadEntry {
   warnings: ConfigWarning[];
 }
 
+/** Sabit pozisyonlu adıma seçilebilecek pozisyon + atanamıyorsa nedeni */
+export interface AssignablePosition extends ConfigPosition {
+  /** positionAssignmentBlocker — null ise seçilebilir */
+  blocker: string | null;
+}
+
 export interface WorkflowConfigOverview {
   workflows: ConfigWorkflow[];
   unit_heads: UnitHeadEntry[];
+  /** Aktif pozisyonlar (birim, başlık sırasıyla); atanamayanlar blocker ile işaretli */
+  assignable_positions: AssignablePosition[];
   generated_at: string;
 }
 
@@ -156,6 +182,7 @@ interface InitiatorRow {
 interface PositionRow {
   id: string;
   title: string;
+  job_code: string | null;
   is_active: boolean;
   is_unit_head: boolean;
   location: string | null;
@@ -168,6 +195,16 @@ interface UnitRow {
   parent_id: string | null;
   is_active: boolean;
   order_index: number;
+}
+
+interface StepChangeRow {
+  workflow_step_id: string;
+  created_at: string;
+  old_position_title: string | null;
+  new_position_title: string | null;
+  old_name: string | null;
+  new_name: string | null;
+  changed_by: { first_name: string; last_name: string } | { first_name: string; last_name: string }[] | null;
 }
 
 interface HolderRow {
@@ -247,7 +284,7 @@ export async function loadWorkflowConfigOverview(
   supabase: SupabaseClient
 ): Promise<WorkflowConfigOverview> {
   // 1) Konfigürasyon tabloları (birbirinden bağımsız → paralel)
-  const [definitionsRes, stepsRes, attachmentsRes, initiatorsRes, unitsRes, unitHeadPositionsRes] =
+  const [definitionsRes, stepsRes, attachmentsRes, initiatorsRes, unitsRes, positionsRes, holdersRes, stepChangesRes] =
     await Promise.all([
       supabase
         .from('workflow_definitions')
@@ -271,10 +308,23 @@ export async function loadWorkflowConfigOverview(
         .select('id, name, parent_id, is_active, order_index')
         .order('order_index')
         .order('name'),
+      // Tüm pozisyonlar ve açık atamaları: adım/başlatıcı/amir pozisyonları + panelden
+      // pozisyon değiştirme seçim listesi (~140 pozisyon; .in() filtresi URL'i şişirirdi).
       supabase
         .from('positions')
-        .select('id, title, is_active, is_unit_head, location, unit_id')
-        .eq('is_unit_head', true),
+        .select('id, title, job_code, is_active, is_unit_head, location, unit_id'),
+      // Motorla aynı filtre: end_date IS NULL
+      supabase
+        .from('employee_positions')
+        .select('position_id, employee_id, is_primary, employee:employees(id, first_name, last_name, status)')
+        .is('end_date', null),
+      // Hata firstError'a girmez — aşağıda (2) tolere edilir
+      supabase
+        .from('workflow_step_changes')
+        .select(
+          'workflow_step_id, created_at, old_position_title, new_position_title, old_name, new_name, changed_by:employees!changed_by_employee_id(first_name, last_name)'
+        )
+        .order('created_at', { ascending: false }),
     ]);
 
   const firstError =
@@ -283,7 +333,8 @@ export async function loadWorkflowConfigOverview(
     attachmentsRes.error ||
     initiatorsRes.error ||
     unitsRes.error ||
-    unitHeadPositionsRes.error;
+    positionsRes.error ||
+    holdersRes.error;
   if (firstError) {
     throw new Error(`Süreç tanımları yüklenemedi: ${firstError.message}`);
   }
@@ -293,43 +344,37 @@ export async function loadWorkflowConfigOverview(
   const attachments = (attachmentsRes.data ?? []) as AttachmentRow[];
   const initiators = (initiatorsRes.data ?? []) as InitiatorRow[];
   const units = (unitsRes.data ?? []) as UnitRow[];
-  const unitHeadPositions = (unitHeadPositionsRes.data ?? []) as PositionRow[];
+  const allPositions = (positionsRes.data ?? []) as PositionRow[];
+  const unitHeadPositions = allPositions.filter((p) => p.is_unit_head);
+  const holders: HolderRow[] = ((holdersRes.data ?? []) as unknown[]).map((row) => {
+    const r = row as Omit<HolderRow, 'employee'> & { employee: HolderRow['employee'] | HolderRow['employee'][] };
+    return { ...r, employee: unwrapOne(r.employee) };
+  });
 
-  // 2) Adımların ve başlatıcıların referans verdiği pozisyonlar
-  const referencedPositionIds = new Set<string>();
-  for (const s of steps) if (s.static_position_id) referencedPositionIds.add(s.static_position_id);
-  for (const i of initiators) if (i.position_id) referencedPositionIds.add(i.position_id);
-  for (const p of unitHeadPositions) referencedPositionIds.delete(p.id); // zaten elimizde
-
-  let referencedPositions: PositionRow[] = [];
-  if (referencedPositionIds.size > 0) {
-    const { data, error } = await supabase
-      .from('positions')
-      .select('id, title, is_active, is_unit_head, location, unit_id')
-      .in('id', Array.from(referencedPositionIds));
-    if (error) throw new Error(`Pozisyonlar yüklenemedi: ${error.message}`);
-    referencedPositions = (data ?? []) as PositionRow[];
+  // 2) Adım değişiklik logu (sql/feature_workflow_step_change_log.sql). Tablo henüz
+  //    yoksa ya da okunamazsa ekran geçmişsiz çalışır — log görünüm için zorunlu değil.
+  const lastChangeByStep = new Map<string, ConfigStepChange>();
+  if (stepChangesRes.error) {
+    console.warn(
+      '[config-overview] workflow_step_changes okunamadı (geçmiş gösterilmeyecek):',
+      stepChangesRes.error.message
+    );
+  } else {
+    for (const row of (stepChangesRes.data ?? []) as StepChangeRow[]) {
+      if (lastChangeByStep.has(row.workflow_step_id)) continue; // en yenisi zaten alındı
+      const by = unwrapOne(row.changed_by);
+      lastChangeByStep.set(row.workflow_step_id, {
+        created_at: row.created_at,
+        changed_by: by ? `${by.first_name} ${by.last_name}`.trim() : null,
+        old_position_title: row.old_position_title,
+        new_position_title: row.new_position_title,
+        old_name: row.old_name,
+        new_name: row.new_name,
+      });
+    }
   }
 
-  const allPositions = [...unitHeadPositions, ...referencedPositions];
-  const allPositionIds = allPositions.map((p) => p.id);
-
-  // 3) Bu pozisyonlardaki aktif atamalar (motorla aynı filtre: end_date IS NULL)
-  let holders: HolderRow[] = [];
-  if (allPositionIds.length > 0) {
-    const { data, error } = await supabase
-      .from('employee_positions')
-      .select('position_id, employee_id, is_primary, employee:employees(id, first_name, last_name, status)')
-      .in('position_id', allPositionIds)
-      .is('end_date', null);
-    if (error) throw new Error(`Pozisyon atamaları yüklenemedi: ${error.message}`);
-    holders = ((data ?? []) as unknown[]).map((row) => {
-      const r = row as Omit<HolderRow, 'employee'> & { employee: HolderRow['employee'] | HolderRow['employee'][] };
-      return { ...r, employee: unwrapOne(r.employee) };
-    });
-  }
-
-  // 4) Sözlükler
+  // 3) Sözlükler
   const unitById = new Map<string, UnitRow>(units.map((u) => [u.id, u]));
   const unitRef = (id: string | null | undefined): ConfigUnitRef | null => {
     if (!id) return null;
@@ -357,6 +402,7 @@ export async function loadWorkflowConfigOverview(
     positionById.set(p.id, {
       id: p.id,
       title: p.title,
+      job_code: p.job_code,
       is_active: p.is_active,
       is_unit_head: p.is_unit_head,
       location: p.location,
@@ -393,7 +439,7 @@ export async function loadWorkflowConfigOverview(
     initiatorsByDefinition.set(i.workflow_definition_id, list);
   }
 
-  // 5) Süreçleri derle
+  // 4) Süreçleri derle
   const workflows: ConfigWorkflow[] = definitions.map((d) => {
     const rawSteps = [...(stepsByDefinition.get(d.id) ?? [])].sort((a, b) => a.step_order - b.step_order);
 
@@ -431,6 +477,7 @@ export async function loadWorkflowConfigOverview(
         static_position: staticPosition,
         can_add_extra_approvers: s.can_add_extra_approvers === true,
         attachments: attachmentsByStep.get(s.id) ?? [],
+        last_change: lastChangeByStep.get(s.id) ?? null,
         warnings,
       };
     });
@@ -480,7 +527,7 @@ export async function loadWorkflowConfigOverview(
     };
   });
 
-  // 6) Birim amirleri (UNIT_HEAD çözümleme tablosu) — motor: is_unit_head & is_active → .single()
+  // 5) Birim amirleri (UNIT_HEAD çözümleme tablosu) — motor: is_unit_head & is_active → .single()
   const headPositionsByUnit = new Map<string, ConfigPosition[]>();
   for (const p of unitHeadPositions) {
     const cfg = positionById.get(p.id);
@@ -536,9 +583,20 @@ export async function loadWorkflowConfigOverview(
     };
   });
 
+  // 6) Panelden pozisyon değiştirme seçim listesi: aktif pozisyonlar, birim + başlık sırasıyla
+  const assignable_positions: AssignablePosition[] = Array.from(positionById.values())
+    .filter((p) => p.is_active)
+    .map((p) => ({ ...p, blocker: positionAssignmentBlocker(p) }))
+    .sort(
+      (a, b) =>
+        (a.unit?.name ?? '').localeCompare(b.unit?.name ?? '', 'tr') ||
+        a.title.localeCompare(b.title, 'tr')
+    );
+
   return {
     workflows,
     unit_heads,
+    assignable_positions,
     generated_at: new Date().toISOString(),
   };
 }

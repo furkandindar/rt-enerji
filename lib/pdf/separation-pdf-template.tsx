@@ -1,7 +1,6 @@
 import React from 'react';
 import { Document, Page, Text, View, StyleSheet, Font, Image, Svg, Path, Line } from '@react-pdf/renderer';
 import { format } from 'date-fns';
-import { formatTrDate } from '@/lib/timezone';
 import { SignatureFont } from '@/lib/signature/types';
 import type { PdfApproval, PdfRequest, PdfRequester, SignatureInfo } from './types';
 import { SEPARATION_SPLIT_SECTIONS, getChainSectionKeys, resolveSignerSectionKey } from '@/lib/approvals/constants';
@@ -27,53 +26,69 @@ const signatureFontMap: Record<SignatureFont, string> = { 'Ballet': 'Ballet', 'G
 
 const colors = { red: '#CC0000', redLight: '#FFF0F0', black: '#000000', white: '#FFFFFF' };
 
-const styles = StyleSheet.create({
-  page: { padding: 20, fontSize: 8, fontFamily: 'Roboto', backgroundColor: colors.white },
-  headerContainer: { flexDirection: 'row', borderWidth: 1, borderColor: colors.black },
-  logoCell: { width: 60, padding: 6, borderRightWidth: 1, borderColor: colors.black, justifyContent: 'center', alignItems: 'center' },
-  logoImage: { width: 40, height: 40 },
-  titleCell: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 6 },
-  titleText: { fontSize: 13, fontWeight: 700 },
-  infoContent: { flexDirection: 'row', borderWidth: 1, borderTopWidth: 0, borderColor: colors.black },
-  infoLeftColumn: { width: '50%', borderRightWidth: 1, borderColor: colors.black },
-  infoRightColumn: { width: '50%' },
-  infoRow: { flexDirection: 'row', borderBottomWidth: 1, borderColor: colors.black, minHeight: 18 },
-  infoRowLast: { flexDirection: 'row', minHeight: 18 },
-  infoLabelCell: { width: '45%', backgroundColor: colors.redLight, padding: 4, borderRightWidth: 1, borderColor: colors.black, justifyContent: 'center' },
-  infoValueCell: { width: '55%', padding: 4, justifyContent: 'center' },
-  labelText: { fontSize: 7, fontWeight: 500 },
-  valueText: { fontSize: 7 },
-  financialContainer: { borderWidth: 1, borderTopWidth: 0, borderColor: colors.black },
-  financialHeader: { flexDirection: 'row', backgroundColor: colors.red, borderBottomWidth: 1, borderColor: colors.black },
-  financialHeaderCell: { padding: 4, borderRightWidth: 1, borderColor: colors.black, justifyContent: 'center' },
-  financialHeaderCellLast: { padding: 4, justifyContent: 'center' },
-  financialHeaderText: { fontSize: 7, fontWeight: 700, textAlign: 'center', color: colors.white },
-  financialRow: { flexDirection: 'row', borderBottomWidth: 1, borderColor: colors.black, minHeight: 18 },
-  financialRowLast: { flexDirection: 'row', minHeight: 18 },
-  financialCell: { padding: 3, borderRightWidth: 1, borderColor: colors.black, justifyContent: 'center' },
-  financialCellLast: { padding: 3, justifyContent: 'center' },
-  financialCellText: { fontSize: 7 },
-  financialCellCenter: { fontSize: 7, textAlign: 'center' },
-  tableContainer: { borderWidth: 1, borderTopWidth: 0, borderColor: colors.black },
-  tableHeader: { flexDirection: 'row', backgroundColor: colors.red, borderBottomWidth: 1, borderColor: colors.black },
-  tableHeaderCell: { padding: 4, borderRightWidth: 1, borderColor: colors.black, justifyContent: 'center' },
-  tableHeaderCellLast: { padding: 4, justifyContent: 'center' },
-  tableHeaderText: { fontSize: 7, fontWeight: 700, textAlign: 'center', color: colors.white },
-  tableRow: { flexDirection: 'row', borderBottomWidth: 1, borderColor: colors.black, minHeight: 20 },
-  tableRowLast: { flexDirection: 'row', minHeight: 20 },
-  tableCell: { padding: 3, borderRightWidth: 1, borderColor: colors.black, justifyContent: 'center' },
-  tableCellLast: { padding: 3, justifyContent: 'center' },
-  tableCellText: { fontSize: 7 },
-  tableCellCenter: { fontSize: 7, textAlign: 'center' },
-  approvalContainer: { flexDirection: 'row', borderWidth: 1, borderTopWidth: 0, borderColor: colors.black, minHeight: 50 },
-  approvalColumn: { flex: 1, borderRightWidth: 1, borderColor: colors.black, padding: 6 },
-  approvalColumnLast: { flex: 1, padding: 6 },
-  approvalTitle: { fontSize: 7, fontWeight: 700, textAlign: 'center', marginBottom: 2 },
-  approvalSubtitle: { fontSize: 7, fontWeight: 700, textAlign: 'center', color: colors.red },
-  approvalName: { fontSize: 7, textAlign: 'center', marginTop: 4 },
-  signatureText: { fontSize: 14, color: '#1a365d', textAlign: 'center' },
-  signatureTextSmall: { fontSize: 8, color: '#1a365d', textAlign: 'center' as const },
-});
+/**
+ * Yerleşim yoğunluğu. Form tek sayfa (kâğıda basılıp ıslak imzalanıyor); normal
+ * düzende sığmazsa generate-request-pdf.ts aynı veriyi 'compact' ile yeniden
+ * render eder (uzun açıklamalarda imza bandı 2. sayfaya düşüyordu — 2026-001706).
+ */
+export type SeparationPdfDensity = 'normal' | 'compact';
+
+function makeStyles(density: SeparationPdfDensity) {
+  const c = density === 'compact';
+  return StyleSheet.create({
+    page: { padding: c ? 16 : 20, fontSize: 8, fontFamily: 'Roboto', backgroundColor: colors.white },
+    headerContainer: { flexDirection: 'row', borderWidth: 1, borderColor: colors.black },
+    // Başlık bandı küçültüldü (logo 40→30, yükseklik ~52→~38pt) — liste + imza bandına yer
+    logoCell: { width: 50, padding: c ? 3 : 4, borderRightWidth: 1, borderColor: colors.black, justifyContent: 'center', alignItems: 'center' },
+    logoImage: { width: c ? 26 : 30, height: c ? 26 : 30 },
+    titleCell: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: c ? 3 : 4 },
+    titleText: { fontSize: 12, fontWeight: 700 },
+    infoContent: { flexDirection: 'row', borderWidth: 1, borderTopWidth: 0, borderColor: colors.black },
+    infoLeftColumn: { width: '50%', borderRightWidth: 1, borderColor: colors.black },
+    infoRightColumn: { width: '50%' },
+    infoRow: { flexDirection: 'row', borderBottomWidth: 1, borderColor: colors.black, minHeight: c ? 15 : 18 },
+    infoRowLast: { flexDirection: 'row', minHeight: c ? 15 : 18 },
+    infoLabelCell: { width: '45%', backgroundColor: colors.redLight, padding: c ? 2.5 : 4, borderRightWidth: 1, borderColor: colors.black, justifyContent: 'center' },
+    infoValueCell: { width: '55%', padding: c ? 2.5 : 4, justifyContent: 'center' },
+    labelText: { fontSize: 7, fontWeight: 500 },
+    valueText: { fontSize: 7 },
+    financialContainer: { borderWidth: 1, borderTopWidth: 0, borderColor: colors.black },
+    financialHeader: { flexDirection: 'row', backgroundColor: colors.red, borderBottomWidth: 1, borderColor: colors.black },
+    financialHeaderCell: { padding: c ? 3 : 4, borderRightWidth: 1, borderColor: colors.black, justifyContent: 'center' },
+    financialHeaderCellLast: { padding: c ? 3 : 4, justifyContent: 'center' },
+    financialHeaderText: { fontSize: 7, fontWeight: 700, textAlign: 'center', color: colors.white },
+    financialRow: { flexDirection: 'row', borderBottomWidth: 1, borderColor: colors.black, minHeight: c ? 14 : 18 },
+    financialRowLast: { flexDirection: 'row', minHeight: c ? 14 : 18 },
+    financialCell: { padding: c ? 2 : 3, borderRightWidth: 1, borderColor: colors.black, justifyContent: 'center' },
+    financialCellLast: { padding: c ? 2 : 3, justifyContent: 'center' },
+    financialCellText: { fontSize: 7 },
+    financialCellCenter: { fontSize: 7, textAlign: 'center' },
+    tableContainer: { borderWidth: 1, borderTopWidth: 0, borderColor: colors.black },
+    tableHeader: { flexDirection: 'row', backgroundColor: colors.red, borderBottomWidth: 1, borderColor: colors.black },
+    tableHeaderCell: { padding: c ? 3 : 4, borderRightWidth: 1, borderColor: colors.black, justifyContent: 'center' },
+    tableHeaderCellLast: { padding: c ? 3 : 4, justifyContent: 'center' },
+    tableHeaderText: { fontSize: 7, fontWeight: 700, textAlign: 'center', color: colors.white },
+    // Normal 18: 20'de 24 satırlık listeyle imza bandı 2. sayfaya taşıyordu (2026-001706)
+    tableRow: { flexDirection: 'row', borderBottomWidth: 1, borderColor: colors.black, minHeight: c ? 14 : 18 },
+    tableRowLast: { flexDirection: 'row', minHeight: c ? 14 : 18 },
+    tableCell: { padding: c ? 2 : 3, borderRightWidth: 1, borderColor: colors.black, justifyContent: 'center' },
+    tableCellLast: { padding: c ? 2 : 3, justifyContent: 'center' },
+    tableCellText: { fontSize: c ? 6.5 : 7 },
+    tableCellCenter: { fontSize: c ? 6.5 : 7, textAlign: 'center' },
+    approvalContainer: { flexDirection: 'row', borderWidth: 1, borderTopWidth: 0, borderColor: colors.black, minHeight: c ? 44 : 50 },
+    approvalColumn: { flex: 1, borderRightWidth: 1, borderColor: colors.black, padding: c ? 4 : 6 },
+    approvalColumnLast: { flex: 1, padding: c ? 4 : 6 },
+    approvalTitle: { fontSize: 7, fontWeight: 700, textAlign: 'center', marginBottom: 2 },
+    approvalName: { fontSize: 7, textAlign: 'center', marginTop: c ? 2 : 4 },
+    signatureText: { fontSize: c ? 12 : 14, color: '#1a365d', textAlign: 'center' },
+    signatureTextSmall: { fontSize: c ? 7 : 8, color: '#1a365d', textAlign: 'center' as const },
+  });
+}
+
+const STYLES: Record<SeparationPdfDensity, ReturnType<typeof makeStyles>> = {
+  normal: makeStyles('normal'),
+  compact: makeStyles('compact'),
+};
 
 
 
@@ -154,11 +169,13 @@ interface SeparationPDFTemplateProps {
   separationRequest: SeparationRequest;
   approvals: PdfApproval[];
   signatures?: Record<string, SignatureInfo>;
+  density?: SeparationPdfDensity;
 }
 
 export const SeparationPDFTemplate: React.FC<SeparationPDFTemplateProps> = ({
-  requester, separationRequest: sr, approvals, signatures = {},
+  requester, separationRequest: sr, approvals, signatures = {}, density = 'normal',
 }) => {
+  const styles = STYLES[density];
   const renderSignature = (employeeId: string, small = false, status?: string) => {
     if (status === 'REJECTED') {
       return <Text style={{ fontSize: small ? 8 : 9, fontWeight: 700, color: '#DC2626' }}>Reddedildi</Text>;
@@ -265,8 +282,8 @@ export const SeparationPDFTemplate: React.FC<SeparationPDFTemplateProps> = ({
           })}
         </View>
 
-        {/* Onay Footer */}
-        <View style={styles.approvalContainer}>
+        {/* Onay Footer — wrap={false}: bant sayfa sonunda bölünmez (imza tek başına 2. sayfaya düşmesin) */}
+        <View style={styles.approvalContainer} wrap={false}>
           <View style={styles.approvalColumn}>
             <Text style={styles.approvalTitle}>EK: ZİMMET TUTANAĞI</Text>
           </View>
@@ -274,9 +291,7 @@ export const SeparationPDFTemplate: React.FC<SeparationPDFTemplateProps> = ({
             <Text style={styles.approvalTitle}>FORM İÇERİĞİ KONTROLÜ</Text>
             {secondToLastApproval ? (
               <>
-                <Text style={styles.approvalSubtitle}>{(secondToLastApproval.workflow_step.static_position?.title || secondToLastApproval.workflow_step.name || '').toUpperCase()}</Text>
                 <Text style={styles.approvalName}>{secondToLastApproval.approver.first_name} {secondToLastApproval.approver.last_name}</Text>
-                {secondToLastApproval.decided_at ? <Text style={styles.approvalName}>{formatTrDate(secondToLastApproval.decided_at)}</Text> : null}
                 {renderSignature(secondToLastApproval.approver.id, false, secondToLastApproval.status)}
               </>
             ) : null}
@@ -285,7 +300,6 @@ export const SeparationPDFTemplate: React.FC<SeparationPDFTemplateProps> = ({
             <Text style={styles.approvalTitle}>ONAY</Text>
             {lastApproval ? (
               <>
-                <Text style={styles.approvalSubtitle}>{(lastApproval.workflow_step.static_position?.title || lastApproval.workflow_step.name || '').toUpperCase()}</Text>
                 <Text style={styles.approvalName}>{lastApproval.approver.first_name} {lastApproval.approver.last_name}</Text>
                 {renderSignature(lastApproval.approver.id, false, lastApproval.status)}
               </>

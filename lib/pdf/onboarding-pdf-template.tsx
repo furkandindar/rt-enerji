@@ -1,7 +1,6 @@
 import React from 'react';
 import { Document, Page, Text, View, StyleSheet, Font, Image, Svg, Path, Line } from '@react-pdf/renderer';
 import { format } from 'date-fns';
-import { formatTrDate } from '@/lib/timezone';
 import { SignatureFont } from '@/lib/signature/types';
 import type { PdfApproval, PdfRequest, PdfRequester, SignatureInfo } from './types';
 import { ONBOARDING_SPLIT_SECTIONS, getChainSectionKeys, resolveSignerSectionKey } from '@/lib/approvals/constants';
@@ -28,47 +27,60 @@ const signatureFontMap: Record<SignatureFont, string> = { 'Ballet': 'Ballet', 'G
 
 const colors = { green: '#008000', greenLight: '#E8F5E9', black: '#000000', white: '#FFFFFF', red: '#CC0000' };
 
-const styles = StyleSheet.create({
-  page: { padding: 20, fontSize: 8, fontFamily: 'Roboto', backgroundColor: colors.white },
-  // Header
-  headerContainer: { flexDirection: 'row', borderWidth: 1, borderColor: colors.black },
-  logoCell: { width: 60, padding: 6, borderRightWidth: 1, borderColor: colors.black, justifyContent: 'center', alignItems: 'center' },
-  logoImage: { width: 40, height: 40 },
-  titleCell: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 6 },
-  titleText: { fontSize: 13, fontWeight: 700 },
-  // Info table
-  infoContent: { flexDirection: 'row', borderWidth: 1, borderTopWidth: 0, borderColor: colors.black },
-  infoLeftColumn: { width: '50%', borderRightWidth: 1, borderColor: colors.black },
-  infoRightColumn: { width: '50%' },
-  infoRow: { flexDirection: 'row', borderBottomWidth: 1, borderColor: colors.black, minHeight: 18 },
-  infoRowLast: { flexDirection: 'row', minHeight: 18 },
-  infoLabelCell: { width: '45%', backgroundColor: colors.greenLight, padding: 4, borderRightWidth: 1, borderColor: colors.black, justifyContent: 'center' },
-  infoValueCell: { width: '55%', padding: 4, justifyContent: 'center' },
-  labelText: { fontSize: 7, fontWeight: 500 },
-  valueText: { fontSize: 7 },
-  // Checklist table
-  tableContainer: { borderWidth: 1, borderTopWidth: 0, borderColor: colors.black },
-  tableHeader: { flexDirection: 'row', backgroundColor: colors.green, borderBottomWidth: 1, borderColor: colors.black },
-  tableHeaderCell: { padding: 4, borderRightWidth: 1, borderColor: colors.black, justifyContent: 'center' },
-  tableHeaderCellLast: { padding: 4, justifyContent: 'center' },
-  tableHeaderText: { fontSize: 7, fontWeight: 700, textAlign: 'center', color: colors.white },
-  tableRow: { flexDirection: 'row', borderBottomWidth: 1, borderColor: colors.black, minHeight: 20 },
-  tableRowLast: { flexDirection: 'row', minHeight: 20 },
-  tableCell: { padding: 3, borderRightWidth: 1, borderColor: colors.black, justifyContent: 'center' },
-  tableCellLast: { padding: 3, justifyContent: 'center' },
-  tableCellText: { fontSize: 7 },
-  tableCellCenter: { fontSize: 7, textAlign: 'center' },
-  // Approval footer
-  approvalContainer: { flexDirection: 'row', borderWidth: 1, borderTopWidth: 0, borderColor: colors.black, minHeight: 50 },
-  approvalColumn: { flex: 1, borderRightWidth: 1, borderColor: colors.black, padding: 6 },
-  approvalColumnLast: { flex: 1, padding: 6 },
-  approvalTitle: { fontSize: 7, fontWeight: 700, textAlign: 'center', marginBottom: 2 },
-  approvalSubtitle: { fontSize: 7, fontWeight: 700, textAlign: 'center', color: colors.red },
-  approvalName: { fontSize: 7, textAlign: 'center', marginTop: 4 },
-  signatureText: { fontSize: 14, color: '#1a365d', textAlign: 'center' },
-  signatureTextSmall: { fontSize: 8, color: '#1a365d', textAlign: 'center' as const },
-  signatureStatus: { fontSize: 7, color: '#666', textAlign: 'center' },
-});
+/**
+ * Yerleşim yoğunluğu. Form tek sayfa (kâğıda basılıp ıslak imzalanıyor); normal
+ * düzende sığmazsa generate-request-pdf.ts aynı veriyi 'compact' ile yeniden
+ * render eder. İşten Çıkış şablonuyla aynı düzen (separation-pdf-template.tsx).
+ */
+export type OnboardingPdfDensity = 'normal' | 'compact';
+
+function makeStyles(density: OnboardingPdfDensity) {
+  const c = density === 'compact';
+  return StyleSheet.create({
+    page: { padding: c ? 16 : 20, fontSize: 8, fontFamily: 'Roboto', backgroundColor: colors.white },
+    // Header — küçültüldü (logo 40→30, yükseklik ~52→~38pt)
+    headerContainer: { flexDirection: 'row', borderWidth: 1, borderColor: colors.black },
+    logoCell: { width: 50, padding: c ? 3 : 4, borderRightWidth: 1, borderColor: colors.black, justifyContent: 'center', alignItems: 'center' },
+    logoImage: { width: c ? 26 : 30, height: c ? 26 : 30 },
+    titleCell: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: c ? 3 : 4 },
+    titleText: { fontSize: 12, fontWeight: 700 },
+    // Info table
+    infoContent: { flexDirection: 'row', borderWidth: 1, borderTopWidth: 0, borderColor: colors.black },
+    infoLeftColumn: { width: '50%', borderRightWidth: 1, borderColor: colors.black },
+    infoRightColumn: { width: '50%' },
+    infoRow: { flexDirection: 'row', borderBottomWidth: 1, borderColor: colors.black, minHeight: c ? 15 : 18 },
+    infoRowLast: { flexDirection: 'row', minHeight: c ? 15 : 18 },
+    infoLabelCell: { width: '45%', backgroundColor: colors.greenLight, padding: c ? 2.5 : 4, borderRightWidth: 1, borderColor: colors.black, justifyContent: 'center' },
+    infoValueCell: { width: '55%', padding: c ? 2.5 : 4, justifyContent: 'center' },
+    labelText: { fontSize: 7, fontWeight: 500 },
+    valueText: { fontSize: 7 },
+    // Checklist table
+    tableContainer: { borderWidth: 1, borderTopWidth: 0, borderColor: colors.black },
+    tableHeader: { flexDirection: 'row', backgroundColor: colors.green, borderBottomWidth: 1, borderColor: colors.black },
+    tableHeaderCell: { padding: c ? 3 : 4, borderRightWidth: 1, borderColor: colors.black, justifyContent: 'center' },
+    tableHeaderCellLast: { padding: c ? 3 : 4, justifyContent: 'center' },
+    tableHeaderText: { fontSize: 7, fontWeight: 700, textAlign: 'center', color: colors.white },
+    tableRow: { flexDirection: 'row', borderBottomWidth: 1, borderColor: colors.black, minHeight: c ? 14 : 18 },
+    tableRowLast: { flexDirection: 'row', minHeight: c ? 14 : 18 },
+    tableCell: { padding: c ? 2 : 3, borderRightWidth: 1, borderColor: colors.black, justifyContent: 'center' },
+    tableCellLast: { padding: c ? 2 : 3, justifyContent: 'center' },
+    tableCellText: { fontSize: c ? 6.5 : 7 },
+    tableCellCenter: { fontSize: c ? 6.5 : 7, textAlign: 'center' },
+    // Approval footer
+    approvalContainer: { flexDirection: 'row', borderWidth: 1, borderTopWidth: 0, borderColor: colors.black, minHeight: c ? 44 : 50 },
+    approvalColumn: { flex: 1, borderRightWidth: 1, borderColor: colors.black, padding: c ? 4 : 6 },
+    approvalColumnLast: { flex: 1, padding: c ? 4 : 6 },
+    approvalTitle: { fontSize: 7, fontWeight: 700, textAlign: 'center', marginBottom: 2 },
+    approvalName: { fontSize: 7, textAlign: 'center', marginTop: c ? 2 : 4 },
+    signatureText: { fontSize: c ? 12 : 14, color: '#1a365d', textAlign: 'center' },
+    signatureTextSmall: { fontSize: c ? 7 : 8, color: '#1a365d', textAlign: 'center' as const },
+  });
+}
+
+const STYLES: Record<OnboardingPdfDensity, ReturnType<typeof makeStyles>> = {
+  normal: makeStyles('normal'),
+  compact: makeStyles('compact'),
+};
 
 const CheckIcon = () => (
   <Svg width="10" height="10" viewBox="0 0 24 24">
@@ -157,11 +169,13 @@ interface OnboardingPDFTemplateProps {
   onboardingRequest: OnboardingRequest;
   approvals: PdfApproval[];
   signatures?: Record<string, SignatureInfo>;
+  density?: OnboardingPdfDensity;
 }
 
 export const OnboardingPDFTemplate: React.FC<OnboardingPDFTemplateProps> = ({
-  requester, onboardingRequest, approvals, signatures = {},
+  requester, onboardingRequest, approvals, signatures = {}, density = 'normal',
 }) => {
+  const styles = STYLES[density];
   const renderSignature = (employeeId: string, small = false, status?: string) => {
     if (status === 'REJECTED') {
       return <Text style={{ fontSize: small ? 8 : 9, fontWeight: 700, color: '#DC2626' }}>Reddedildi</Text>;
@@ -250,8 +264,8 @@ export const OnboardingPDFTemplate: React.FC<OnboardingPDFTemplateProps> = ({
           })}
         </View>
 
-        {/* Approval Footer - 3 columns */}
-        <View style={styles.approvalContainer}>
+        {/* Approval Footer - 3 columns. wrap={false}: bant sayfa sonunda bölünmez (imza tek başına 2. sayfaya düşmesin) */}
+        <View style={styles.approvalContainer} wrap={false}>
           {/* EK: ZİMMET TUTANAĞI */}
           <View style={styles.approvalColumn}>
             <Text style={styles.approvalTitle}>EK: ZİMMET TUTANAĞI</Text>
@@ -261,9 +275,7 @@ export const OnboardingPDFTemplate: React.FC<OnboardingPDFTemplateProps> = ({
             <Text style={styles.approvalTitle}>FORM İÇERİĞİ KONTROLÜ</Text>
             {secondToLastApproval ? (
               <>
-                <Text style={styles.approvalSubtitle}>{(secondToLastApproval.workflow_step.static_position?.title || secondToLastApproval.workflow_step.name || '').toUpperCase()}</Text>
                 <Text style={styles.approvalName}>{secondToLastApproval.approver.first_name} {secondToLastApproval.approver.last_name}</Text>
-                {secondToLastApproval.decided_at ? <Text style={styles.approvalName}>{formatTrDate(secondToLastApproval.decided_at)}</Text> : null}
                 {renderSignature(secondToLastApproval.approver.id, false, secondToLastApproval.status)}
               </>
             ) : null}
@@ -273,7 +285,6 @@ export const OnboardingPDFTemplate: React.FC<OnboardingPDFTemplateProps> = ({
             <Text style={styles.approvalTitle}>ONAY</Text>
             {lastApproval ? (
               <>
-                <Text style={styles.approvalSubtitle}>{(lastApproval.workflow_step.static_position?.title || lastApproval.workflow_step.name || '').toUpperCase()}</Text>
                 <Text style={styles.approvalName}>{lastApproval.approver.first_name} {lastApproval.approver.last_name}</Text>
                 {renderSignature(lastApproval.approver.id, false, lastApproval.status)}
               </>

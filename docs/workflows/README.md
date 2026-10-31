@@ -728,7 +728,7 @@ kullan ve `request_approvals` güncellemesine `acted_by_employee_id` yaz. SQL: `
 
 ## Notlar
 
-> **Mevcut tanımları görmek için:** panel → **Süreç Yönetimi → Süreç Tanımları** (`/workflow-definitions`, ORG_ADMIN). Adımlar, onaycı tipleri, sabit pozisyonların güncel sahipleri, ek dosya konfigürasyonu ve birim amirleri tek ekranda; motorun çözümleyemeyeceği durumlar (boş pozisyon, çift atama, pasif çalışan) uyarı olarak işaretlenir. Salt okunur — değişiklik hâlâ SQL ile yapılır. Veri katmanı: `lib/workflow/config-overview.ts`.
+> **Mevcut tanımları görmek için:** panel → **Süreç Yönetimi → Süreç Tanımları** (`/workflow-definitions`, ORG_ADMIN). Adımlar, onaycı tipleri, sabit pozisyonların güncel sahipleri, ek dosya konfigürasyonu ve birim amirleri tek ekranda; motorun çözümleyemeyeceği durumlar (boş pozisyon, çift atama, pasif çalışan) uyarı olarak işaretlenir. **Sabit pozisyonlu adımın pozisyonu (ve adı) buradan değiştirilebilir** ("Pozisyonu değiştir"; boş/çift atamalı/pasif çalışanlı pozisyon seçilemez, yalnız yeni talepleri etkiler, her değişiklik `workflow_step_changes`'e loglanır). Diğer her şey (adım ekleme/sıralama, onaycı tipi, başlatıcılar, ekler) salt okunur — hâlâ Table Editor / SQL. Veri katmanı: `lib/workflow/config-overview.ts`, yazma: `PATCH /api/workflow-steps/[id]`.
 
 ### Önemli Noktalar
 

@@ -1,24 +1,28 @@
 "use client";
 
-// Süreç Tanımları — admin, salt okunur (Faz 1).
+// Süreç Tanımları — admin.
 // Sol: süreç listesi (+ Birim Amirleri). Sağ: seçili sürecin adımları ve onaycıları.
-// Veri sunucuda derlenir (lib/workflow/config-overview.ts); burada yalnız gösterim var.
+// Veri sunucuda derlenir (lib/workflow/config-overview.ts). Faz 2a: sabit pozisyonlu
+// adımın pozisyonu buradan değiştirilebilir (StepPositionDialog → PATCH /api/workflow-steps/[id]);
+// geri kalan her şey salt okunur.
 
 import { useMemo, useState } from "react";
 import {
   Building2,
   ChevronDown,
   CircleAlert,
-  Eye,
+  History,
   Info,
   Lock,
   Paperclip,
+  Pencil,
   Search,
   TriangleAlert,
   Users,
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
@@ -34,14 +38,17 @@ import { cn } from "@/lib/utils";
 import { formatTrDateTime } from "@/lib/timezone";
 import type { ActionType, ApproverType, WorkflowStepPhase } from "@/lib/workflow/types";
 import type {
+  AssignablePosition,
   ConfigHolder,
   ConfigPosition,
   ConfigStep,
+  ConfigStepChange,
   ConfigWarning,
   ConfigWorkflow,
   UnitHeadEntry,
   WorkflowConfigOverview,
 } from "@/lib/workflow/config-overview";
+import { StepPositionDialog } from "./step-position-dialog";
 
 // ============================================================================
 // Etiketler
@@ -250,8 +257,40 @@ function ApproverResolution({ step }: { step: ConfigStep }) {
   }
 }
 
-function StepCard({ step, isLast }: { step: ConfigStep; isLast: boolean }) {
+function LastChangeNote({ change }: { change: ConfigStepChange }) {
+  const positionChanged = change.old_position_title !== change.new_position_title;
+  const nameChanged = change.old_name !== change.new_name;
+  return (
+    <p className="flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
+      <History className="h-3.5 w-3.5 shrink-0" />
+      <span>Son değişiklik: {formatTrDateTime(change.created_at)}</span>
+      <span>· {change.changed_by ?? "Supabase (Table Editor / SQL)"}</span>
+      {positionChanged && (
+        <span>
+          · pozisyon: {change.old_position_title ?? "—"} → {change.new_position_title ?? "—"}
+        </span>
+      )}
+      {nameChanged && (
+        <span>
+          · ad: {change.old_name ?? "—"} → {change.new_name ?? "—"}
+        </span>
+      )}
+    </p>
+  );
+}
+
+function StepCard({
+  step,
+  isLast,
+  positions,
+}: {
+  step: ConfigStep;
+  isLast: boolean;
+  positions: AssignablePosition[];
+}) {
   const { errors } = countWarnings(step.warnings);
+  const [editOpen, setEditOpen] = useState(false);
+  const editable = step.approver_type === "STATIC_POSITION";
   return (
     <li className="relative flex gap-4 pb-6 last:pb-0">
       {/* Zaman çizgisi */}
@@ -312,9 +351,17 @@ function StepCard({ step, isLast }: { step: ConfigStep; isLast: boolean }) {
               )}
             </p>
           </div>
+          {editable && (
+            <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
+              <Pencil className="mr-1.5 h-3.5 w-3.5" />
+              Pozisyonu değiştir
+            </Button>
+          )}
         </div>
 
         <ApproverResolution step={step} />
+
+        {step.last_change && <LastChangeNote change={step.last_change} />}
 
         {step.attachments.length > 0 && (
           <div className="flex flex-col gap-1">
@@ -337,6 +384,10 @@ function StepCard({ step, isLast }: { step: ConfigStep; isLast: boolean }) {
 
         <WarningList items={step.warnings} />
       </div>
+
+      {editable && (
+        <StepPositionDialog step={step} positions={positions} open={editOpen} onOpenChange={setEditOpen} />
+      )}
     </li>
   );
 }
@@ -345,7 +396,13 @@ function StepCard({ step, isLast }: { step: ConfigStep; isLast: boolean }) {
 // Sağ panel: süreç detayı
 // ============================================================================
 
-function WorkflowDetail({ workflow }: { workflow: ConfigWorkflow }) {
+function WorkflowDetail({
+  workflow,
+  positions,
+}: {
+  workflow: ConfigWorkflow;
+  positions: AssignablePosition[];
+}) {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-3">
@@ -420,7 +477,12 @@ function WorkflowDetail({ workflow }: { workflow: ConfigWorkflow }) {
         ) : (
           <ol className="flex flex-col">
             {workflow.steps.map((step, idx) => (
-              <StepCard key={step.id} step={step} isLast={idx === workflow.steps.length - 1} />
+              <StepCard
+                key={step.id}
+                step={step}
+                isLast={idx === workflow.steps.length - 1}
+                positions={positions}
+              />
             ))}
           </ol>
         )}
@@ -593,8 +655,8 @@ export function WorkflowConfigView({ overview }: WorkflowConfigViewProps) {
           </p>
         </div>
         <div className="flex flex-col items-end gap-1">
-          <Badge variant="outline" className="gap-1">
-            <Eye className="h-3 w-3" /> Salt okunur
+          <Badge variant="outline" className="gap-1" title="Diğer ayarlar salt okunur">
+            <Pencil className="h-3 w-3" /> Yalnız sabit pozisyonlar düzenlenebilir
           </Badge>
           <span className="text-xs text-muted-foreground">
             Yüklendi: {formatTrDateTime(overview.generated_at)}
@@ -703,7 +765,7 @@ export function WorkflowConfigView({ overview }: WorkflowConfigViewProps) {
           {selectedKey === UNIT_HEADS_KEY ? (
             <UnitHeadsView entries={overview.unit_heads} />
           ) : selectedWorkflow ? (
-            <WorkflowDetail workflow={selectedWorkflow} />
+            <WorkflowDetail workflow={selectedWorkflow} positions={overview.assignable_positions} />
           ) : (
             <p className="text-sm text-muted-foreground">Soldan bir süreç seçin.</p>
           )}
