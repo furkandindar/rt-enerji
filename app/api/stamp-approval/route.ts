@@ -1,7 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
-import { createApprovalChain, getWorkflowDefinitionByCode, notifyApprover, canStartWorkflow } from "@/lib/workflow";
+import { resolveApprovalChain, insertApprovalChain, getWorkflowDefinitionByCode, notifyApprover, canStartWorkflow, type ResolvedApprovalChain } from "@/lib/workflow";
+import { approvalChainErrorResponse, rollbackCreatedRequest } from "@/lib/workflow/request-creation";
 import {
   STAMP_PDF_BUCKET,
   buildOriginalPdfPath,
@@ -114,6 +115,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Sadece PDF dosyası yüklenebilir" }, { status: 400 });
     }
 
+    // Onay zinciri talep kaydından ÖNCE çözülür: onaycısı bulunamayan adım varsa
+    // (pozisyon boş vb.) kullanıcı nedenini görür ve hiç kayıt oluşmaz.
+    let chain: ResolvedApprovalChain;
+    try {
+      chain = await resolveApprovalChain(supabase, workflowDef.id, appUser.employee_id);
+    } catch (chainError) {
+      return approvalChainErrorResponse(chainError, "stamp-approval");
+    }
+
     // 5. PDF'i Storage'a yükle
     const supabaseAdmin = createServiceRoleClient();
     const pdfBuffer = Buffer.from(await pdfFile.arrayBuffer());
@@ -168,7 +178,7 @@ export async function POST(request: Request) {
       });
 
     if (stampError) {
-      await supabase.from("requests").delete().eq("id", newRequest.id);
+      await rollbackCreatedRequest(newRequest.id, "stamp-approval");
       await supabaseAdmin.storage.from(STAMP_PDF_BUCKET).remove([originalPdfPath]);
       console.error("Error creating stamp request:", stampError);
       return NextResponse.json({ error: "Failed to create stamp request details" }, { status: 500 });
@@ -176,20 +186,11 @@ export async function POST(request: Request) {
 
     // 8. Approval chain oluştur
     try {
-      await createApprovalChain(
-        supabase,
-        newRequest.id,
-        workflowDef.id,
-        appUser.employee_id
-      );
+      await insertApprovalChain(supabase, newRequest.id, chain);
     } catch (approvalError) {
-      await supabase.from("stamp_requests").delete().eq("request_id", newRequest.id);
-      await supabase.from("requests").delete().eq("id", newRequest.id);
+      await rollbackCreatedRequest(newRequest.id, "stamp-approval");
       await supabaseAdmin.storage.from(STAMP_PDF_BUCKET).remove([originalPdfPath]);
-      console.error("Error creating approval chain:", approvalError);
-      return NextResponse.json({
-        error: approvalError instanceof Error ? approvalError.message : "Failed to create approval chain"
-      }, { status: 500 });
+      return approvalChainErrorResponse(approvalError, "stamp-approval");
     }
 
     // 9. Oluşturulan talebi detaylı getir

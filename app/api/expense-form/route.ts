@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
-import { createApprovalChain, getWorkflowDefinitionByCode, notifyApprover, canStartWorkflow } from "@/lib/workflow";
+import { resolveApprovalChain, insertApprovalChain, getWorkflowDefinitionByCode, notifyApprover, canStartWorkflow, type ResolvedApprovalChain } from "@/lib/workflow";
+import { approvalChainErrorResponse, rollbackCreatedRequest } from "@/lib/workflow/request-creation";
 import type { CreateExpenseFormInput } from "@/lib/workflow";
 
 // GET /api/expense-form - Kullanıcının harcama formu taleplerini listele
@@ -127,6 +128,15 @@ export async function POST(request: Request) {
       }
     }
 
+    // Onay zinciri talep kaydından ÖNCE çözülür: onaycısı bulunamayan adım varsa
+    // (pozisyon boş vb.) kullanıcı nedenini görür ve hiç kayıt oluşmaz.
+    let chain: ResolvedApprovalChain;
+    try {
+      chain = await resolveApprovalChain(supabase, workflowDef.id, appUser.employee_id);
+    } catch (chainError) {
+      return approvalChainErrorResponse(chainError, "expense-form");
+    }
+
     // Ana request kaydı
     const { data: newRequest, error: requestError } = await supabase
       .from("requests")
@@ -165,7 +175,7 @@ export async function POST(request: Request) {
       .single();
 
     if (expenseError || !expenseRequest) {
-      await supabase.from("requests").delete().eq("id", newRequest.id);
+      await rollbackCreatedRequest(newRequest.id, "expense-form");
       console.error("Error creating expense request:", expenseError);
       return NextResponse.json({ error: "Failed to create expense details" }, { status: 500 });
     }
@@ -185,28 +195,17 @@ export async function POST(request: Request) {
       .insert(itemsData);
 
     if (itemsError) {
-      await supabase.from("expense_requests").delete().eq("id", expenseRequest.id);
-      await supabase.from("requests").delete().eq("id", newRequest.id);
+      await rollbackCreatedRequest(newRequest.id, "expense-form");
       console.error("Error creating expense items:", itemsError);
       return NextResponse.json({ error: "Failed to create expense items" }, { status: 500 });
     }
 
     // Onay zinciri
     try {
-      await createApprovalChain(
-        supabase,
-        newRequest.id,
-        workflowDef.id,
-        appUser.employee_id,
-      );
+      await insertApprovalChain(supabase, newRequest.id, chain);
     } catch (chainError) {
-      await supabase.from("expense_items").delete().eq("expense_request_id", expenseRequest.id);
-      await supabase.from("expense_requests").delete().eq("id", expenseRequest.id);
-      await supabase.from("requests").delete().eq("id", newRequest.id);
-      console.error("Error creating approval chain:", chainError);
-      return NextResponse.json({
-        error: chainError instanceof Error ? chainError.message : "Failed to create approval chain"
-      }, { status: 500 });
+      await rollbackCreatedRequest(newRequest.id, "expense-form");
+      return approvalChainErrorResponse(chainError, "expense-form");
     }
 
     // Oluşturulan talebi detaylı getir

@@ -32,11 +32,11 @@
 | 3 | İnsan Kaynakları | `REQUESTER` | `FILL_AND_SIGN` | `section_3` | İK İşlemleri |
 | 4 | Hukuk Müşaviri | `STATIC_POSITION` | `FILL_AND_SIGN` | `section_4` | Sözleşme İşlemleri |
 | 5 | İdari İşler Uzmanı | `STATIC_POSITION` | `FILL_AND_SIGN` | `section_5` | IT İşlemleri (Bilgisayar Temini) |
-| 6 | İdari İşler Personeli | `STATIC_POSITION` | `FILL_AND_SIGN` | `section_5b` | IT İşlemleri (QNAP/O365/IP Telefon Kaydı) |
+| 6 | Bilgi İşlem Personeli | `STATIC_POSITION` | `FILL_AND_SIGN` | `section_5b` | IT İşlemleri (QNAP/O365/IP Telefon Kaydı) |
 | 7 | Yönetici Asistanı Antalya | `STATIC_POSITION` | `FILL_AND_SIGN` | `section_6` | Diğer |
 | 8 | Genel Müdür | `STATIC_POSITION` | `FILL_AND_SIGN` | `null` | Son Onay |
 
-> **Not (2026-09-27):** Tablo prod konfigürasyonunu yansıtır. Adım 6 (`section_5b`) QNAP maddesini İdari İşler Personeli'ne vermek için `section_5`'ten ayrıldı. Bu adım olmadan kurulmuş zincirlerde (değişiklikten önce gönderilmiş talepler) QNAP maddesi `section_5`'te kalır ve imzasını adım 5 onaycısı atar — kaynak: `ONBOARDING_SPLIT_SECTIONS` (`lib/approvals/constants.ts`). Adım 6, PDF'teki "FORM İÇERİĞİ KONTROLÜ" kutusu (sondan bir önceki onaycı) değişmesin diye Asistan'dan önce konumlandı.
+> **Not (2026-09-27):** Tablo prod konfigürasyonunu yansıtır. Adım 6 (`section_5b`) QNAP maddesini Saadet Nur Kanbur'a vermek için `section_5`'ten ayrıldı (2026-10-31'den beri pozisyon: Bilgi İşlem Personeli, BID500 — önceden İdari İşler Personeli, İDR500). Bu adım olmadan kurulmuş zincirlerde (değişiklikten önce gönderilmiş talepler) QNAP maddesi `section_5`'te kalır ve imzasını adım 5 onaycısı atar — kaynak: `ONBOARDING_SPLIT_SECTIONS` (`lib/approvals/constants.ts`). Adım 6, PDF'teki "FORM İÇERİĞİ KONTROLÜ" kutusu (sondan bir önceki onaycı) değişmesin diye Asistan'dan önce konumlandı.
 
 ---
 
@@ -95,7 +95,7 @@
 |----|-------|------------|-----------|
 | 7 | Bilgisayar Temini | `computer_setup_status` | `computer_setup_notes` |
 
-### 3.5b Section 5b: IT İşlemleri (İdari İşler Personeli)
+### 3.5b Section 5b: IT İşlemleri (Bilgi İşlem Personeli)
 
 | No | Madde | Status Key | Notes Key |
 |----|-------|------------|-----------|
@@ -445,7 +445,7 @@ section_1, section_3 → Requester (İK)
 section_2  → Genel Müdür
 section_4  → Hukuk Müşaviri
 section_5  → İdari İşler Uzmanı
-section_5b → İdari İşler Personeli (zincirde yoksa section_5 imzalar)
+section_5b → Bilgi İşlem Personeli (zincirde yoksa section_5 imzalar)
 section_6  → Yönetici Asistanı
 ```
 

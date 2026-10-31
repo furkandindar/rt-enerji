@@ -33,12 +33,12 @@
 | 4 | Hukuk Müşaviri | `STATIC_POSITION` | `FILL_AND_SIGN` | `section_4` | Hukuki İşlemler |
 | 5 | Muhasebe Müdürü | `STATIC_POSITION` | `FILL_AND_SIGN` | `section_5` | Muhasebe İşlemleri |
 | 6 | İdari İşler Uzmanı | `STATIC_POSITION` | `FILL_AND_SIGN` | `section_6` | IT / İdari İşlemler (PC Kontrolü) |
-| 7 | İdari İşler Personeli | `STATIC_POSITION` | `FILL_AND_SIGN` | `section_6b` | IT / İdari İşlemler (QNAP/O365/IP Telefon Kaldırma) |
+| 7 | Bilgi İşlem Personeli | `STATIC_POSITION` | `FILL_AND_SIGN` | `section_6b` | IT / İdari İşlemler (QNAP/O365/IP Telefon Kaldırma) |
 | 8 | İnsan Kaynakları Uzmanı | `STATIC_POSITION` | `FILL_AND_SIGN` | `section_7` | Belge Tarama |
 | 9 | Yönetici Asistanı Antalya | `STATIC_POSITION` | `FILL_AND_SIGN` | `section_8` | Takvim İşlemleri |
 | 10 | Genel Müdür | `STATIC_POSITION` | `FILL_AND_SIGN` | `null` | Son Onay |
 
-> **Not (2026-09-27):** Tablo prod konfigürasyonunu yansıtır. Adım 7 (`section_6b`) QNAP maddesini İdari İşler Personeli'ne vermek için `section_6`'dan ayrıldı. Bu adım olmadan kurulmuş zincirlerde (değişiklikten önce gönderilmiş talepler) QNAP maddesi `section_6`'da kalır ve imzasını adım 6 onaycısı atar — kaynak: `SEPARATION_SPLIT_SECTIONS` (`lib/approvals/constants.ts`).
+> **Not (2026-09-27):** Tablo prod konfigürasyonunu yansıtır. Adım 7 (`section_6b`) QNAP maddesini Saadet Nur Kanbur'a vermek için `section_6`'dan ayrıldı (2026-10-31'den beri pozisyon: Bilgi İşlem Personeli, BID500 — önceden İdari İşler Personeli, İDR500). Bu adım olmadan kurulmuş zincirlerde (değişiklikten önce gönderilmiş talepler) QNAP maddesi `section_6`'da kalır ve imzasını adım 6 onaycısı atar — kaynak: `SEPARATION_SPLIT_SECTIONS` (`lib/approvals/constants.ts`).
 
 ---
 
@@ -112,7 +112,7 @@
 |----|-------|------------|-----------|
 | 1 | PC Kontrolü (İhtiyaç Halinde Profesyonel Kontrol) | `pc_check_status` | `pc_check_notes` |
 
-### 3.6b Section 6b: IT / İdari İşlemler (İdari İşler Personeli)
+### 3.6b Section 6b: IT / İdari İşlemler (Bilgi İşlem Personeli)
 
 | No | Madde | Status Key | Notes Key |
 |----|-------|------------|-----------|
@@ -486,7 +486,7 @@ section_2            → Genel Müdür
 section_4            → Hukuk Müşaviri
 section_5            → Muhasebe Müdürü
 section_6            → İdari İşler Uzmanı
-section_6b           → İdari İşler Personeli (zincirde yoksa section_6 imzalar)
+section_6b           → Bilgi İşlem Personeli (zincirde yoksa section_6 imzalar)
 section_7            → İnsan Kaynakları Uzmanı
 section_8            → Yönetici Asistanı
 ```

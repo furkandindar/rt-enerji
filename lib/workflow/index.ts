@@ -5,11 +5,15 @@ export * from './types';
 export {
   determineApprover,
   createApprovalChain,
+  resolveApprovalChain,
+  insertApprovalChain,
+  ApprovalChainResolutionError,
   getWorkflowDefinitionByCode,
   // V3: Yeni fonksiyonlar
   canStartWorkflow,
   getAvailableWorkflows,
 } from './workflow-service';
+export type { ResolvedApprovalChain } from './workflow-service';
 export {
   createNotification,
   notifyApprover,

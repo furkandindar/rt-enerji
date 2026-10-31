@@ -94,7 +94,7 @@ Hesaplar tek yerde: [`lib/comparison-form/matrix-totals.ts`](../../lib/compariso
 
 4 tablo: `mukayese_requests` (header + footer), `mukayese_items` (satırlar), `mukayese_suppliers` (sütunlar), `mukayese_prices` (hücreler). Tam SQL için bkz. [`sql/comparison_form_schema.sql`](../../sql/comparison_form_schema.sql).
 
-Talep oluşturma atomik bir RPC üzerinden yapılır: [`sql/comparison_form_rpc.sql`](../../sql/comparison_form_rpc.sql) → `create_mukayese_request_atomic(...)` fonksiyonu `requests + mukayese_requests + N items + M suppliers + N×M prices` insertlerini tek transaction içinde yürütür. Onay zinciri (`request_approvals`) RPC kapsamı dışındadır; backend RPC'den dönen `request_id` ile `createApprovalChain(...)` çağırır, başarısızlık durumunda `DELETE FROM requests WHERE id = ...` ile geri alır (CASCADE sayesinde mukayese_* alt tabloları da temizlenir).
+Talep oluşturma atomik bir RPC üzerinden yapılır: [`sql/comparison_form_rpc.sql`](../../sql/comparison_form_rpc.sql) → `create_mukayese_request_atomic(...)` fonksiyonu `requests + mukayese_requests + N items + M suppliers + N×M prices` insertlerini tek transaction içinde yürütür. Onay zinciri (`request_approvals`) RPC kapsamı dışındadır; backend zinciri RPC'den ÖNCE `resolveApprovalChain` ile çözer (onaycısı bulunamazsa RPC hiç çağrılmaz), RPC'den dönen `request_id` ile `insertApprovalChain(...)` yazar; başarısızlıkta `rollbackCreatedRequest` (service role) ile `requests` satırını siler (CASCADE sayesinde mukayese_* alt tabloları da temizlenir).
 
 ```
 requests (1) ──┬─ (1) mukayese_requests

@@ -313,7 +313,8 @@ export interface CreateProcessInput {
 ```typescript
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
-import { createApprovalChain, getWorkflowDefinitionByCode, notifyApprover, canStartWorkflow } from "@/lib/workflow";
+import { resolveApprovalChain, insertApprovalChain, getWorkflowDefinitionByCode, notifyApprover, canStartWorkflow, type ResolvedApprovalChain } from "@/lib/workflow";
+import { approvalChainErrorResponse, rollbackCreatedRequest } from "@/lib/workflow/request-creation";
 import type { CreateProcessInput } from "@/lib/workflow";
 
 // GET - Kullanıcının taleplerini listele
@@ -350,13 +351,20 @@ export async function POST(request: Request) {
   // 2. Workflow definition al
   // 3. Yetki kontrolü (canStartWorkflow)
   // 4. Validasyon
-  // 5. Request oluştur
-  // 6. Process-specific request oluştur
-  // 7. Approval chain oluştur
-  // 8. Onaycıya bildirim gönder
-  // 9. Response döndür
+  // 5. Onay zincirini ÇÖZ — request insert'inden ÖNCE (onaycısı bulunamazsa hiç kayıt oluşmaz):
+  //      let chain: ResolvedApprovalChain;
+  //      try { chain = await resolveApprovalChain(supabase, workflowDef.id, appUser.employee_id /*, formData, dynamicApprovers */); }
+  //      catch (e) { return approvalChainErrorResponse(e, "process-name"); }   // 422 + Türkçe mesaj
+  // 6. Request oluştur
+  // 7. Process-specific request oluştur — hata: await rollbackCreatedRequest(newRequest.id, "process-name")
+  // 8. Zinciri YAZ: await insertApprovalChain(supabase, newRequest.id, chain)
+  //      catch → rollbackCreatedRequest(...) + return approvalChainErrorResponse(e, "process-name")
+  // 9. Onaycıya bildirim gönder
+  // 10. Response döndür
 }
 ```
+
+> **Rollback'i RLS'li client ile yazma.** `requests` ve detay tablolarında DELETE policy yok; `supabase.from("requests").delete()` hata vermeden 0 satır siler ve talep PENDING + onay satırsız kalır (2026-10-31, talep 2026-001990). `rollbackCreatedRequest` service role ile siler; detay/kalem/onay tabloları `requests`'e CASCADE bağlı olduğu için tek çağrı yeter.
 
 ### Adım 2.3: Mevcut API'leri Güncelle
 
@@ -727,7 +735,7 @@ kullan ve `request_approvals` güncellemesine `acted_by_employee_id` yaz. SQL: `
 1. **Workflow Code**: Her zaman `UPPER_SNAKE_CASE` kullan
 2. **İlk Adım**: Her zaman `REQUESTER` + `FILL_AND_SIGN` olmalı
 3. **RLS**: Güvenlik için mutlaka RLS politikaları ekle
-4. **Rollback**: API'de hata durumunda rollback mantığı ekle
+4. **Rollback**: Zinciri `resolveApprovalChain` ile kayıttan önce çöz; sonraki hatalarda `rollbackCreatedRequest` kullan (bkz. Adım 2.2)
 5. **Bildirim**: Talep oluşturulduğunda onaycıya bildirim gönder
 6. **Alternatif Onaycı**: Talep eden = onaycı durumunda sistem otomatik olarak aynı birimde veya üst birimde alternatif arar
 

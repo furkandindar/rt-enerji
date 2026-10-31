@@ -42,7 +42,7 @@ export const onboardingSectionConfig: Record<string, { title: string; items: Che
       { key: "computer_setup", label: "Bilgisayar Temini" },
     ],
   },
-  // section_5'ten ayrıldı: QNAP maddesi ayrı bir adımda (İdari İşler Personeli) doldurulur.
+  // section_5'ten ayrıldı: QNAP maddesi ayrı bir adımda (Bilgi İşlem Personeli) doldurulur.
   section_5b: {
     title: "IT İşlemleri",
     items: [
@@ -272,7 +272,7 @@ export const separationSectionConfig: Record<string, { title: string; items: Che
       { key: "pc_check", label: "PC Kontrolü (İhtiyaç Halinde Profesyonel Kontrol)" },
     ],
   },
-  // section_6'dan ayrıldı: QNAP maddesi ayrı bir adımda (İdari İşler Personeli) doldurulur.
+  // section_6'dan ayrıldı: QNAP maddesi ayrı bir adımda (Bilgi İşlem Personeli) doldurulur.
   section_6b: {
     title: "IT / İdari İşlemler",
     items: [

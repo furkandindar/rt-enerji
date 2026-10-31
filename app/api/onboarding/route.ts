@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
-import { createApprovalChain, getWorkflowDefinitionByCode, notifyApprover, canStartWorkflow } from "@/lib/workflow";
+import { resolveApprovalChain, insertApprovalChain, getWorkflowDefinitionByCode, notifyApprover, canStartWorkflow, type ResolvedApprovalChain } from "@/lib/workflow";
+import { approvalChainErrorResponse, rollbackCreatedRequest } from "@/lib/workflow/request-creation";
 import type { CreateOnboardingInput } from "@/lib/workflow";
 
 const ALLOWED_PAGE_SIZES = [10, 25, 50, 100] as const;
@@ -148,6 +149,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "İşe giriş tarihi zorunludur" }, { status: 400 });
     }
 
+    // Onay zinciri talep kaydından ÖNCE çözülür: onaycısı bulunamayan adım varsa
+    // (pozisyon boş vb.) kullanıcı nedenini görür ve hiç kayıt oluşmaz.
+    let chain: ResolvedApprovalChain;
+    try {
+      chain = await resolveApprovalChain(supabase, workflowDef.id, appUser.employee_id);
+    } catch (chainError) {
+      return approvalChainErrorResponse(chainError, "onboarding");
+    }
+
     // 5. Ana request kaydını oluştur
     const { data: newRequest, error: requestError } = await supabase
       .from("requests")
@@ -183,27 +193,18 @@ export async function POST(request: Request) {
 
     if (onboardingError) {
       // Rollback: request'i sil
-      await supabase.from("requests").delete().eq("id", newRequest.id);
+      await rollbackCreatedRequest(newRequest.id, "onboarding");
       console.error("Error creating onboarding request:", onboardingError);
       return NextResponse.json({ error: "Failed to create onboarding details" }, { status: 500 });
     }
 
     // 7. Approval chain oluştur
     try {
-      await createApprovalChain(
-        supabase,
-        newRequest.id,
-        workflowDef.id,
-        appUser.employee_id
-      );
+      await insertApprovalChain(supabase, newRequest.id, chain);
     } catch (approvalError) {
       // Rollback: tüm kayıtları sil
-      await supabase.from("onboarding_requests").delete().eq("request_id", newRequest.id);
-      await supabase.from("requests").delete().eq("id", newRequest.id);
-      console.error("Error creating approval chain:", approvalError);
-      return NextResponse.json({
-        error: approvalError instanceof Error ? approvalError.message : "Failed to create approval chain"
-      }, { status: 500 });
+      await rollbackCreatedRequest(newRequest.id, "onboarding");
+      return approvalChainErrorResponse(approvalError, "onboarding");
     }
 
     // 8. Oluşturulan talebi detaylı getir

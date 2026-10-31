@@ -3,7 +3,8 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import { createServiceRoleClient } from '@/lib/supabase/service-role';
 import {
-  createApprovalChain,
+  resolveApprovalChain,
+  insertApprovalChain,
   buildCarriedApprovalFields,
   type CarryOverSourceRow,
 } from './workflow-service';
@@ -192,6 +193,16 @@ export async function resetApprovalChain(
   const effectiveFormData =
     formData ?? (await buildConditionFormData(serviceSupabase as unknown as SupabaseClient, requestId, workflowCode));
 
+  // Zincir cycle artırılmadan ÖNCE çözülür: onaycısı bulunamayan adım varsa
+  // (ApprovalChainResolutionError) talep hiç değişmeden eski durumunda kalır.
+  const chain = await resolveApprovalChain(
+    serviceSupabase as unknown as SupabaseClient,
+    req.workflow_definition_id,
+    req.requester_employee_id,
+    effectiveFormData,
+    dynamicApprovers
+  );
+
   const { error: bumpError } = await serviceSupabase
     .from('requests')
     .update({ current_revision_cycle: newCycle, current_step: 1 })
@@ -201,13 +212,10 @@ export async function resetApprovalChain(
     throw new Error(`Failed to bump revision cycle: ${bumpError.message}`);
   }
 
-  await createApprovalChain(
+  await insertApprovalChain(
     serviceSupabase as unknown as SupabaseClient,
     requestId,
-    req.workflow_definition_id,
-    req.requester_employee_id,
-    effectiveFormData,
-    dynamicApprovers,
+    chain,
     newCycle,
     {
       firstStepComment: options?.requesterComment ?? null,

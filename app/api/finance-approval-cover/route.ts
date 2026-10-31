@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
-import { createApprovalChain, getWorkflowDefinitionByCode, notifyApprover, canStartWorkflow } from "@/lib/workflow";
+import { resolveApprovalChain, insertApprovalChain, getWorkflowDefinitionByCode, notifyApprover, canStartWorkflow, type ResolvedApprovalChain } from "@/lib/workflow";
+import { approvalChainErrorResponse, rollbackCreatedRequest } from "@/lib/workflow/request-creation";
 import type { CreateFinanceApprovalCoverInput } from "@/lib/workflow";
 import {
   buildFinanceCoverDetail,
@@ -156,6 +157,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: validationError }, { status: 400 });
     }
 
+    // Onay zinciri talep kaydından ÖNCE çözülür: onaycısı bulunamayan adım varsa
+    // (pozisyon boş vb.) kullanıcı nedenini görür ve hiç kayıt oluşmaz.
+    let chain: ResolvedApprovalChain;
+    try {
+      chain = await resolveApprovalChain(supabase, workflowDef.id, appUser.employee_id, undefined, body.dynamic_approvers);
+    } catch (chainError) {
+      return approvalChainErrorResponse(chainError, "finance-approval-cover");
+    }
+
     // 6. Ana request kaydı oluştur
     const { data: newRequest, error: requestError } = await supabase
       .from("requests")
@@ -185,7 +195,7 @@ export async function POST(request: Request) {
       .single();
 
     if (financeError || !financeRequest) {
-      await supabase.from("requests").delete().eq("id", newRequest.id);
+      await rollbackCreatedRequest(newRequest.id, "finance-approval-cover");
       console.error("Error creating finance request:", financeError);
       return NextResponse.json({ error: "Failed to create finance details" }, { status: 500 });
     }
@@ -198,30 +208,17 @@ export async function POST(request: Request) {
       .insert(itemsData);
 
     if (itemsError) {
-      await supabase.from("finance_approval_cover_requests").delete().eq("id", financeRequest.id);
-      await supabase.from("requests").delete().eq("id", newRequest.id);
+      await rollbackCreatedRequest(newRequest.id, "finance-approval-cover");
       console.error("Error creating finance items:", itemsError);
       return NextResponse.json({ error: "Failed to create finance items" }, { status: 500 });
     }
 
     // 9. Onay zinciri oluştur (dinamik onaycılar dahil)
     try {
-      await createApprovalChain(
-        supabase,
-        newRequest.id,
-        workflowDef.id,
-        appUser.employee_id,
-        undefined,
-        body.dynamic_approvers
-      );
+      await insertApprovalChain(supabase, newRequest.id, chain);
     } catch (chainError) {
-      await supabase.from("finance_approval_cover_items").delete().eq("finance_request_id", financeRequest.id);
-      await supabase.from("finance_approval_cover_requests").delete().eq("id", financeRequest.id);
-      await supabase.from("requests").delete().eq("id", newRequest.id);
-      console.error("Error creating approval chain:", chainError);
-      return NextResponse.json({
-        error: chainError instanceof Error ? chainError.message : "Failed to create approval chain"
-      }, { status: 500 });
+      await rollbackCreatedRequest(newRequest.id, "finance-approval-cover");
+      return approvalChainErrorResponse(chainError, "finance-approval-cover");
     }
 
     // 10. Oluşturulan talebi detaylı getir

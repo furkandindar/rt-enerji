@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
-import { createApprovalChain, getWorkflowDefinitionByCode, notifyApprover, canStartWorkflow } from "@/lib/workflow";
+import { resolveApprovalChain, insertApprovalChain, getWorkflowDefinitionByCode, notifyApprover, canStartWorkflow, type ResolvedApprovalChain } from "@/lib/workflow";
+import { approvalChainErrorResponse, rollbackCreatedRequest } from "@/lib/workflow/request-creation";
 import type { CreateOvertimeInput } from "@/lib/workflow";
 import { APP_UTC_OFFSET, istanbulInputToTimestamptz } from "@/lib/timezone";
 
@@ -174,6 +175,15 @@ export async function POST(request: Request) {
       }
     }
 
+    // Onay zinciri talep kaydından ÖNCE çözülür: onaycısı bulunamayan adım varsa
+    // (pozisyon boş vb.) kullanıcı nedenini görür ve hiç kayıt oluşmaz.
+    let chain: ResolvedApprovalChain;
+    try {
+      chain = await resolveApprovalChain(supabase, workflowDef.id, appUser.employee_id);
+    } catch (chainError) {
+      return approvalChainErrorResponse(chainError, "overtime");
+    }
+
     // 5. Ana request kaydını oluştur
     const { data: newRequest, error: requestError } = await supabase
       .from("requests")
@@ -235,7 +245,7 @@ export async function POST(request: Request) {
 
     if (overtimeError || !overtimeRequest) {
       // Rollback: request'i sil
-      await supabase.from("requests").delete().eq("id", newRequest.id);
+      await rollbackCreatedRequest(newRequest.id, "overtime");
       console.error("Error creating overtime request:", overtimeError);
       return NextResponse.json({ error: "Failed to create overtime details" }, { status: 500 });
     }
@@ -256,8 +266,7 @@ export async function POST(request: Request) {
 
       if (entriesError) {
         // Rollback: tüm kayıtları sil
-        await supabase.from("overtime_requests").delete().eq("id", overtimeRequest.id);
-        await supabase.from("requests").delete().eq("id", newRequest.id);
+        await rollbackCreatedRequest(newRequest.id, "overtime");
         console.error("Error creating overtime entries:", entriesError);
         return NextResponse.json({ error: "Failed to create overtime entries" }, { status: 500 });
       }
@@ -265,21 +274,11 @@ export async function POST(request: Request) {
 
     // 8. Approval chain oluştur
     try {
-      await createApprovalChain(
-        supabase,
-        newRequest.id,
-        workflowDef.id,
-        appUser.employee_id
-      );
+      await insertApprovalChain(supabase, newRequest.id, chain);
     } catch (approvalError) {
       // Rollback: tüm kayıtları sil
-      await supabase.from("overtime_entries").delete().eq("overtime_request_id", overtimeRequest.id);
-      await supabase.from("overtime_requests").delete().eq("id", overtimeRequest.id);
-      await supabase.from("requests").delete().eq("id", newRequest.id);
-      console.error("Error creating approval chain:", approvalError);
-      return NextResponse.json({
-        error: approvalError instanceof Error ? approvalError.message : "Failed to create approval chain"
-      }, { status: 500 });
+      await rollbackCreatedRequest(newRequest.id, "overtime");
+      return approvalChainErrorResponse(approvalError, "overtime");
     }
 
     // 9. Oluşturulan talebi detaylı getir

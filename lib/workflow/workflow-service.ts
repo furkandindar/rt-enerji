@@ -29,9 +29,12 @@ interface OrganizationalUnit {
   parent_id: string | null;
 }
 
-/** createApprovalChain'in insert öncesi kurduğu satır (yardımcı alanlar insert'ten önce çıkarılır). */
+/**
+ * resolveApprovalChain'in kurduğu satır. Talepten bağımsızdır: request_id ve
+ * revision_cycle insert anında eklenir, yardımcı alanlar (action_type,
+ * approver_type, phase, is_first_requester_step) insert'ten önce çıkarılır.
+ */
 interface ChainApprovalDraft {
-  request_id: string;
   workflow_step_id: string;
   approver_employee_id: string;
   status: string;
@@ -40,10 +43,34 @@ interface ChainApprovalDraft {
   action_type: string;
   approver_type: string;
   phase: string;
-  revision_cycle: number;
+  is_first_requester_step: boolean;
   comment?: string | null;
   acted_by_employee_id?: string | null;
   carried_over_from_id?: string;
+}
+
+/**
+ * Talep kaydından önce çözülmüş onay zinciri (resolveApprovalChain → insertApprovalChain).
+ * Alanlar motorun iç detayıdır; çağıran yalnız iki fonksiyon arasında taşır.
+ */
+export interface ResolvedApprovalChain {
+  workflowDefinitionId: string;
+  requesterEmployeeId: string;
+  drafts: ChainApprovalDraft[];
+}
+
+/**
+ * Onay zinciri kurulamadı: onaycısı bulunamayan adım (pozisyon boş / çift atama),
+ * pozisyonu tanımsız adım ya da birincil pozisyonu olmayan talep eden.
+ * Mesaj kullanıcıya gösterilecek Türkçe metindir; uçlar 422 ile döner
+ * (lib/workflow/request-creation.ts). Zincir talep kaydından ÖNCE çözüldüğü için
+ * bu hata DB'de iz bırakmaz.
+ */
+export class ApprovalChainResolutionError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ApprovalChainResolutionError';
+  }
 }
 
 /**
@@ -219,7 +246,9 @@ export async function determineApprover(
   // Talep eden = pozisyondaki kişi ise → self-approval (alternatif aranmaz)
   if (step.approver_type === 'STATIC_POSITION') {
     if (!step.static_position_id) {
-      throw new Error(`Step "${step.name}" requires static_position_id`);
+      throw new ApprovalChainResolutionError(
+        `"${step.name}" adımına onaycı pozisyonu tanımlanmamış. Talebiniz oluşturulmadı; lütfen sistem yöneticisine bildirin.`
+      );
     }
 
     // Pozisyondaki kişiyi bul ve direkt döndür
@@ -252,7 +281,9 @@ async function determineUnitHeadApprover(
   // 1. Talep edenin primary pozisyonunu al
   const requesterPosition = await getEmployeePrimaryPosition(supabase, requesterEmployeeId);
   if (!requesterPosition) {
-    throw new Error('Requester has no primary position assigned');
+    throw new ApprovalChainResolutionError(
+      'Birincil pozisyon atamanız bulunamadığı için birim amiriniz belirlenemedi. Talebiniz oluşturulmadı; lütfen sistem yöneticisine bildirin.'
+    );
   }
 
   let currentUnitId = requesterPosition.position.unit_id;
@@ -356,6 +387,10 @@ function shouldSkipStep(
  *                adım + AYNI kişiyle yer alan bekleyen satırlar yeniden onay beklemez, taşınır.
  *                Zincirde yeni olan kişi (ör. eklenen İlgili Kişi) yine onaylar. 1. satır bu
  *                gönderimin kendisidir, taşınmaz.
+ *
+ * Talep oluşturma uçları bunun yerine iki aşamayı ayrı çağırır: resolveApprovalChain
+ * talep kaydından ÖNCE, insertApprovalChain sonra (onaycısı bulunamayan zincir hiç
+ * kayıt bırakmasın diye).
  */
 export async function createApprovalChain(
   supabase: SupabaseClient,
@@ -367,6 +402,31 @@ export async function createApprovalChain(
   cycle: number = 0,
   options?: { firstStepComment?: string | null; carryOverFrom?: CarryOverSourceRow[] }
 ): Promise<void> {
+  const chain = await resolveApprovalChain(
+    supabase,
+    workflowDefinitionId,
+    requesterEmployeeId,
+    formData,
+    dynamicApprovers
+  );
+  await insertApprovalChain(supabase, requestId, chain, cycle, options);
+}
+
+/**
+ * Onay zincirini DB'ye yazmadan çözer: adımlar, onaycılar, koşullu / dinamik /
+ * mükerrer onaycı skip'leri ve 1..N sıra. Talepten bağımsızdır (request_id yok).
+ *
+ * Onaycısı bulunamayan adım varsa ApprovalChainResolutionError fırlatır. Talep
+ * oluşturma uçları bunu requests insert'inden ÖNCE çağırır; böylece hata hiçbir
+ * kayıt bırakmaz (eskiden talep PENDING + onay satırsız kalıyordu).
+ */
+export async function resolveApprovalChain(
+  supabase: SupabaseClient,
+  workflowDefinitionId: string,
+  requesterEmployeeId: string,
+  formData?: Record<string, unknown>,
+  dynamicApprovers?: CreateRequestDynamicApprovers
+): Promise<ResolvedApprovalChain> {
 
   // 1. Workflow adımlarını al
   const { data: steps, error: stepsError } = await supabase
@@ -405,7 +465,6 @@ export async function createApprovalChain(
       for (const employeeId of selectedIds) {
         sequenceCounter++;
         approvals.push({
-          request_id: requestId,
           workflow_step_id: step.id,
           approver_employee_id: employeeId,
           status: 'PENDING',
@@ -414,7 +473,7 @@ export async function createApprovalChain(
           action_type: step.action_type,
           approver_type: step.approver_type, // Mükerrer-onaycı skip kontrolü için
           phase: step.phase,
-          revision_cycle: cycle,
+          is_first_requester_step: false,
         });
       }
       continue;
@@ -428,7 +487,11 @@ export async function createApprovalChain(
     );
 
     if (!approverEmployeeId) {
-      throw new Error(`Could not determine approver for step: ${step.name}`);
+      // STATIC_POSITION: pozisyonda aktif çalışan yok ya da birden fazla açık atama var
+      // (getEmployeeByPosition .single() ikisinde de null döner).
+      throw new ApprovalChainResolutionError(
+        `"${step.name}" adımının onaycısı belirlenemedi (pozisyonda aktif çalışan yok ya da birden fazla). Talebiniz oluşturulmadı; lütfen sistem yöneticisine bildirin.`
+      );
     }
 
     // Otomatik onaylama (oluşturma anında):
@@ -439,7 +502,6 @@ export async function createApprovalChain(
 
     sequenceCounter++;
     approvals.push({
-      request_id: requestId,
       workflow_step_id: step.id,
       approver_employee_id: approverEmployeeId,
       status: autoApproveThisStep ? 'APPROVED' : 'PENDING',
@@ -448,10 +510,7 @@ export async function createApprovalChain(
       action_type: step.action_type, // Forward-approve kontrolü için
       approver_type: step.approver_type, // Mükerrer-onaycı skip kontrolü için
       phase: step.phase,
-      revision_cycle: cycle,
-      ...(isFirstRequesterStep && options?.firstStepComment
-        ? { comment: options.firstStepComment }
-        : {}),
+      is_first_requester_step: isFirstRequesterStep, // firstStepComment hedefi
     });
   }
 
@@ -505,6 +564,37 @@ export async function createApprovalChain(
     a.sequence_order = idx + 1;
   });
 
+  return { workflowDefinitionId, requesterEmployeeId, drafts: approvals };
+}
+
+/**
+ * resolveApprovalChain ile çözülmüş zinciri talebe yazar: oto-onaylar, revize
+ * taşıması, insert ve current_step / tüm-adımlar-onaylı tamamlama.
+ * Parametreler createApprovalChain ile aynı anlamdadır.
+ */
+export async function insertApprovalChain(
+  supabase: SupabaseClient,
+  requestId: string,
+  chain: ResolvedApprovalChain,
+  cycle: number = 0,
+  options?: { firstStepComment?: string | null; carryOverFrom?: CarryOverSourceRow[] }
+): Promise<void> {
+  const { workflowDefinitionId, requesterEmployeeId } = chain;
+  // Satırlar aşağıda yerinde güncellenir; çağıranın elindeki çözüm değişmesin.
+  const approvals = chain.drafts.map((d) => ({ ...d }));
+
+  // Oto-onaylanan ilk REQUESTER satırı (gönderim imzası): karar anı çözüm anı değil
+  // yazma anıdır — zincir talep kaydından önce çözüldüğü için aksi halde
+  // submitted_at'ten önceye düşer. Resubmit'te talep sahibinin Revize Açıklaması
+  // da bu satıra yazılır.
+  const firstRequesterRow = approvals.find((a) => a.is_first_requester_step);
+  if (firstRequesterRow) {
+    if (firstRequesterRow.status === 'APPROVED') {
+      firstRequesterRow.decided_at = new Date().toISOString();
+    }
+    if (options?.firstStepComment) firstRequesterRow.comment = options.firstStepComment;
+  }
+
   // 3. İlk adım auto-approve edildiyse, talep edenin ilerideki SIGN_ONLY adımlarını da onayla
   const firstApproval = approvals[0];
   if (firstApproval && firstApproval.status === 'APPROVED' && firstApproval.approver_employee_id === requesterEmployeeId) {
@@ -544,11 +634,11 @@ export async function createApprovalChain(
     }
   }
 
-  // 4. Yardımcı alanları çıkar (DB'de yok), sonra tüm approval kayıtlarını ekle
+  // 4. Yardımcı alanları çıkar (DB'de yok), talep/tur bilgisini ekle, sonra tüm approval kayıtlarını ekle
   const approvalsForInsert = approvals.map((a) => {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { action_type, approver_type, phase, ...rest } = a;
-    return rest;
+    const { action_type, approver_type, phase, is_first_requester_step, ...rest } = a;
+    return { ...rest, request_id: requestId, revision_cycle: cycle };
   });
 
   const { error: insertError } = await supabase

@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
-import { createApprovalChain, getWorkflowDefinitionByCode, notifyApprover, canStartWorkflow } from "@/lib/workflow";
+import { resolveApprovalChain, insertApprovalChain, getWorkflowDefinitionByCode, notifyApprover, canStartWorkflow, type ResolvedApprovalChain } from "@/lib/workflow";
+import { approvalChainErrorResponse, rollbackCreatedRequest } from "@/lib/workflow/request-creation";
 import type { CreateRequestFormInput } from "@/lib/workflow";
 
 // GET /api/request-form - Kullanıcının talep formlarını listele
@@ -98,6 +99,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Geçerli bir talep türü seçin" }, { status: 400 });
     }
 
+    // Onay zinciri talep kaydından ÖNCE çözülür: onaycısı bulunamayan adım varsa
+    // (pozisyon boş vb.) kullanıcı nedenini görür ve hiç kayıt oluşmaz.
+    let chain: ResolvedApprovalChain;
+    try {
+      chain = await resolveApprovalChain(supabase, workflowDef.id, appUser.employee_id);
+    } catch (chainError) {
+      return approvalChainErrorResponse(chainError, "request-form");
+    }
+
     // Ana request kaydı oluştur
     const { data: newRequest, error: requestError } = await supabase
       .from("requests")
@@ -133,7 +143,7 @@ export async function POST(request: Request) {
       });
 
     if (formError) {
-      await supabase.from("requests").delete().eq("id", newRequest.id);
+      await rollbackCreatedRequest(newRequest.id, "request-form");
       console.error("Error creating request form:", formError);
       return NextResponse.json({ error: "Failed to create request form details" }, { status: 500 });
     }
@@ -142,19 +152,10 @@ export async function POST(request: Request) {
 
     // Approval chain oluştur
     try {
-      await createApprovalChain(
-        supabase,
-        newRequest.id,
-        workflowDef.id,
-        appUser.employee_id
-      );
+      await insertApprovalChain(supabase, newRequest.id, chain);
     } catch (approvalError) {
-      await supabase.from("request_form_requests").delete().eq("request_id", newRequest.id);
-      await supabase.from("requests").delete().eq("id", newRequest.id);
-      console.error("Error creating approval chain:", approvalError);
-      return NextResponse.json({
-        error: approvalError instanceof Error ? approvalError.message : "Failed to create approval chain"
-      }, { status: 500 });
+      await rollbackCreatedRequest(newRequest.id, "request-form");
+      return approvalChainErrorResponse(approvalError, "request-form");
     }
 
     // Oluşturulan talebi detaylı getir

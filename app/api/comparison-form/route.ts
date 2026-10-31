@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
-import { createApprovalChain, getWorkflowDefinitionByCode, notifyApprover, canStartWorkflow } from "@/lib/workflow";
+import { resolveApprovalChain, insertApprovalChain, getWorkflowDefinitionByCode, notifyApprover, canStartWorkflow, type ResolvedApprovalChain } from "@/lib/workflow";
+import { approvalChainErrorResponse, rollbackCreatedRequest } from "@/lib/workflow/request-creation";
 import type { CreateMukayeseInput } from "@/lib/workflow";
 
 const CURRENCIES = ['TRY', 'USD', 'EUR'] as const;
@@ -101,6 +102,15 @@ export async function POST(request: Request) {
     const matrixError = validateMatrix(body);
     if (matrixError) return NextResponse.json({ error: matrixError }, { status: 400 });
 
+    // Onay zinciri talep kaydından ÖNCE çözülür: onaycısı bulunamayan adım varsa
+    // (pozisyon boş vb.) kullanıcı nedenini görür ve hiç kayıt oluşmaz.
+    let chain: ResolvedApprovalChain;
+    try {
+      chain = await resolveApprovalChain(supabase, workflowDef.id, appUser.employee_id);
+    } catch (chainError) {
+      return approvalChainErrorResponse(chainError, "comparison-form");
+    }
+
     // 6. Atomik insert (RPC)
     const { data: newRequestId, error: rpcError } = await supabase.rpc('create_mukayese_request', {
       p_workflow_definition_id: workflowDef.id,
@@ -138,19 +148,11 @@ export async function POST(request: Request) {
 
     // 7. Onay zinciri oluştur
     try {
-      await createApprovalChain(
-        supabase,
-        newRequestIdStr,
-        workflowDef.id,
-        appUser.employee_id
-      );
+      await insertApprovalChain(supabase, newRequestIdStr, chain);
     } catch (chainError) {
       // Cascade ile mukayese_* alt tabloları otomatik temizlenir
-      await supabase.from("requests").delete().eq("id", newRequestIdStr);
-      console.error("Error creating approval chain:", chainError);
-      return NextResponse.json({
-        error: chainError instanceof Error ? chainError.message : "Failed to create approval chain"
-      }, { status: 500 });
+      await rollbackCreatedRequest(newRequestIdStr, "comparison-form");
+      return approvalChainErrorResponse(chainError, "comparison-form");
     }
 
     // 8. Detayı getir

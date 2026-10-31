@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
-import { createApprovalChain, getWorkflowDefinitionByCode, notifyApprover, canStartWorkflow } from "@/lib/workflow";
+import { resolveApprovalChain, insertApprovalChain, getWorkflowDefinitionByCode, notifyApprover, canStartWorkflow, type ResolvedApprovalChain } from "@/lib/workflow";
+import { approvalChainErrorResponse, rollbackCreatedRequest } from "@/lib/workflow/request-creation";
 import type { CreateTravelAssignmentInput } from "@/lib/workflow";
 import { istanbulInputToTimestamptz } from "@/lib/timezone";
 
@@ -105,6 +106,29 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Geçerli bir ulaşım aracı seçin" }, { status: 400 });
     }
 
+    // Onay zincirleri talep kaydından ÖNCE çözülür: onaycısı bulunamayan adım varsa
+    // (pozisyon boş vb.) kullanıcı nedenini görür ve hiç kayıt oluşmaz. Avans
+    // istendiyse bağlı Talep Formu zinciri de burada çözülür; aksi halde görev formu
+    // oluşup avans talebi onay satırsız kalabilirdi.
+    const requestFormDef = body.advance_requested
+      ? await getWorkflowDefinitionByCode(supabase, "REQUEST_FORM")
+      : null;
+    let chain: ResolvedApprovalChain;
+    let advanceChain: ResolvedApprovalChain | null = null;
+    try {
+      chain = await resolveApprovalChain(
+        supabase,
+        workflowDef.id,
+        appUser.employee_id,
+        { advance_requested: body.advance_requested || false }  // V4: koşullu adım kontrolü
+      );
+      if (requestFormDef) {
+        advanceChain = await resolveApprovalChain(supabase, requestFormDef.id, appUser.employee_id);
+      }
+    } catch (chainError) {
+      return approvalChainErrorResponse(chainError, "travel-assignment");
+    }
+
     // 5. Ana request kaydı oluştur
     const { data: newRequest, error: requestError } = await supabase
       .from("requests")
@@ -142,26 +166,18 @@ export async function POST(request: Request) {
       });
 
     if (travelError) {
-      await supabase.from("requests").delete().eq("id", newRequest.id);
+      await rollbackCreatedRequest(newRequest.id, "travel-assignment");
       console.error("Error creating travel assignment request:", travelError);
       return NextResponse.json({ error: "Failed to create travel assignment details" }, { status: 500 });
     }
 
-    // 7. Onay zinciri oluştur (condition kontrolü için formData geçilir)
+    // 7. Onay zincirini yaz (yukarıda formData ile çözüldü)
     try {
-      await createApprovalChain(
-        supabase,
-        newRequest.id,
-        workflowDef.id,
-        appUser.employee_id,
-        { advance_requested: body.advance_requested || false }  // V4: koşullu adım kontrolü
-      );
+      await insertApprovalChain(supabase, newRequest.id, chain);
     } catch (chainError) {
       // Rollback: request ve travel_assignment_request sil
-      await supabase.from("travel_assignment_requests").delete().eq("request_id", newRequest.id);
-      await supabase.from("requests").delete().eq("id", newRequest.id);
-      console.error("Error creating approval chain:", chainError);
-      return NextResponse.json({ error: "Failed to create approval chain" }, { status: 500 });
+      await rollbackCreatedRequest(newRequest.id, "travel-assignment");
+      return approvalChainErrorResponse(chainError, "travel-assignment");
     }
 
     // 8. İlk onaycıya bildirim gönder (ilk adım auto-approve ise sonraki PENDING adıma)
@@ -206,11 +222,10 @@ export async function POST(request: Request) {
       // Bildirim hatası süreci durdurmamalı
     }
 
-    // 9. Avans talebi varsa REQUEST_FORM workflow'u tetikle
+    // 9. Avans talebi varsa REQUEST_FORM workflow'u tetikle (zinciri yukarıda çözüldü)
     if (body.advance_requested) {
       try {
-        const requestFormDef = await getWorkflowDefinitionByCode(supabase, "REQUEST_FORM");
-        if (requestFormDef) {
+        if (requestFormDef && advanceChain) {
           // Çalışan adı ve şirket adını al
           const [{ data: employee }, { data: company }] = await Promise.all([
             supabase
@@ -263,15 +278,15 @@ export async function POST(request: Request) {
 
             if (advanceDetailError) {
               console.error("Error creating advance details:", advanceDetailError);
-              await supabase.from("requests").delete().eq("id", advanceRequest.id);
+              await rollbackCreatedRequest(advanceRequest.id, "travel-assignment/advance");
             } else {
-              // Avans onay zinciri oluştur
-              await createApprovalChain(
-                supabase,
-                advanceRequest.id,
-                requestFormDef.id,
-                appUser.employee_id
-              );
+              // Avans onay zinciri — yazılamazsa avans talebi onay satırsız kalmasın
+              try {
+                await insertApprovalChain(supabase, advanceRequest.id, advanceChain);
+              } catch (advanceChainError) {
+                console.error("Error creating advance approval chain:", advanceChainError);
+                await rollbackCreatedRequest(advanceRequest.id, "travel-assignment/advance");
+              }
             }
           }
         }

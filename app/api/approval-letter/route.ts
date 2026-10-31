@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
-import { createApprovalChain, getWorkflowDefinitionByCode, notifyApprover, canStartWorkflow } from "@/lib/workflow";
+import { resolveApprovalChain, insertApprovalChain, getWorkflowDefinitionByCode, notifyApprover, canStartWorkflow, type ResolvedApprovalChain } from "@/lib/workflow";
+import { approvalChainErrorResponse, rollbackCreatedRequest } from "@/lib/workflow/request-creation";
 import type { CreateApprovalLetterInput, CreateRequestDynamicApprovers } from "@/lib/workflow";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { hasExtraApproverSupport } from "@/lib/workflow/extra-approvers-shared";
@@ -124,6 +125,15 @@ export async function POST(request: Request) {
       }
     }
 
+    // Onay zinciri talep kaydından ÖNCE çözülür: onaycısı bulunamayan adım varsa
+    // (pozisyon boş vb.) kullanıcı nedenini görür ve hiç kayıt oluşmaz.
+    let chain: ResolvedApprovalChain;
+    try {
+      chain = await resolveApprovalChain(supabase, workflowDef.id, appUser.employee_id, undefined, dynamicApprovers);
+    } catch (chainError) {
+      return approvalChainErrorResponse(chainError, "approval-letter");
+    }
+
     // Ana request kaydı oluştur
     const { data: newRequest, error: requestError } = await supabase
       .from("requests")
@@ -163,28 +173,17 @@ export async function POST(request: Request) {
       });
 
     if (letterError) {
-      await supabase.from("requests").delete().eq("id", newRequest.id);
+      await rollbackCreatedRequest(newRequest.id, "approval-letter");
       console.error("Error creating approval letter:", letterError);
       return NextResponse.json({ error: "Failed to create approval letter details" }, { status: 500 });
     }
 
     // Approval chain oluştur
     try {
-      await createApprovalChain(
-        supabase,
-        newRequest.id,
-        workflowDef.id,
-        appUser.employee_id,
-        undefined,
-        dynamicApprovers
-      );
+      await insertApprovalChain(supabase, newRequest.id, chain);
     } catch (approvalError) {
-      await supabase.from("approval_letter_requests").delete().eq("request_id", newRequest.id);
-      await supabase.from("requests").delete().eq("id", newRequest.id);
-      console.error("Error creating approval chain:", approvalError);
-      return NextResponse.json({
-        error: approvalError instanceof Error ? approvalError.message : "Failed to create approval chain"
-      }, { status: 500 });
+      await rollbackCreatedRequest(newRequest.id, "approval-letter");
+      return approvalChainErrorResponse(approvalError, "approval-letter");
     }
 
     // Oluşturulan talebi detaylı getir

@@ -5,6 +5,7 @@ import {
   notifyApprover,
   notifyRequestUpdated,
   resetApprovalChain,
+  ApprovalChainResolutionError,
   type CreateRequestDynamicApprovers,
 } from "@/lib/workflow";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
@@ -238,6 +239,12 @@ export async function POST(
       });
       newCycle = result.newCycle;
     } catch (err) {
+      // Onaycısı bulunamayan adım: zincir cycle artırılmadan çözüldüğü için talep
+      // eski durumunda kalır; kullanıcıya hangi adımın sorunlu olduğu gösterilir.
+      if (err instanceof ApprovalChainResolutionError) {
+        console.warn("[resubmit] approval chain unresolvable:", err.message);
+        return NextResponse.json({ error: err.message }, { status: 422 });
+      }
       console.error("[resubmit] resetApprovalChain failed:", err);
       return NextResponse.json({ error: "Failed to reset approval chain" }, { status: 500 });
     }
