@@ -93,6 +93,7 @@ const REQUEST_BASE_DETAIL_SELECT = `
 const WORKFLOW_CODE_TO_TYPE_JOIN: Record<string, string> = {
   ANNUAL_LEAVE: "leave_request:leave_requests(*)",
   SHORT_LEAVE: "leave_request:leave_requests(*)",
+  REMOTE_WORK: "leave_request:leave_requests(*)",
   SALARY_ADVANCE: "salary_advance_request:salary_advance_requests(*)",
   OVERTIME: "overtime_request:overtime_requests(*, entries:overtime_entries(*))",
   EMPLOYEE_ONBOARDING: "onboarding_request:onboarding_requests(*)",

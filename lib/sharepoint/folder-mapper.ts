@@ -27,7 +27,7 @@ import {
 } from "@/lib/pdf/file-naming";
 
 // ============================================================================
-// Bireysel süreçler: workflow code → standart form tipi klasörü (7 klasör)
+// Bireysel süreçler: workflow code → standart form tipi klasörü (8 klasör)
 // Yıllık ve kısa süreli izin aynı "İzin" klasörünü paylaşır; ayrım dosya
 // adındaki tür ekiyle (file-naming.ts ARCHIVE_TYPE_TOKENS) yapılır.
 // ============================================================================
@@ -41,6 +41,8 @@ export const STANDARD_FORM_FOLDERS: Record<string, string> = {
   EXPENSE_FORM:      "Harcama Formu",
   ANNUAL_LEAVE:      "İzin",
   SHORT_LEAVE:       "İzin",
+  // İzin altyapısını kullanır ama izin değildir → kendi klasörü (2026-11-10)
+  REMOTE_WORK:       "Uzaktan Çalışma",
 };
 
 // ============================================================================

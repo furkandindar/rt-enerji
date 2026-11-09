@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { applyAuditStamp, canEditRequest } from "@/lib/workflow";
 
 interface PatchLeaveBody {
-  leave_type?: "ANNUAL_LEAVE" | "SHORT_LEAVE";
+  leave_type?: "ANNUAL_LEAVE" | "SHORT_LEAVE" | "REMOTE_WORK";
   start_datetime?: string;
   end_datetime?: string;
   total_days?: number;
@@ -50,7 +50,20 @@ export async function PATCH(
     }
 
     const patch: Record<string, unknown> = {};
-    if (body.leave_type !== undefined) patch.leave_type = body.leave_type;
+    if (body.leave_type !== undefined) {
+      // Uzaktan Çalışma ayrı süreçtir: düzenlemede izin ↔ uzaktan çalışma geçişi yok
+      const { data: current } = await supabase
+        .from("leave_requests")
+        .select("leave_type")
+        .eq("request_id", requestId)
+        .maybeSingle();
+      const touchesRemoteWork =
+        body.leave_type === "REMOTE_WORK" || current?.leave_type === "REMOTE_WORK";
+      if (touchesRemoteWork && body.leave_type !== current?.leave_type) {
+        return NextResponse.json({ error: "İzin türü değiştirilemez" }, { status: 400 });
+      }
+      patch.leave_type = body.leave_type;
+    }
     if (body.start_datetime !== undefined) patch.start_datetime = body.start_datetime;
     if (body.end_datetime !== undefined) patch.end_datetime = body.end_datetime;
     if (body.total_days !== undefined) patch.total_days = body.total_days;

@@ -24,19 +24,23 @@ export async function buildWorkflowDetails(
 
   switch (workflowCode) {
     case 'ANNUAL_LEAVE':
-    case 'SHORT_LEAVE': {
+    case 'SHORT_LEAVE':
+    case 'REMOTE_WORK': {
       const { data } = await supabase
         .from('leave_requests')
         .select('leave_type, start_datetime, end_datetime, total_days, reason')
         .eq('request_id', requestId)
         .single();
       if (!data) break;
-      pushIf(rows, 'İzin Türü', leaveTypeLabels[data.leave_type] || data.leave_type);
-      const startStr = workflowCode === 'SHORT_LEAVE' ? fmtDateTime(data.start_datetime) : fmtDate(data.start_datetime);
-      const endStr = workflowCode === 'SHORT_LEAVE' ? fmtDateTime(data.end_datetime) : fmtDate(data.end_datetime);
+      const isRemoteWork = workflowCode === 'REMOTE_WORK';
+      pushIf(rows, isRemoteWork ? 'Talep Türü' : 'İzin Türü', leaveTypeLabels[data.leave_type] || data.leave_type);
+      // Kısa izin ve uzaktan çalışma saatli; yıllık izin gün bazlı
+      const withTime = workflowCode === 'SHORT_LEAVE' || isRemoteWork;
+      const startStr = withTime ? fmtDateTime(data.start_datetime) : fmtDate(data.start_datetime);
+      const endStr = withTime ? fmtDateTime(data.end_datetime) : fmtDate(data.end_datetime);
       if (startStr && endStr) pushIf(rows, 'Tarih Aralığı', `${startStr} – ${endStr}`);
       if (data.total_days != null) pushIf(rows, 'Toplam Gün', `${data.total_days}`);
-      pushIf(rows, 'Sebep', data.reason);
+      pushIf(rows, isRemoteWork ? 'Talep Nedeni' : 'Sebep', data.reason);
       break;
     }
 

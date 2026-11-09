@@ -67,6 +67,7 @@ export const checklistStatusLabels: Record<ChecklistStatus, string> = {
 export const leaveTypeLabels: Record<string, string> = {
   ANNUAL_LEAVE: "Yıllık İzin",
   SHORT_LEAVE: "Kısa Süreli İzin",
+  REMOTE_WORK: "Uzaktan Çalışma",
 };
 
 export const overtimeTypeLabels: Record<string, string> = {

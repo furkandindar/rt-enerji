@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarPlus, FileCheck, ClipboardList, Banknote, Calculator, Clock, UserPlus, UserMinus, UserCheck, UserX, FileText, Stamp, MapPin, FilePenLine, Scale, ReceiptText, History, type LucideIcon } from "lucide-react";
+import { CalendarPlus, Laptop, FileCheck, ClipboardList, Banknote, Calculator, Clock, UserPlus, UserMinus, UserCheck, UserX, FileText, Stamp, MapPin, FilePenLine, Scale, ReceiptText, History, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -31,6 +31,7 @@ interface NavItem {
 // Her zaman görünen bireysel süreçler
 const personalItems: NavItem[] = [
   { title: "İzin Talebi", url: "/leave-requests/new", icon: CalendarPlus },
+  { title: "Uzaktan Çalışma Formu", url: "/remote-work/new", icon: Laptop },
   { title: "Maaş Avans Talebi",   url: "/salary-advance/new", icon: Banknote },
   { title: "Şehir İçi/Dışı Görev Formu",         url: "/travel-assignment/new", icon: MapPin },
   { title: "Talep Formu",         url: "/request-form/new",   icon: FileText },

@@ -1,6 +1,6 @@
 # CLAUDE.md — RT Enerji Onay Süreçleri Platformu
 
-RT Enerji'nin kurumsal onay süreçleri (16 workflow) + organizasyon yönetimi platformu. Next.js 16 (App Router) + React 19 + TypeScript + Supabase (Postgres/Auth/Storage/Realtime) + Microsoft Graph. UI, yorumlar ve dokümanlar Türkçe; tanımlayıcılar İngilizce. **Sistem canlıda aktif kullanılıyor.**
+RT Enerji'nin kurumsal onay süreçleri (17 workflow) + organizasyon yönetimi platformu. Next.js 16 (App Router) + React 19 + TypeScript + Supabase (Postgres/Auth/Storage/Realtime) + Microsoft Graph. UI, yorumlar ve dokümanlar Türkçe; tanımlayıcılar İngilizce. **Sistem canlıda aktif kullanılıyor.**
 
 **Önce oku:** [ONBOARDING.md](ONBOARDING.md) (tam resim) → gerekirse [docs/genel-bakis.md](docs/genel-bakis.md).
 

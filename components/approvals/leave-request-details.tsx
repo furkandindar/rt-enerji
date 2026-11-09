@@ -12,18 +12,20 @@ interface LeaveRequestDetailsProps {
 export function LeaveRequestDetails({ approval }: LeaveRequestDetailsProps) {
   const leave = approval.request.leave_request;
   if (!leave) return null;
+  // Uzaktan Çalışma Formu izin altyapısını kullanır; etiketler izin değil
+  const isRemoteWork = leave.leave_type === "REMOTE_WORK";
 
   return (
     <>
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <p className="text-sm font-medium text-muted-foreground">İzin Türü</p>
+          <p className="text-sm font-medium text-muted-foreground">{isRemoteWork ? "Talep Türü" : "İzin Türü"}</p>
           <p className="text-sm font-semibold">
             {leaveTypeLabels[leave.leave_type] || "-"}
           </p>
         </div>
         <div>
-          <p className="text-sm font-medium text-muted-foreground">Toplam Gün</p>
+          <p className="text-sm font-medium text-muted-foreground">{isRemoteWork ? "Toplam İş Günü" : "Toplam Gün"}</p>
           <p className="text-sm font-semibold">
             {leave.total_days || "-"} gün
           </p>
@@ -45,7 +47,7 @@ export function LeaveRequestDetails({ approval }: LeaveRequestDetailsProps) {
       </div>
       {leave.reason && (
         <div>
-          <p className="text-sm font-medium text-muted-foreground">İzin Nedeni</p>
+          <p className="text-sm font-medium text-muted-foreground">{isRemoteWork ? "Talep Nedeni" : "İzin Nedeni"}</p>
           <p className="text-sm font-semibold">{leave.reason}</p>
         </div>
       )}

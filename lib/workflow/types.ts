@@ -17,7 +17,7 @@ export type RequestStatus =
   | 'COMPLETED'
   | 'REVISION_REQUESTED';
 export type ApprovalStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'REVISION_REQUESTED';
-export type LeaveType = 'ANNUAL_LEAVE' | 'SHORT_LEAVE';
+export type LeaveType = 'ANNUAL_LEAVE' | 'SHORT_LEAVE' | 'REMOTE_WORK';
 export type NotificationType =
   | 'APPROVAL_REQUIRED'
   | 'REQUEST_APPROVED'
@@ -175,7 +175,7 @@ export interface RequestApprovalWithDetails extends RequestApproval {
 // ============================================================================
 
 export interface CreateLeaveRequestInput {
-  workflow_code: 'ANNUAL_LEAVE' | 'SHORT_LEAVE';
+  workflow_code: 'ANNUAL_LEAVE' | 'SHORT_LEAVE' | 'REMOTE_WORK';
   leave_type: LeaveType;
   start_datetime: string;
   end_datetime: string;

@@ -9,6 +9,7 @@
 export const WORKFLOW_EDIT_ROUTE: Record<string, string> = {
   ANNUAL_LEAVE: '/leave-requests/new',
   SHORT_LEAVE: '/leave-requests/new',
+  REMOTE_WORK: '/remote-work/new',
   EXPENSE_FORM: '/expense-form/new',
   COMPARISON_FORM: '/comparison-form/new',
   SALARY_ADVANCE: '/salary-advance/new',
@@ -43,6 +44,7 @@ export function getEditUrl(workflowCode: string | null | undefined, requestId: s
 export const WORKFLOW_PATCH_ROUTE: Record<string, string> = {
   ANNUAL_LEAVE: '/api/leave-requests',
   SHORT_LEAVE: '/api/leave-requests',
+  REMOTE_WORK: '/api/leave-requests',
   EXPENSE_FORM: '/api/expense-form',
   COMPARISON_FORM: '/api/comparison-form',
   SALARY_ADVANCE: '/api/salary-advance',

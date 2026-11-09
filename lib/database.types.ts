@@ -2982,7 +2982,7 @@ export type Database = {
         | "YEKA_1"
         | "YEKA_2"
       finance_funding_source: "KREDI" | "OZ_KAYNAK" | "NAKIT_FAZLASI" | "DIGER"
-      leave_type: "ANNUAL_LEAVE" | "SHORT_LEAVE"
+      leave_type: "ANNUAL_LEAVE" | "SHORT_LEAVE" | "REMOTE_WORK"
       mukayese_currency: "TRY" | "USD" | "EUR"
       mukayese_row_type: "ITEM" | "SUBTOTAL"
       mukayese_unit: "ADET" | "SET" | "GUN"
@@ -3159,7 +3159,7 @@ export const Constants = {
       checklist_status: ["DONE", "NOT_DONE", "NA"],
       finance_expense_area: ["ANA_SAHA", "ELEKTRIKSEL_KAPASITE_ARTISI", "YEKA_1", "YEKA_2"],
       finance_funding_source: ["KREDI", "OZ_KAYNAK", "NAKIT_FAZLASI", "DIGER"],
-      leave_type: ["ANNUAL_LEAVE", "SHORT_LEAVE"],
+      leave_type: ["ANNUAL_LEAVE", "SHORT_LEAVE", "REMOTE_WORK"],
       mukayese_currency: ["TRY", "USD", "EUR"],
       mukayese_row_type: ["ITEM", "SUBTOTAL"],
       mukayese_unit: ["ADET", "SET", "GUN"],

@@ -54,6 +54,17 @@ export async function POST(request: Request) {
     const supabase = await createClient();
     const body: CreateLeaveRequestInput = await request.json();
 
+    // Uzaktan Çalışma, izin altyapısını kullanan ayrı bir süreçtir: tür süreç
+    // koduna sabitlenir (izin ↔ uzaktan çalışma karışmaz) ve talep nedeni zorunludur.
+    const isRemoteWork = body.workflow_code === "REMOTE_WORK";
+    if (!isRemoteWork && body.leave_type === "REMOTE_WORK") {
+      return NextResponse.json({ error: "Geçersiz izin türü" }, { status: 400 });
+    }
+    if (isRemoteWork && !(typeof body.reason === "string" && body.reason.trim())) {
+      return NextResponse.json({ error: "Talep nedeni zorunludur" }, { status: 400 });
+    }
+    const leaveType = isRemoteWork ? "REMOTE_WORK" : body.leave_type;
+
     // 1. Mevcut kullanıcının employee_id'sini al
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
@@ -114,7 +125,7 @@ export async function POST(request: Request) {
       .from("leave_requests")
       .insert({
         request_id: newRequest.id,
-        leave_type: body.leave_type,
+        leave_type: leaveType,
         start_datetime: body.start_datetime,
         end_datetime: body.end_datetime,
         total_days: body.total_days,

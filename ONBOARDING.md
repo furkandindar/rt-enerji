@@ -10,7 +10,7 @@
 
 RT Enerji'nin **kurumsal onay süreçleri + organizasyon yönetimi** platformu. İki ana yetenek:
 
-1. **Onay süreçleri (workflow):** İzin, fazla mesai, harcama, maaş avansı, mukayese, görev, kaşe onayı, olur yazısı, onay kapağı vb. **16 süreç** dijital olarak yürütülür. Talep açılır → onay zincirinden geçer → süreç sonunda **imzalı/kaşeli PDF** üretilir → SharePoint'e otomatik arşivlenir.
+1. **Onay süreçleri (workflow):** İzin, fazla mesai, harcama, maaş avansı, mukayese, görev, kaşe onayı, olur yazısı, onay kapağı vb. **17 süreç** dijital olarak yürütülür. Talep açılır → onay zincirinden geçer → süreç sonunda **imzalı/kaşeli PDF** üretilir → SharePoint'e otomatik arşivlenir.
 2. **Organizasyon yönetimi:** Şirketler, birimler (hiyerarşik), pozisyonlar, çalışanlar ve **tarihçeli** pozisyon atamaları; ReactFlow ile org şeması.
 
 **Durum:** Faz 1 **canlıda ve aktif kullanılıyor** (Haziran 2026'dan beri). Faz 2 (İK derinleşmesi: izin bakiyesi, zimmet, performans, mobil) tasarım aşamasında — özet: [docs/faz2-yonetici-ozeti.md](docs/faz2-yonetici-ozeti.md).
@@ -240,12 +240,13 @@ Kaşe süreci (`STAMP_APPROVAL`) farklıdır: kullanıcı PDF yükler, kaşe poz
 
 ---
 
-## 7. Süreç kataloğu (16 süreç)
+## 7. Süreç kataloğu (17 süreç)
 
 | Workflow kodu | Form | Rota | Erişim |
 |---|---|---|---|
 | `ANNUAL_LEAVE` | Yıllık İzin | `/leave-requests/new` | Herkes |
 | `SHORT_LEAVE` | Kısa Süreli İzin | `/leave-requests/new` (tip seçimi) | Herkes |
+| `REMOTE_WORK` | Uzaktan Çalışma Formu (izin altyapısı, `leave_type = REMOTE_WORK`) | `/remote-work/new` | Herkes |
 | `SALARY_ADVANCE` | Maaş Avans Talebi | `/salary-advance/new` | Herkes |
 | `TRAVEL_ASSIGNMENT` | Şehir İçi/Dışı Görev Formu | `/travel-assignment/new` | Herkes |
 | `REQUEST_FORM` | Talep Formu (mutfak/kırtasiye/diğer) | `/request-form/new` | Herkes |
@@ -330,6 +331,7 @@ Sistemi tanımanın en iyi yolu uçtan uca senaryolar koşmak (hepsi dev'de serb
 | 2026-10-31 | **Süreç Tanımları'ndan pozisyon değiştirme (Faz 2a):** ORG_ADMIN sabit pozisyonlu adımın pozisyonunu (ve istenirse adım adını) panelden değiştirir; boş / çift atamalı / pasif çalışanlı pozisyon seçilemez (`lib/workflow/step-position-rules.ts`, motorla aynı kural). Yalnız yeni talepleri etkiler; bekleyenler mevcut onaycıda kalır (pencere sayısını gösterir). Her değişikliği (Table Editor dahil) DB trigger'ı `workflow_step_changes`'e yazar; kartta "Son değişiklik". API: `PATCH /api/workflow-steps/[id]`. | SQL (`sql/feature_workflow_step_change_log.sql`) dev → prod, sonra deploy (kod tablo yokken de çalışır). |
 | 2026-10-31 | **İşe Giriş / İşten Çıkış PDF'i tek sayfa:** imza bandı 2. sayfaya bölünüyordu (2026-001706). Başlık bandı küçültüldü, alt onay kutularında yalnız ad + imza (pozisyon/tarih yok), checklist satırı 20→18, bant `wrap={false}`. Şablonlarda `density: 'normal' \| 'compact'`; `generate-request-pdf.ts` normal render >1 sayfaysa compact ile yeniden render eder. Kayıtlı eski PDF'ler değişmez (yeniden üretilmedikçe). | Kod-only; deploy bekliyor. |
 | 2026-11-09 | **İşe Giriş / İşten Çıkış ONAY formları:** kağıt MİY-EK-03_11 / 03_10 ayrı süreç olarak eklendi (Takip formlarıyla bağsız; maaş Takip formunda görünmesin diye). Kısıtlı İK süreci: İK, ORG_ADMIN, talep sahibi ve zincir görür; e-postada ücret yazılmaz. İK doldurur, onaycılar paraflar, YKB ıslak imzalı taramayı İK yükler. Yan güvenlik düzeltmeleri: `workflow-attachments` bucket'ı yalnız yükleyene (prod'da uygulandı), `sharepoint-test` yalnız ORG_ADMIN, YKB tarama yolu talebe bağlı. Yan PDF düzeltmesi: kalıcı PDF artık service role ile render ediliyor — kısıtlı süreçte son onaycı başlatıcı birimden/admin değilse PDF'te önceki paraflar düşüyordu (prod'da yalnız 3 reddedilmiş finans kapağının red PDF'i etkilenmiş olabilir: 2026-001277/-001367/-001664). Doküman: [docs/workflows/hr-approval-forms.md](docs/workflows/hr-approval-forms.md). | SQL (`_2_schema` → `_2b` → `_3`, yalnız ekleme) dev+prod → deploy → `is_active`. |
+| 2026-11-10 | **Uzaktan Çalışma Formu (`REMOTE_WORK`):** bireysel süreç; izin altyapısını kullanır (`leave_requests`, `/api/leave-requests`, izin PDF şablonu) ama ayrı süreçtir — tür süreç koduna sabit, izin↔uzaktan çalışma geçişi yok, talep nedeni zorunlu, izin bakiyesine dokunmaz. Zincir Kısa Süreli İzin'in kopyası (Talep Eden → İlgili Bölüm Müdürü → İnsan Kaynakları → Genel Koordinatör). Arşiv klasörü "Uzaktan Çalışma". İK cevabı beklenmeden varsayımlar: "ASİSTAN – Bildirim" yalnız formda yazı; "hafta sonu/resmi tatille birleştirilemez" kuralı yazılı, sistem engellemez. Tarih/saat yardımcıları `lib/leave/business-time.ts`'e taşındı. SQL: `sql/feature_remote_work_form.sql`. | SQL dev+prod → deploy → `is_active`. |
 | Faz 2 | **`reports_to_position_id` routing'de kullanılmıyor:** motor birim amirini `is_unit_head` + üst-birim tırmanmasıyla bulur; `reports_to` alanı dolu ama onay zincirine etkisi yok. Lokasyon-bazlı `MANAGER` onaycı tipi Faz 2 tasarımında. | Tasarım aşaması — davranışı değiştirme. |
 
 ---

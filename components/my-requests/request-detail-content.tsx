@@ -401,6 +401,7 @@ export interface Attachment {
 const leaveTypeLabels: Record<string, string> = {
   ANNUAL_LEAVE: "Yıllık İzin",
   SHORT_LEAVE: "Kısa Süreli İzin",
+  REMOTE_WORK: "Uzaktan Çalışma",
 };
 
 const overtimeReasonLabels: Record<string, string> = {
@@ -582,13 +583,13 @@ export function RequestDetailContent({
             <>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground">İzin Türü</p>
+                  <p className="text-sm font-medium text-muted-foreground">{selectedRequest.leave_request.leave_type === "REMOTE_WORK" ? "Talep Türü" : "İzin Türü"}</p>
                   <p className="text-sm font-semibold">
                     {leaveTypeLabels[selectedRequest.leave_request.leave_type] || "-"}
                   </p>
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground">Toplam Gün</p>
+                  <p className="text-sm font-medium text-muted-foreground">{selectedRequest.leave_request.leave_type === "REMOTE_WORK" ? "Toplam İş Günü" : "Toplam Gün"}</p>
                   <p className="text-sm font-semibold">
                     {selectedRequest.leave_request.total_days || "-"} gün
                   </p>
@@ -610,7 +611,7 @@ export function RequestDetailContent({
               </div>
               {selectedRequest.leave_request.reason && (
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground">İzin Nedeni</p>
+                  <p className="text-sm font-medium text-muted-foreground">{selectedRequest.leave_request.leave_type === "REMOTE_WORK" ? "Talep Nedeni" : "İzin Nedeni"}</p>
                   <p className="text-sm font-semibold">{selectedRequest.leave_request.reason}</p>
                 </div>
               )}

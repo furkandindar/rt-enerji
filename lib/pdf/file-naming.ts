@@ -30,6 +30,7 @@ type RequestStatus = Database['public']['Enums']['request_status'];
 export const PROCESS_CODE_TO_FILENAME: Record<string, string> = {
   ANNUAL_LEAVE:              'IZIN',
   SHORT_LEAVE:               'KISA-IZIN',
+  REMOTE_WORK:               'UZAKTAN-CALISMA',
   SALARY_ADVANCE:            'MAAS-AVANS',
   OVERTIME:                  'FAZLA-MESAI',
   EMPLOYEE_ONBOARDING:       'ISE-GIRIS',

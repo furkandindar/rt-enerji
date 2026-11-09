@@ -291,11 +291,13 @@ const styles = StyleSheet.create({
 const leaveTypeLabels: Record<string, string> = {
   ANNUAL_LEAVE: 'Yıllık İzin',
   SHORT_LEAVE: 'Kısa Süreli İzin',
+  REMOTE_WORK: 'Uzaktan Çalışma',
 };
 
 const leaveTypeTitles: Record<string, string> = {
   ANNUAL_LEAVE: 'YILLIK İZİN TALEP FORMU',
   SHORT_LEAVE: 'KISA SÜRELİ İZİN TALEP FORMU',
+  REMOTE_WORK: 'UZAKTAN ÇALIŞMA FORMU',
 };
 
 interface LeaveRequest {
@@ -357,6 +359,10 @@ export const RequestPDFTemplate: React.FC<RequestPDFTemplateProps> = ({
   // HR notu (Personel Müdürlüğü tarafından giriliyor - opsiyonel)
   const hrNote = leaveRequest?.hr_note || null;
 
+  // Uzaktan Çalışma Formu (REMOTE_WORK) izin şablonunu kullanır ama kağıdı farklı:
+  // adres / kalan izin / İK notu yok, sağ üstte oluşturma tarihi + saat, kendi bilgi kutusu.
+  const isRemoteWork = leaveRequest?.leave_type === 'REMOTE_WORK';
+
   // Onay sütunları - Screenshot'taki gibi 5 sütun
   const getApprovalColumns = () => {
     const columns: { title: string; name: string; employeeId: string; note: string; status?: string }[] = [
@@ -384,7 +390,7 @@ export const RequestPDFTemplate: React.FC<RequestPDFTemplateProps> = ({
 
     // İnsan Kaynakları için özel not (gerçek onayci yorumu yoksa placeholder göster)
     const hrIndex = columns.findIndex(c => c.title.toLowerCase().includes('insan kaynakları') || c.title.toLowerCase().includes('personel'));
-    if (hrIndex > -1 && !columns[hrIndex].note) {
+    if (!isRemoteWork && hrIndex > -1 && !columns[hrIndex].note) {
       columns[hrIndex].note = 'Fazla Mesai oluşup oluşmadığı yazılmalıdır.\nOluşuyorsa izin boyunca oluşacak toplam tutar yazılmalıdır.';
     }
 
@@ -433,6 +439,27 @@ export const RequestPDFTemplate: React.FC<RequestPDFTemplateProps> = ({
               <View style={styles.labelCell}><Text style={styles.labelText}>Görev Unvanı</Text></View>
               <View style={styles.valueCell}><Text style={styles.valueText}>{getRequesterPosition()}</Text></View>
             </View>
+            {isRemoteWork ? (
+              <>
+                <View style={styles.tableRow}>
+                  <View style={styles.labelCell}><Text style={styles.labelText}>Başlangıç Tarihi/Saati</Text></View>
+                  <View style={styles.valueCell}><Text style={styles.valueText}>{formatTrDateTime(leaveRequest.start_datetime) || '-'}</Text></View>
+                </View>
+                <View style={styles.tableRow}>
+                  <View style={styles.labelCell}><Text style={styles.labelText}>Bitiş Tarihi/Saati</Text></View>
+                  <View style={styles.valueCell}><Text style={styles.valueText}>{formatTrDateTime(leaveRequest.end_datetime) || '-'}</Text></View>
+                </View>
+                <View style={styles.tableRow}>
+                  <View style={styles.labelCell}><Text style={styles.labelText}>Toplam İş Günü</Text></View>
+                  <View style={styles.valueCell}><Text style={styles.valueText}>{leaveRequest.total_days || '-'} gün</Text></View>
+                </View>
+                <View style={styles.tableRowLast}>
+                  <View style={styles.labelCell}><Text style={styles.labelText}>Talep Nedeni</Text></View>
+                  <View style={styles.valueCell}><Text style={styles.valueText}>{leaveRequest.reason || '-'}</Text></View>
+                </View>
+              </>
+            ) : (
+            <>
             {/* İzinde Bulunacağı Adres */}
             <View style={styles.tableRow}>
               <View style={styles.labelCell}><Text style={styles.labelText}>İzinde Bulunacağı Adres</Text></View>
@@ -478,10 +505,25 @@ export const RequestPDFTemplate: React.FC<RequestPDFTemplateProps> = ({
                 <View style={styles.valueCell}><Text style={styles.valueText}>{hrNote}</Text></View>
               </View>
             )}
+            </>
+            )}
           </View>
 
           {/* Right Column */}
           <View style={styles.rightColumn}>
+            {isRemoteWork ? (
+              <>
+                <View style={styles.rightTopRow}>
+                  <View style={styles.rightLabelCell}><Text style={styles.labelText}>Oluşturma Tarihi:</Text></View>
+                  <View style={styles.rightValueCell}><Text style={styles.valueText}>{formatTrDate(request.created_at)}</Text></View>
+                </View>
+                <View style={styles.rightTopRow}>
+                  <View style={styles.rightLabelCell}><Text style={styles.labelText}>Saat:</Text></View>
+                  <View style={styles.rightValueCell}><Text style={styles.valueText}>{formatTrDateTime(request.created_at).split(' ')[1] || ''}</Text></View>
+                </View>
+              </>
+            ) : (
+            <>
             {/* İzin Türü */}
             <View style={styles.rightTopRow}>
               <View style={styles.rightLabelCell}><Text style={styles.labelText}>İzin Türü:</Text></View>
@@ -498,7 +540,23 @@ export const RequestPDFTemplate: React.FC<RequestPDFTemplateProps> = ({
                 </Text>
               </View>
             </View>
+            </>
+            )}
             {/* Info Box */}
+            {isRemoteWork ? (
+            <View style={styles.infoBox}>
+              <Text style={styles.infoText}>
+                Uzaktan Çalışma Talepleri hafta sonu ve resmi tatillerle birleştirilemez.
+              </Text>
+              <Text style={[styles.infoBold, { marginTop: 8 }]}>ASİSTAN – Bildirim</Text>
+              <Text style={styles.infoText}>1-Talep Eden</Text>
+              <Text style={styles.infoText}>2-İlgili Bölüm Müdürü</Text>
+              <Text style={styles.infoText}>3-Personel Müdürlüğü</Text>
+              <Text style={[styles.infoText, { marginTop: 8 }]}>
+                Tamamlanan form İnsan Kaynakları Birimine teslim edilir ve ilgili birim tarafından İK Onaylı Formlar adresine yüklenir.
+              </Text>
+            </View>
+            ) : (
             <View style={styles.infoBox}>
               {leaveRequest?.leave_type === 'ANNUAL_LEAVE' && (
                 <>
@@ -519,6 +577,7 @@ export const RequestPDFTemplate: React.FC<RequestPDFTemplateProps> = ({
                 Tamamlanan form asistan tarafından taranarak İK - İK Onaylı Formlar adresine yüklenir.
               </Text>
             </View>
+            )}
           </View>
         </View>
 
