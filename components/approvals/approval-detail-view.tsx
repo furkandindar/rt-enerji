@@ -24,6 +24,9 @@ import { FinanceApprovalCoverDetails } from "./finance-approval-cover-details";
 import { AccountingApprovalCoverDetails } from "./accounting-approval-cover-details";
 import { ComparisonFormDetails } from "./comparison-form-details";
 import { ExpenseFormDetails } from "./expense-form-details";
+import { AttachmentList } from "./attachment-list";
+import { OnboardingApprovalSummary, SeparationApprovalSummary } from "@/components/hr-approval/hr-approval-summary";
+import { pickOne } from "@/lib/hr-approval/display";
 import { ApprovalHistoryAccordion } from "./approval-history-accordion";
 import { RequestActivityLog } from "./request-activity-log";
 import { RevisionAssignmentNotice, RevisionResponseNotice } from "@/components/my-requests/revision-notice";
@@ -377,6 +380,26 @@ export function ApprovalDetailView({
         {selectedApproval.request.expense_request && (
           <ExpenseFormDetails approval={selectedApproval} previousStepAttachments={previousStepAttachments} />
         )}
+        {(() => {
+          const onboardingApproval = pickOne(selectedApproval.request.onboarding_approval_request);
+          if (!onboardingApproval) return null;
+          return (
+            <>
+              <OnboardingApprovalSummary data={onboardingApproval} />
+              <AttachmentList attachments={previousStepAttachments} />
+            </>
+          );
+        })()}
+        {(() => {
+          const separationApproval = pickOne(selectedApproval.request.separation_approval_request);
+          if (!separationApproval) return null;
+          return (
+            <>
+              <SeparationApprovalSummary data={separationApproval} />
+              <AttachmentList attachments={previousStepAttachments} />
+            </>
+          );
+        })()}
 
         {/* Onay Adımı, Oluşturulma, Karar bilgileri kompakt grid'e taşındı. */}
 

@@ -21,6 +21,8 @@ export const WORKFLOW_EDIT_ROUTE: Record<string, string> = {
   APPROVAL_LETTER: '/approval-letter/new',
   STAMP_APPROVAL: '/stamp-approval/new',
   EMPLOYEE_ONBOARDING: '/onboarding/new',
+  EMPLOYEE_ONBOARDING_APPROVAL: '/onboarding-approval/new',
+  EMPLOYEE_SEPARATION_APPROVAL: '/separation-approval/new',
 };
 
 /**
@@ -53,6 +55,8 @@ export const WORKFLOW_PATCH_ROUTE: Record<string, string> = {
   APPROVAL_LETTER: '/api/approval-letter',
   STAMP_APPROVAL: '/api/stamp-approval',
   EMPLOYEE_ONBOARDING: '/api/onboarding',
+  EMPLOYEE_ONBOARDING_APPROVAL: '/api/onboarding-approval',
+  EMPLOYEE_SEPARATION_APPROVAL: '/api/separation-approval',
 };
 
 export function getPatchUrl(workflowCode: string | null | undefined, requestId: string): string | null {

@@ -13,6 +13,8 @@ import { FinanceApprovalCoverPDFTemplate } from './finance-approval-cover-pdf-te
 import { AccountingApprovalCoverPDFTemplate } from './accounting-approval-cover-pdf-template';
 import { ComparisonFormPDFTemplate } from './comparison-form-pdf-template';
 import { ExpenseFormPDFTemplate } from './expense-form-pdf-template';
+import { OnboardingApprovalPDFTemplate } from './onboarding-approval-pdf-template';
+import { SeparationApprovalPDFTemplate } from './separation-approval-pdf-template';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { SignatureFont, DEFAULT_SIGNATURE_FONT } from '@/lib/signature/types';
 import type { PdfApproval, SignatureInfo } from './types';
@@ -64,6 +66,8 @@ export async function generateRequestPDF(
       ),
       onboarding_request:onboarding_requests(*),
       separation_request:separation_requests(*),
+      onboarding_approval_request:onboarding_approval_requests(*),
+      separation_approval_request:separation_approval_requests(*),
       request_form_request:request_form_requests(*),
       travel_assignment_request:travel_assignment_requests(*, company:companies(*)),
       approval_letter_request:approval_letter_requests(*),
@@ -257,6 +261,22 @@ export async function generateRequestPDF(
     compactFallback = React.createElement(SeparationPDFTemplate, {
       ...separationProps,
       density: 'compact',
+    }) as React.ReactElement<DocumentProps>;
+  } else if (request.onboarding_approval_request) {
+    // İşe Giriş Onay Formu PDF'i (maaş içerir)
+    pdfDocument = React.createElement(OnboardingApprovalPDFTemplate, {
+      request,
+      onboardingApprovalRequest: request.onboarding_approval_request,
+      approvals,
+      signatures,
+    }) as React.ReactElement<DocumentProps>;
+  } else if (request.separation_approval_request) {
+    // İşten Çıkış Onay Formu PDF'i (hak ediş/tazminat içerir)
+    pdfDocument = React.createElement(SeparationApprovalPDFTemplate, {
+      request,
+      separationApprovalRequest: request.separation_approval_request,
+      approvals,
+      signatures,
     }) as React.ReactElement<DocumentProps>;
   } else if (request.request_form_request) {
     // Talep Formu PDF'i

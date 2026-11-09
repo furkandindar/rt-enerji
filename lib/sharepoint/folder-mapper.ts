@@ -55,6 +55,9 @@ export const FIXED_ROUTE_FOLDERS: Record<string, string> = {
   OVERTIME:                  "İnsan Kaynakları/Birim Süreçleri/Fazla Mesai Formu",
   EMPLOYEE_ONBOARDING:       "İnsan Kaynakları/Birim Süreçleri/İşe Giriş Takip Formu",
   EMPLOYEE_SEPARATION:       "İnsan Kaynakları/Birim Süreçleri/İşten Çıkış Takip Formu",
+  // Maaş içeren İK onay formları: klasör izni yalnız İK'ya (ve yöneticilere) açık olmalı (BT)
+  EMPLOYEE_ONBOARDING_APPROVAL: "İnsan Kaynakları/Birim Süreçleri/İşe Giriş Onay Formu",
+  EMPLOYEE_SEPARATION_APPROVAL: "İnsan Kaynakları/Birim Süreçleri/İşten Çıkış Onay Formu",
   SALARY_ADVANCE:            "İnsan Kaynakları/Birim Süreçleri/Maaş Avans Talebi",
 };
 

@@ -996,6 +996,74 @@ export type Database = {
         }
         Relationships: []
       }
+      onboarding_approval_requests: {
+        Row: {
+          approved_salary: number | null
+          candidate_last_salary: number | null
+          candidate_name: string
+          candidate_title: string
+          company_name: string
+          created_at: string
+          id: string
+          info_note: string | null
+          project_name: string
+          proposed_net_salary: number | null
+          replaced_employee_last_salary: number | null
+          replaced_employee_name: string | null
+          request_id: string
+          request_reason: string
+          salary_scale_range: string | null
+          start_date: string
+          updated_at: string
+        }
+        Insert: {
+          approved_salary?: number | null
+          candidate_last_salary?: number | null
+          candidate_name: string
+          candidate_title: string
+          company_name: string
+          created_at?: string
+          id?: string
+          info_note?: string | null
+          project_name: string
+          proposed_net_salary?: number | null
+          replaced_employee_last_salary?: number | null
+          replaced_employee_name?: string | null
+          request_id: string
+          request_reason: string
+          salary_scale_range?: string | null
+          start_date: string
+          updated_at?: string
+        }
+        Update: {
+          approved_salary?: number | null
+          candidate_last_salary?: number | null
+          candidate_name?: string
+          candidate_title?: string
+          company_name?: string
+          created_at?: string
+          id?: string
+          info_note?: string | null
+          project_name?: string
+          proposed_net_salary?: number | null
+          replaced_employee_last_salary?: number | null
+          replaced_employee_name?: string | null
+          request_id?: string
+          request_reason?: string
+          salary_scale_range?: string | null
+          start_date?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "onboarding_approval_requests_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: true
+            referencedRelation: "requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       onboarding_requests: {
         Row: {
           computer_setup_notes: string | null
@@ -2075,6 +2143,113 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "salary_advance_requests_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: true
+            referencedRelation: "requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      separation_approval_requests: {
+        Row: {
+          annual_leave_amount: number | null
+          annual_leave_period: string | null
+          company_name: string
+          created_at: string
+          deductions_amount: number | null
+          deductions_period: string | null
+          employee_name: string
+          employee_title: string
+          final_salary_amount: number | null
+          final_salary_period: string | null
+          hire_date: string
+          id: string
+          last_salary: number | null
+          notice_amount: number | null
+          notice_period: string | null
+          overtime_amount: number | null
+          overtime_period: string | null
+          project_name: string
+          request_id: string
+          separation_date: string
+          separation_reason: string
+          severance_amount: number | null
+          severance_period: string | null
+          total_amount: number | null
+          total_is_manual: boolean
+          ugbt_amount: number | null
+          ugbt_period: string | null
+          updated_at: string
+          weekend_work_amount: number | null
+          weekend_work_period: string | null
+        }
+        Insert: {
+          annual_leave_amount?: number | null
+          annual_leave_period?: string | null
+          company_name: string
+          created_at?: string
+          deductions_amount?: number | null
+          deductions_period?: string | null
+          employee_name: string
+          employee_title: string
+          final_salary_amount?: number | null
+          final_salary_period?: string | null
+          hire_date: string
+          id?: string
+          last_salary?: number | null
+          notice_amount?: number | null
+          notice_period?: string | null
+          overtime_amount?: number | null
+          overtime_period?: string | null
+          project_name: string
+          request_id: string
+          separation_date: string
+          separation_reason: string
+          severance_amount?: number | null
+          severance_period?: string | null
+          total_amount?: number | null
+          total_is_manual?: boolean
+          ugbt_amount?: number | null
+          ugbt_period?: string | null
+          updated_at?: string
+          weekend_work_amount?: number | null
+          weekend_work_period?: string | null
+        }
+        Update: {
+          annual_leave_amount?: number | null
+          annual_leave_period?: string | null
+          company_name?: string
+          created_at?: string
+          deductions_amount?: number | null
+          deductions_period?: string | null
+          employee_name?: string
+          employee_title?: string
+          final_salary_amount?: number | null
+          final_salary_period?: string | null
+          hire_date?: string
+          id?: string
+          last_salary?: number | null
+          notice_amount?: number | null
+          notice_period?: string | null
+          overtime_amount?: number | null
+          overtime_period?: string | null
+          project_name?: string
+          request_id?: string
+          separation_date?: string
+          separation_reason?: string
+          severance_amount?: number | null
+          severance_period?: string | null
+          total_amount?: number | null
+          total_is_manual?: boolean
+          ugbt_amount?: number | null
+          ugbt_period?: string | null
+          updated_at?: string
+          weekend_work_amount?: number | null
+          weekend_work_period?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "separation_approval_requests_request_id_fkey"
             columns: ["request_id"]
             isOneToOne: true
             referencedRelation: "requests"

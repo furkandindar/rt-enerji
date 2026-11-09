@@ -1,4 +1,5 @@
 import { SignatureFont } from "@/lib/signature/types";
+import type { OnboardingApprovalRecord, SeparationApprovalRecord } from "@/lib/hr-approval/display";
 
 export interface EmployeePosition {
   position: {
@@ -191,6 +192,9 @@ export interface PendingApproval {
       notice_amount: number | null;
       [key: string]: string | number | null | undefined;
     };
+    // İK Onay formları (maaş içerir) — tam satır yalnız detay select'inde gelir
+    onboarding_approval_request?: OnboardingApprovalRecord | null;
+    separation_approval_request?: SeparationApprovalRecord | null;
     request_form_request?: {
       id: string;
       requester_name: string;

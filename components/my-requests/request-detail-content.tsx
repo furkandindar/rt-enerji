@@ -50,6 +50,8 @@ import type {
   ApprovalStatus as RequestLifecycleActionsApprovalStatus,
 } from "@/lib/workflow/types";
 import { RichTextDisplay } from "@/components/ui/rich-text-display";
+import { OnboardingApprovalSummary, SeparationApprovalSummary } from "@/components/hr-approval/hr-approval-summary";
+import { pickOne, type OnboardingApprovalRecord, type SeparationApprovalRecord } from "@/lib/hr-approval/display";
 
 export interface WorkflowDefinition {
   id: string;
@@ -207,6 +209,9 @@ export interface Request {
   overtime_request?: OvertimeRequest;
   onboarding_request?: OnboardingRequestData;
   separation_request?: SeparationRequestData;
+  // İK Onay formları (maaş içerir)
+  onboarding_approval_request?: OnboardingApprovalRecord | null;
+  separation_approval_request?: SeparationApprovalRecord | null;
   request_form_request?: RequestFormRequestData;
   travel_assignment_request?: {
     id: string;
@@ -1505,6 +1510,16 @@ export function RequestDetailContent({
                 </div>
               </>
             );
+          })()}
+
+          {/* İK Onay formları (maaş içerir) */}
+          {(() => {
+            const onboardingApproval = pickOne(selectedRequest.onboarding_approval_request);
+            return onboardingApproval ? <OnboardingApprovalSummary data={onboardingApproval} /> : null;
+          })()}
+          {(() => {
+            const separationApproval = pickOne(selectedRequest.separation_approval_request);
+            return separationApproval ? <SeparationApprovalSummary data={separationApproval} /> : null;
           })()}
 
           {/* Ek Dosyalar - tüm talep tipleri için */}

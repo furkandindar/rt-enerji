@@ -97,6 +97,8 @@ const WORKFLOW_CODE_TO_TYPE_JOIN: Record<string, string> = {
   OVERTIME: "overtime_request:overtime_requests(*, entries:overtime_entries(*))",
   EMPLOYEE_ONBOARDING: "onboarding_request:onboarding_requests(*)",
   EMPLOYEE_SEPARATION: "separation_request:separation_requests(*)",
+  EMPLOYEE_ONBOARDING_APPROVAL: "onboarding_approval_request:onboarding_approval_requests(*)",
+  EMPLOYEE_SEPARATION_APPROVAL: "separation_approval_request:separation_approval_requests(*)",
   REQUEST_FORM: "request_form_request:request_form_requests(*)",
   STAMP_APPROVAL: "stamp_request:stamp_requests(*, stamp:stamps(*))",
   TRAVEL_ASSIGNMENT:

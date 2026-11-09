@@ -23,6 +23,8 @@ export interface RequestSummarySource {
   overtime_request?: { month: string; year: number; overtime_type: 'EMERGENCY' | 'STAFF_SHORTAGE' } | null;
   onboarding_request?: { employee_name: string | null } | null;
   separation_request?: { employee_name: string | null } | null;
+  onboarding_approval_request?: { candidate_name: string | null } | null;
+  separation_approval_request?: { employee_name: string | null } | null;
   request_form_request?: { subject: string } | null;
   stamp_request?: { subject: string | null } | null;
   travel_assignment_request?: { assignment_subject: string; destination_city: string } | null;
@@ -49,6 +51,12 @@ export const getRequestSummary = (request: RequestSummarySource): string => {
   }
   if (request.separation_request) {
     return request.separation_request.employee_name || "-";
+  }
+  if (request.onboarding_approval_request) {
+    return request.onboarding_approval_request.candidate_name || "-";
+  }
+  if (request.separation_approval_request) {
+    return request.separation_approval_request.employee_name || "-";
   }
   if (request.request_form_request) {
     return request.request_form_request.subject || "-";

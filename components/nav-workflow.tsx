@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarPlus, FileCheck, ClipboardList, Banknote, Calculator, Clock, UserPlus, UserMinus, FileText, Stamp, MapPin, FilePenLine, Scale, ReceiptText, History, type LucideIcon } from "lucide-react";
+import { CalendarPlus, FileCheck, ClipboardList, Banknote, Calculator, Clock, UserPlus, UserMinus, UserCheck, UserX, FileText, Stamp, MapPin, FilePenLine, Scale, ReceiptText, History, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -45,8 +45,11 @@ const personalItems: NavItem[] = [
 // "Yeni …" butonundan açılır.
 const departmentItems: NavItem[] = [
   { title: "Fazla Mesai Formu",    url: "/overtime",   icon: Clock,    workflowCodes: ["OVERTIME"],           group: "İnsan Kaynakları" },
-  { title: "İşe Giriş Takip Formu", url: "/onboarding", icon: UserPlus, workflowCodes: ["EMPLOYEE_ONBOARDING"], group: "İnsan Kaynakları" },
-  { title: "İşten Çıkış Takip Formu", url: "/separation", icon: UserMinus, workflowCodes: ["EMPLOYEE_SEPARATION"], group: "İnsan Kaynakları" },
+  // isActiveMatch: "/onboarding" öneki "/onboarding-approval"ı da yakalamasın
+  { title: "İşe Giriş Takip Formu", url: "/onboarding", icon: UserPlus, workflowCodes: ["EMPLOYEE_ONBOARDING"], group: "İnsan Kaynakları", isActiveMatch: (p) => p === "/onboarding" || p.startsWith("/onboarding/") },
+  { title: "İşten Çıkış Takip Formu", url: "/separation", icon: UserMinus, workflowCodes: ["EMPLOYEE_SEPARATION"], group: "İnsan Kaynakları", isActiveMatch: (p) => p === "/separation" || p.startsWith("/separation/") },
+  { title: "İşe Giriş Onay Formu", url: "/onboarding-approval", icon: UserCheck, workflowCodes: ["EMPLOYEE_ONBOARDING_APPROVAL"], group: "İnsan Kaynakları" },
+  { title: "İşten Çıkış Onay Formu", url: "/separation-approval", icon: UserX, workflowCodes: ["EMPLOYEE_SEPARATION_APPROVAL"], group: "İnsan Kaynakları" },
   { title: "Onay Kapağı",           url: "/finance-approval-cover", icon: Banknote, workflowCodes: ["FINANCE_APPROVAL_COVER"], group: "Finans" },
   { title: "Onay Kapağı",           url: "/accounting-approval-cover", icon: Calculator, workflowCodes: ["ACCOUNTING_APPROVAL_COVER"], group: "Muhasebe" },
 ];

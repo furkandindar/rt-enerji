@@ -227,6 +227,40 @@ export async function buildWorkflowDetails(
       pushIf(rows, 'Çıkış Sebebi', data.separation_reason);
       break;
     }
+
+    // İK onay formları (maaş): e-postaya ücret/tutar YAZILMAZ (e-postalar iletilebilir,
+    // posta kutularında kalır). Kimlik bilgisi + BYS'ye yönlendirme yeterli.
+    case 'EMPLOYEE_ONBOARDING_APPROVAL': {
+      const { data } = await supabase
+        .from('onboarding_approval_requests')
+        .select('candidate_name, candidate_title, company_name, project_name, start_date')
+        .eq('request_id', requestId)
+        .single();
+      if (!data) break;
+      pushIf(rows, 'Aday', data.candidate_name);
+      pushIf(rows, 'Görev Unvanı', data.candidate_title);
+      pushIf(rows, 'Şirket', data.company_name);
+      pushIf(rows, 'Proje', data.project_name);
+      pushIf(rows, 'İşe Başlama', fmtDate(data.start_date));
+      pushIf(rows, 'Ücret Bilgisi', 'E-postada gösterilmez — BYS üzerinden görüntüleyin');
+      break;
+    }
+
+    case 'EMPLOYEE_SEPARATION_APPROVAL': {
+      const { data } = await supabase
+        .from('separation_approval_requests')
+        .select('employee_name, employee_title, company_name, project_name, separation_date')
+        .eq('request_id', requestId)
+        .single();
+      if (!data) break;
+      pushIf(rows, 'Personel', data.employee_name);
+      pushIf(rows, 'Görev Unvanı', data.employee_title);
+      pushIf(rows, 'Şirket', data.company_name);
+      pushIf(rows, 'Proje', data.project_name);
+      pushIf(rows, 'Çıkış Tarihi', fmtDate(data.separation_date));
+      pushIf(rows, 'Hak Ediş Bilgisi', 'E-postada gösterilmez — BYS üzerinden görüntüleyin');
+      break;
+    }
   }
 
   return rows;

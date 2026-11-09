@@ -40,6 +40,8 @@ export const APPROVAL_LIST_SELECT = `
     overtime_request:overtime_requests(month, year, overtime_type),
     onboarding_request:onboarding_requests(employee_name),
     separation_request:separation_requests(employee_name),
+    onboarding_approval_request:onboarding_approval_requests(candidate_name),
+    separation_approval_request:separation_approval_requests(employee_name),
     request_form_request:request_form_requests(subject),
     stamp_request:stamp_requests(subject),
     travel_assignment_request:travel_assignment_requests(assignment_subject, destination_city),
