@@ -1,4 +1,5 @@
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
+import { buildYkbSignedPdfPath } from "@/lib/storage/ykb-signed-pdf-path";
 import { NextResponse } from "next/server";
 import { resolveActingRights } from "@/lib/workflow/delegation";
 
@@ -107,11 +108,8 @@ export async function POST(request: Request) {
 
     // Storage'a yükle
     const supabaseAdmin = createServiceRoleClient();
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, "0");
-    const fileName = `signed_${Date.now()}.pdf`;
-    const pdfPath = `${year}/${month}/${fileName}`;
+    // Yol talep kimliğini taşır; onay ucu pdf_path'e yazmadan önce bunu doğrular
+    const pdfPath = buildYkbSignedPdfPath(targetRequest.id);
     const pdfBuffer = Buffer.from(await pdfFile.arrayBuffer());
 
     const { error: uploadError } = await supabaseAdmin.storage

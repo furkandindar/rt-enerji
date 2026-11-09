@@ -9,7 +9,9 @@
 //     → Verilen talep için PDF'i yeniden üretip Supabase + SharePoint'e yükler.
 //       requests tablosundaki sharepoint_* alanları güncellenir. Faz 4 e2e test.
 //
-// Authenticated kullanıcı yeterli. Production'da silinecek / kapatılacak.
+// Yalnız ORG_ADMIN (2026-11-07: önceden her oturum açmış kullanıcıya açıktı ve
+// pdf_path'i ezebiliyordu). COMPLETED talepler (pdf_path = YKB'nin ıslak imzalı
+// taraması olabilir) full-sync modunda reddedilir.
 
 import { buildAndUploadRequestPDF } from "@/lib/pdf/build-and-upload-request-pdf";
 import { isArchivableStatus } from "@/lib/pdf/file-naming";
@@ -33,6 +35,15 @@ export async function GET(request: NextRequest) {
   } = await supabase.auth.getUser();
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { data: appUser } = await supabase
+    .from("app_users")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+  if (appUser?.role !== "ORG_ADMIN") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   const requestId = request.nextUrl.searchParams.get("requestId");
@@ -139,6 +150,16 @@ async function runFullSyncTest(requestId: string): Promise<NextResponse> {
     return NextResponse.json(
       { ok: false, error: "Talep bulunamadı.", requestId },
       { status: 404 }
+    );
+  }
+  if (reqRow.status === "COMPLETED") {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "COMPLETED talepte pdf_path ıslak imzalı taramadır; test ucu üzerine yazmaz.",
+        requestId,
+      },
+      { status: 400 }
     );
   }
   if (!isArchivableStatus(reqRow.status)) {

@@ -4,6 +4,7 @@ import { generateRequestPDF } from './generate-request-pdf';
 import { mergeAttachments } from './merge-attachments';
 import { uploadRequestPDF } from '@/lib/storage/upload-request-pdf';
 import { enqueueSharePointSync } from '@/lib/sharepoint/enqueue-sync';
+import { createServiceRoleClient } from '@/lib/supabase/service-role';
 
 interface BuildAndUploadOptions {
   requestId: string;
@@ -31,9 +32,18 @@ export async function buildAndUploadRequestPDF(
   let pdfPath: string;
   let finalPdfBuffer: Buffer;
 
+  // Render (veri okuma + ek birleştirme) service role ile: belge talebin TAMAMINI
+  // göstermeli, çağıranın görebildiği kadarını değil. Onay ucu karar veren onaycının
+  // RLS'li client'ını geçirir; kısıtlı süreçlerde onaycı (başlatıcı birimden değilse)
+  // request_approvals'ta yalnız kendi satırını görür → PDF'te önceki adımların
+  // paraf/imzaları düşüyordu (İK Onay formlarında 2026-11-09 dev e2e'de yakalandı).
+  // Yetki kontrolü çağıranda yapılmıştır; preview-live aynı gerekçeyle service role kullanır.
+  // DB yazımları (pdf_status / pdf_path) aşağıda eskisi gibi çağıranın client'ıyla.
+  const renderClient = createServiceRoleClient();
+
   try {
-    const pdfBuffer = await generateRequestPDF({ requestId, supabase });
-    finalPdfBuffer = await mergeAttachments(pdfBuffer, requestId, supabase);
+    const pdfBuffer = await generateRequestPDF({ requestId, supabase: renderClient });
+    finalPdfBuffer = await mergeAttachments(pdfBuffer, requestId, renderClient);
     pdfPath = await uploadRequestPDF({ requestId, pdfBuffer: finalPdfBuffer });
   } catch (err) {
     // PDF üretim hatası — caller'a fırlatmadan önce requests.pdf_status'u

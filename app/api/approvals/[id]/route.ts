@@ -16,6 +16,7 @@ import { stampPDF, type StampPositionOverrides } from "@/lib/pdf/stamp-pdf";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { StampPosition } from "@/lib/workflow/types";
 import { getApprovalDetailSelect } from "@/lib/my-requests/server-selects";
+import { isValidYkbSignedPdfPath } from "@/lib/storage/ykb-signed-pdf-path";
 import {
   resolveActingRights,
   getEmployeeFullName,
@@ -69,7 +70,9 @@ export async function GET(
         { status: isTimeout ? 504 : 500 }
       );
     }
-    if (!head) {
+    // Onay satırı görünse bile talebin kendisi RLS'te görünmüyorsa (ör. kısıtlı süreç)
+    // service-role ile tam veri dönülmez
+    if (!head || !(head as { request?: unknown }).request) {
       return NextResponse.json({ error: "Approval not found" }, { status: 404 });
     }
 
@@ -545,10 +548,15 @@ export async function PATCH(
       if (!ykb_signed_pdf_path?.trim()) {
         return NextResponse.json({ error: "İmzalı PDF yüklenmeden onaylanamaz" }, { status: 400 });
       }
+      // Yalnız yükleme ucunun bu talep için ürettiği yol kabul edilir (başka talebin
+      // belgesini pdf_path'e bağlayıp PDF ucundan indirmeyi engeller)
+      if (!isValidYkbSignedPdfPath(ykb_signed_pdf_path.trim(), requestData.id)) {
+        return NextResponse.json({ error: "Geçersiz imzalı PDF yolu" }, { status: 400 });
+      }
 
       const { error: pdfPathError } = await supabase
         .from("requests")
-        .update({ pdf_path: ykb_signed_pdf_path })
+        .update({ pdf_path: ykb_signed_pdf_path.trim() })
         .eq("id", requestData.id);
 
       if (pdfPathError) {
