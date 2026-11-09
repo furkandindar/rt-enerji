@@ -10,7 +10,7 @@
 
 RT Enerji'nin **kurumsal onay süreçleri + organizasyon yönetimi** platformu. İki ana yetenek:
 
-1. **Onay süreçleri (workflow):** İzin, fazla mesai, harcama, maaş avansı, mukayese, görev, kaşe onayı, olur yazısı, onay kapağı vb. **14 süreç** dijital olarak yürütülür. Talep açılır → onay zincirinden geçer → süreç sonunda **imzalı/kaşeli PDF** üretilir → SharePoint'e otomatik arşivlenir.
+1. **Onay süreçleri (workflow):** İzin, fazla mesai, harcama, maaş avansı, mukayese, görev, kaşe onayı, olur yazısı, onay kapağı vb. **16 süreç** dijital olarak yürütülür. Talep açılır → onay zincirinden geçer → süreç sonunda **imzalı/kaşeli PDF** üretilir → SharePoint'e otomatik arşivlenir.
 2. **Organizasyon yönetimi:** Şirketler, birimler (hiyerarşik), pozisyonlar, çalışanlar ve **tarihçeli** pozisyon atamaları; ReactFlow ile org şeması.
 
 **Durum:** Faz 1 **canlıda ve aktif kullanılıyor** (Haziran 2026'dan beri). Faz 2 (İK derinleşmesi: izin bakiyesi, zimmet, performans, mobil) tasarım aşamasında — özet: [docs/faz2-yonetici-ozeti.md](docs/faz2-yonetici-ozeti.md).
@@ -46,7 +46,7 @@ RT Enerji'nin **kurumsal onay süreçleri + organizasyon yönetimi** platformu. 
 
 1. Lokal `.env.local` **her zaman dev** projesine bağlanır. Prod anahtarları lokalde bulunmaz.
 2. **Prod'a hiçbir koşulda yazma yapılmaz**; prod'u incelemek gerekiyorsa Furkan'la birlikte, read-only.
-3. **Veritabanına yazma işlemi (INSERT/UPDATE/DELETE/DDL) AI agent tarafından yapılmaz** — dev'de bile. AI SQL üretir, insan inceleyip Supabase SQL Editor'de kendisi çalıştırır. (Ayrıntılı kural seti: [docs/workflows/README.md](docs/workflows/README.md) baş kısmı.)
+3. **Senin oturumlarında veritabanına yazma işlemi (INSERT/UPDATE/DELETE/DDL) yapılmaz** — dev'de bile. DB değişikliklerini Furkan'ın oturumundaki agent dev → prod sırasıyla uygular. (Ayrıntılı kural seti: [docs/workflows/README.md](docs/workflows/README.md) baş kısmı.)
 4. Uygulama üzerinden (UI'dan talep açmak, onaylamak) dev DB'sine veri girmek serbest — test bunun için var.
 
 **E-posta uyarısı:** Onay aksiyonları Microsoft Graph ile **gerçek e-posta** gönderir (`AZURE_MAIL_FROM` hesabından). `.env.local`'inde mail secret'ları varsa, dev'de onaycı olarak seçtiğin kişiye gerçekten mail gider. Test kullanıcıları dışında kimseyi onay zincirine sokma. Mail secret'ları sende yoksa e-posta bildirimi sessizce atlanır — bu bir hata değildir.
@@ -240,7 +240,7 @@ Kaşe süreci (`STAMP_APPROVAL`) farklıdır: kullanıcı PDF yükler, kaşe poz
 
 ---
 
-## 7. Süreç kataloğu (14 süreç)
+## 7. Süreç kataloğu (16 süreç)
 
 | Workflow kodu | Form | Rota | Erişim |
 |---|---|---|---|
@@ -256,6 +256,8 @@ Kaşe süreci (`STAMP_APPROVAL`) farklıdır: kullanıcı PDF yükler, kaşe poz
 | `OVERTIME` | Fazla Mesai | `/overtime/new` | Kısıtlı — İK |
 | `EMPLOYEE_ONBOARDING` | İşe Giriş Takip | `/onboarding/new` | Kısıtlı — İK |
 | `EMPLOYEE_SEPARATION` | İşten Çıkış Takip | `/separation/new` | Kısıtlı — İK |
+| `EMPLOYEE_ONBOARDING_APPROVAL` | İşe Giriş Onay (ücret) | `/onboarding-approval/new` | Kısıtlı — İK (maaş içerir) |
+| `EMPLOYEE_SEPARATION_APPROVAL` | İşten Çıkış Onay (hak ediş) | `/separation-approval/new` | Kısıtlı — İK (maaş içerir) |
 | `FINANCE_APPROVAL_COVER` | Onay Kapağı (Finans) | `/finance-approval-cover/new` | Kısıtlı — Finans |
 | `ACCOUNTING_APPROVAL_COVER` | Onay Kapağı (Muhasebe) | `/accounting-approval-cover/new` | Kısıtlı — Muhasebe |
 
@@ -327,6 +329,7 @@ Sistemi tanımanın en iyi yolu uçtan uca senaryolar koşmak (hepsi dev'de serb
 | 2026-10-31 | **Talep oluştururken yetim kayıt kalmıyor:** onay zinciri artık talep kaydından ÖNCE çözülüyor (`resolveApprovalChain` → `insertApprovalChain`); onaycısı bulunamayan adımda kullanıcı Türkçe neden görür (422) ve hiç kayıt oluşmaz. Eskiden RLS'li rollback sessizce 0 satır silip talebi PENDING + onaysız bırakıyordu (2026-001990). Sonraki hatalarda `rollbackCreatedRequest` (service role). Kod: `lib/workflow/request-creation.ts`. | Kod-only; deploy bekliyor. |
 | 2026-10-31 | **Süreç Tanımları'ndan pozisyon değiştirme (Faz 2a):** ORG_ADMIN sabit pozisyonlu adımın pozisyonunu (ve istenirse adım adını) panelden değiştirir; boş / çift atamalı / pasif çalışanlı pozisyon seçilemez (`lib/workflow/step-position-rules.ts`, motorla aynı kural). Yalnız yeni talepleri etkiler; bekleyenler mevcut onaycıda kalır (pencere sayısını gösterir). Her değişikliği (Table Editor dahil) DB trigger'ı `workflow_step_changes`'e yazar; kartta "Son değişiklik". API: `PATCH /api/workflow-steps/[id]`. | SQL (`sql/feature_workflow_step_change_log.sql`) dev → prod, sonra deploy (kod tablo yokken de çalışır). |
 | 2026-10-31 | **İşe Giriş / İşten Çıkış PDF'i tek sayfa:** imza bandı 2. sayfaya bölünüyordu (2026-001706). Başlık bandı küçültüldü, alt onay kutularında yalnız ad + imza (pozisyon/tarih yok), checklist satırı 20→18, bant `wrap={false}`. Şablonlarda `density: 'normal' \| 'compact'`; `generate-request-pdf.ts` normal render >1 sayfaysa compact ile yeniden render eder. Kayıtlı eski PDF'ler değişmez (yeniden üretilmedikçe). | Kod-only; deploy bekliyor. |
+| 2026-11-09 | **İşe Giriş / İşten Çıkış ONAY formları:** kağıt MİY-EK-03_11 / 03_10 ayrı süreç olarak eklendi (Takip formlarıyla bağsız; maaş Takip formunda görünmesin diye). Kısıtlı İK süreci: İK, ORG_ADMIN, talep sahibi ve zincir görür; e-postada ücret yazılmaz. İK doldurur, onaycılar paraflar, YKB ıslak imzalı taramayı İK yükler. Yan güvenlik düzeltmeleri: `workflow-attachments` bucket'ı yalnız yükleyene (prod'da uygulandı), `sharepoint-test` yalnız ORG_ADMIN, YKB tarama yolu talebe bağlı. Yan PDF düzeltmesi: kalıcı PDF artık service role ile render ediliyor — kısıtlı süreçte son onaycı başlatıcı birimden/admin değilse PDF'te önceki paraflar düşüyordu (prod'da yalnız 3 reddedilmiş finans kapağının red PDF'i etkilenmiş olabilir: 2026-001277/-001367/-001664). Doküman: [docs/workflows/hr-approval-forms.md](docs/workflows/hr-approval-forms.md). | SQL (`_2_schema` → `_2b` → `_3`, yalnız ekleme) dev+prod → deploy → `is_active`. |
 | Faz 2 | **`reports_to_position_id` routing'de kullanılmıyor:** motor birim amirini `is_unit_head` + üst-birim tırmanmasıyla bulur; `reports_to` alanı dolu ama onay zincirine etkisi yok. Lokasyon-bazlı `MANAGER` onaycı tipi Faz 2 tasarımında. | Tasarım aşaması — davranışı değiştirme. |
 
 ---
@@ -335,8 +338,8 @@ Sistemi tanımanın en iyi yolu uçtan uca senaryolar koşmak (hepsi dev'de serb
 
 Repo kökündeki **`CLAUDE.md`** agent'ın otomatik okuduğu kural setidir. Özü:
 
-1. **DB'ye yazma yok** — dev dahil. Agent SQL üretir, insan çalıştırır. `workflow_steps` INSERT'lerini agent hiç yazmaz (pozisyon id seçimi insan işi).
-2. **Prod'a dokunma.**
+1. **DB değişikliklerini agent uygular, her zaman önce dev sonra prod** (Furkan'ın oturumunda; 2026-11-07 kararı). Her SQL `sql/` klasörüne arşivlenir. `workflow_steps` pozisyon seçimi insan onayıyla.
+2. **Prod gerçek veri içerir** — prod'a yalnız dev'de denenmiş değişiklik gider.
 3. Süreç implementasyonu **faz faz** ilerler, her fazda durup onay alınır ([docs/workflows/README.md](docs/workflows/README.md) tam kural seti + yeni süreç ekleme rehberi).
 4. Timezone, revision-cycle ve RLS/service-role konvansiyonlarına uy (§8).
 
@@ -359,7 +362,7 @@ Repo kökündeki **`CLAUDE.md`** agent'ın otomatik okuduğu kural setidir. Öz�
 | Ek dosya sistemi | [docs/workflow-attachments.md](docs/workflow-attachments.md) |
 | Auth kurulum / callback sorunları | [docs/auth-setup.md](docs/auth-setup.md) |
 | Faz 2 planı | [docs/faz2-yonetici-ozeti.md](docs/faz2-yonetici-ozeti.md) · [docs/faz2-roadmap.md](docs/faz2-roadmap.md) |
-| Süreç-bazlı detay dokümanları | [docs/workflows/](docs/workflows/) (comparison-form, overtime, salary-advance, separation, onboarding) |
+| Süreç-bazlı detay dokümanları | [docs/workflows/](docs/workflows/) (comparison-form, overtime, salary-advance, separation, onboarding, hr-approval-forms) |
 
 > Not: `docs/workflows/onboarding.md` **İşe Giriş Takip sürecinin** dokümanıdır; bu proje-onboarding dokümanıyla karıştırma.
 

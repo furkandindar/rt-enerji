@@ -23,17 +23,17 @@ Bu doküman, RT Enerji Workflow Engine V3'e yeni bir süreç eklemek isteyen gel
 
 > **⚠️ ÖNEMLİ — AI Asistanı İçin Kurallar**
 >
-> Bu projede süreç implementasyonu yapılırken **AI asistanı Supabase'e doğrudan yazma işlemi yapmaz.** Aşağıdaki kurallara uyulur:
+> 2026-11-07'den itibaren **veritabanı değişikliklerini AI asistanı Supabase MCP ile kendisi uygular** (kullanıcı kararı; önceden SQL'i kullanıcı SQL Editor'de çalıştırıyordu). Aşağıdaki kurallara uyulur:
 >
-> 1. **SQL'ler elle çalıştırılır.** Tüm `INSERT`, `CREATE TABLE`, `ALTER TABLE`, `CREATE POLICY` vb. komutlar kullanıcı tarafından **Supabase SQL Editor** üzerinden manuel olarak çalıştırılır. AI asistan Supabase MCP/API aracılığıyla yazma işlemi yapmaz.
+> 1. **Önce DEV, sonra PROD.** Her değişiklik önce dev'e uygulanır, sorguyla doğrulanır ve akış denenir; prod'a ancak ondan sonra uygulanır ve tekrar doğrulanır. DDL `apply_migration` ile, çok adımlı değişiklikler tek transaction'da.
 >
-> 2. **AI'ın görevi SQL üretmektir.** Her faz için çalıştırılmaya hazır, kopyala-yapıştır edilebilir SQL blokları verilir. Kullanıcı bu SQL'leri inceler ve kendisi uygular.
+> 2. **Her SQL arşivlenir.** Uygulanan SQL'ler `sql/` klasörüne de dosya olarak yazılır (başlık yorumu: amaç, sıra, doğrulama sorguları) — migration runner yok, geçmiş buradan okunur.
 >
-> 3. **İstisna — `workflow_steps` INSERT'leri AI tarafından yazılmaz.** Bu tablodaki kayıtlar `static_position_id` seçimi gerektirdiği için **tamamen kullanıcı tarafından elle yazılır**. AI asistan `workflow_steps` için SQL üretmez; sadece sürecin kaç adımdan oluşacağı ve her adımın hangi `approver_type` / `action_type` / `form_section_key` değerlerini alacağı konusunda **metinsel öneri** sunar. Kullanıcı bu öneriye göre INSERT'leri kendisi yazar. Diğer tüm SQL'ler (`workflow_definitions`, `[process]_requests` tablosu, RLS politikaları, `workflow_step_attachments` vb.) AI tarafından tam olarak üretilir.
+> 3. **`workflow_steps`: pozisyon seçimi insan kararıdır.** AI adım yapısını (`approver_type` / `action_type` / `form_section_key` / `phase`) ve `static_position_id` için pozisyon önerisini (unvan + bugünkü sahibi) sunar; kullanıcı onaylayınca kayıtları kendisi ekler. Dev'de gerçek çalışan yerine test kullanıcıları seçilir (onay e-postası gerçekten gider).
 >
-> 4. **Okuma işlemleri serbesttir.** Mevcut şemayı, pozisyonları veya test verisini anlamak için `SELECT` sorguları AI tarafından çalıştırılabilir; ancak yazma (`INSERT`/`UPDATE`/`DELETE`/`CREATE`/`ALTER`) komutları her zaman kullanıcıya bırakılır.
+> 4. **Prod'da dikkat gerektiren işlemler.** Prod'a uygulamadan önce kullanıcıya ne uygulanacağı tek satırla söylenir; gerçek veriyi silen/toplu değiştiren veya geri dönüşü zor işlemler (DROP, toplu UPDATE/DELETE, kayıt düzeltme) için açık onay alınır.
 >
-> 5. **Kod tarafındaki değişiklikler (TypeScript, React, API route'ları vb.) AI tarafından yapılır.** Bu kısıtlama yalnızca veritabanı yazma işlemlerini kapsar.
+> 5. **Kod tarafındaki değişiklikler (TypeScript, React, API route'ları vb.) AI tarafından yapılır.**
 >
 > 6. **Her sürece ek dosya desteği zorunludur.** İstisnasız her yeni süreç, `workflow_step_attachments` konfigürasyonuyla birlikte gelir ve talep formunda `<AttachmentUploader>` component'i bulundurur. Ek dosya alanı genellikle ilk adıma (Talep Eden) tanımlanır; is_required varsayılan olarak `false` olsa da bazı süreçlerde zorunlu olabilir. Detaylar için bkz. [Adım 1.5](#adım-15-ek-dosya-konfigürasyonu-zorunlu) ve [Adım 3.2](#adım-32-ek-dosya-yükleme-alanı-ekle-zorunlu).
 >
@@ -127,7 +127,7 @@ Her yeni süreç 4 fazda implement edilir:
 
 ## Faz 1: Veritabanı
 
-> **🔔 Hatırlatma:** Bu fazdaki tüm SQL'ler **kullanıcı tarafından Supabase SQL Editor üzerinden manuel** çalıştırılır. AI asistan sadece şablon/parametre tamamlanmış SQL üretir, Supabase'e yazma yapmaz. Ayrıntı için [Çalışma Prensibi](#çalışma-prensibi) bölümüne bakın.
+> **🔔 Hatırlatma:** Bu fazdaki SQL'leri AI asistan önce dev'e, doğruladıktan sonra prod'a uygular ve `sql/` klasörüne arşivler. Ayrıntı için [Çalışma Prensibi](#çalışma-prensibi) bölümüne bakın.
 
 ### Adım 1.1: Workflow Definition Oluştur
 
@@ -144,9 +144,9 @@ VALUES (
 
 ### Adım 1.2: Workflow Steps Oluştur
 
-> **🛑 Bu INSERT'leri AI yazmaz — kullanıcı elle yazar.**
+> **🛑 Pozisyon seçimi kullanıcı onayıyla.**
 >
-> `workflow_steps` tablosundaki kayıtlar `static_position_id` seçimi gerektirdiği için tamamen kullanıcı tarafından Supabase SQL Editor'de yazılır. AI asistan sadece adımların **yapısını** (kaç adım, her adımın `approver_type` / `action_type` / `form_section_key` değerleri) önerir; kullanıcı doğru pozisyonları seçerek INSERT'leri kendisi oluşturur. Aşağıdaki blok **yalnızca referans şablondur**.
+> `workflow_steps` kayıtları `static_position_id` seçimi gerektirir. AI asistan adımların **yapısını** (kaç adım, her adımın `approver_type` / `action_type` / `form_section_key` değerleri) ve her sabit pozisyonlu adım için pozisyon önerisini (unvan + bugünkü sahibi) sunar; kullanıcı onaylayınca kayıtları ekler. Aşağıdaki blok şablondur.
 
 ```sql
 -- 📌 REFERANS ŞABLON (kullanıcı tarafından doldurulur)
