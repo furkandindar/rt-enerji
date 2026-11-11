@@ -48,7 +48,8 @@
 --      önce/sonra birebir (23.051 satır); e2e 80/80; security advisor
 --      "authenticated SECURITY DEFINER" 14 → 2 (can_act_on_approval + create_notification;
 --      ikincisi hardening_2'de kapanır).
--- PROD: bekliyor (öncesi fotoğraf alındı: 77 kullanıcı × 46 tablo, 817.815 satır).
+-- PROD: 2026-11-12 uygulandı (kullanıcı onayıyla). RLS altında 77 kullanıcı × 46 tablo
+--       (817.815 satır) önce/sonra birebir aynı özet.
 -- ============================================================================
 
 BEGIN;

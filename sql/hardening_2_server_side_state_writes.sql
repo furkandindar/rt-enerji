@@ -43,7 +43,13 @@
 --      bildirim) 35/35; e2e 80/80; RLS görünürlüğü 46 tablo × tüm kullanıcılar birebir;
 --      dışarıdan hesap simülasyonu: example.com → rol NONE, hiçbir kurum verisi yok.
 --      Yeni kod eski DB ile de çalışır (DB'den önce deploy edilebilir — doğrulandı).
--- PROD: bekliyor (sıra: kod deploy → bu script).
+-- PROD: 2026-11-12 uygulandı (kod b1927f4 Vercel'de canlıya çıktıktan sonra, kullanıcı
+--       onayıyla; dashboard'da e-posta sağlayıcısı kapatıldı, Azure kiracısı doğrulandı).
+--       RLS altında 77 kullanıcı × 46 tablo (817.815 satır) önce/sonra birebir aynı.
+--       Gerçek kullanıcı kimliğiyle, geri alınan transaction içinde saldırı yoklaması:
+--       10/10 senaryo 42501 ile engellendi; okundu işareti, imza alanı ve
+--       can_act_on_approval çalışıyor. Security advisor: authenticated SECURITY DEFINER
+--       14 → 1 (bilinçli can_act_on_approval).
 -- ============================================================================
 
 BEGIN;
@@ -246,6 +252,7 @@ CREATE OR REPLACE FUNCTION private.member_email_domains()
 RETURNS text[]
 LANGUAGE sql
 IMMUTABLE
+SET search_path = ''
 AS $$ SELECT ARRAY['rtenerji.com'] $$;
 REVOKE ALL ON FUNCTION private.member_email_domains() FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION private.member_email_domains() TO service_role;
