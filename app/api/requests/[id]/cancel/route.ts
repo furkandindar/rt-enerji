@@ -77,18 +77,30 @@ export async function POST(
       );
     }
 
-    // 4. Status'u CANCELLED'a çek
-    const { error: updateError } = await supabase
+    // 4. Status'u CANCELLED'a çek — yetki yukarıda doğrulandı; `requests` satırını
+    //    yalnız sunucu yazar (sql/hardening_2_server_side_state_writes.sql).
+    //    Yarış-safe: okunan statü UPDATE anında hâlâ aynı olmalı (araya bir karar
+    //    girip talebi sonuçlandırdıysa iptal onu ezmez).
+    const { data: cancelled, error: updateError } = await createServiceRoleClient()
       .from("requests")
       .update({
         status: "CANCELLED",
         completed_at: new Date().toISOString(),
       })
-      .eq("id", requestId);
+      .eq("id", requestId)
+      .eq("status", req.status)
+      .select("id")
+      .maybeSingle();
 
     if (updateError) {
       console.error("[cancel] update failed:", updateError);
       return NextResponse.json({ error: "Failed to cancel" }, { status: 500 });
+    }
+    if (!cancelled) {
+      return NextResponse.json(
+        { error: "Request state changed; cancel aborted" },
+        { status: 409 }
+      );
     }
 
     // 5. Audit

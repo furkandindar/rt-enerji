@@ -34,6 +34,8 @@
 --        ağır finans sorgusu 7.958 → 36 ms; Bekleyen Onaylar 1.278 → 56 ms; Onay Geçmişi
 --        ~1.200 → 46 ms. Advisor auth_rls_initplan 123 → 0.
 --   Acil geri alma: perf_rls_2_rollback_prod_snapshot.sql (139 politikanın eski metni).
+-- ARŞİV NOTU (2026-11-12): bu script'teki fonksiyonlar hardening_1 ile `private`
+-- şemasına taşındı; yeniden ÇALIŞTIRMA (public'te kopya oluşturur). Güncel tanım: canlı DB.
 -- ============================================================================
 
 BEGIN;

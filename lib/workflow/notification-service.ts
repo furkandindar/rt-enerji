@@ -124,15 +124,19 @@ async function enrichEmailPayload(
 // ============================================================================
 
 /**
- * Tek bir bildirim oluşturur
+ * Tek bir bildirim oluşturur.
+ *
+ * Bildirimi her zaman sunucu (service role) yazar: kullanıcı oturumu bildirim
+ * oluşturamaz (DB'de authenticated için INSERT ve create_notification yetkisi
+ * yok — sql/hardening_2_server_side_state_writes.sql). Böylece giriş yapmış biri
+ * API'ye doğrudan istek atıp başkası adına bildirim üretemez. `supabase`
+ * parametresi imza uyumu için durur; yazma için kullanılmaz.
  */
 export async function createNotification(
   supabase: SupabaseClient,
   params: CreateNotificationParams
 ): Promise<void> {
-  // SECURITY DEFINER fonksiyon kullanarak bildirim oluştur
-  // Bu fonksiyon RLS'i bypass eder (Next.js SSR + Supabase JWT token sorunu için)
-  const { data, error } = await supabase.rpc('create_notification', {
+  const { data, error } = await createServiceRoleClient().rpc('create_notification', {
     p_user_id: params.userId,
     p_title: params.title,
     p_message: params.message,

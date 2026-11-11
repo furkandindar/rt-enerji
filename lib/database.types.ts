@@ -2903,10 +2903,6 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      approval_stored_approver: {
-        Args: { p_approval_id: string }
-        Returns: string
-      }
       can_act_on_approval: { Args: { p_approval_id: string }; Returns: boolean }
       create_mukayese_request: {
         Args: {
@@ -2935,7 +2931,6 @@ export type Database = {
           employee_id: string
         }[]
       }
-      get_current_employee_id: { Args: never; Returns: string }
       insert_extra_approvers_before: {
         Args: {
           p_added_by_employee_id: string
@@ -2946,22 +2941,6 @@ export type Database = {
         }
         Returns: number
       }
-      is_active_delegate_for: {
-        Args: {
-          p_delegator_employee_id: string
-          p_workflow_definition_id: string
-        }
-        Returns: boolean
-      }
-      is_approver_for_request: {
-        Args: { p_request_id: string }
-        Returns: boolean
-      }
-      is_approver_for_same_request: {
-        Args: { p_request_id: string }
-        Returns: boolean
-      }
-      next_request_no: { Args: { p_year: number }; Returns: string }
     }
     Enums: {
       accounting_capacity_type: "KAPASITE" | "ANASAHA" | "YEKA_1" | "YEKA_2"

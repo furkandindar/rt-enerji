@@ -27,7 +27,7 @@ interface BuildAndUploadOptions {
 export async function buildAndUploadRequestPDF(
   options: BuildAndUploadOptions
 ): Promise<string> {
-  const { requestId, supabase, persistPdfPath = true } = options;
+  const { requestId, persistPdfPath = true } = options;
 
   let pdfPath: string;
   let finalPdfBuffer: Buffer;
@@ -38,7 +38,9 @@ export async function buildAndUploadRequestPDF(
   // request_approvals'ta yalnız kendi satırını görür → PDF'te önceki adımların
   // paraf/imzaları düşüyordu (İK Onay formlarında 2026-11-09 dev e2e'de yakalandı).
   // Yetki kontrolü çağıranda yapılmıştır; preview-live aynı gerekçeyle service role kullanır.
-  // DB yazımları (pdf_status / pdf_path) aşağıda eskisi gibi çağıranın client'ıyla.
+  // DB yazımları (pdf_status / pdf_path) da service role ile: `requests` satırını yalnız
+  // sunucu yazar (sql/hardening_2_server_side_state_writes.sql). `supabase` parametresi
+  // imza uyumu için durur.
   const renderClient = createServiceRoleClient();
 
   try {
@@ -49,7 +51,7 @@ export async function buildAndUploadRequestPDF(
     // PDF üretim hatası — caller'a fırlatmadan önce requests.pdf_status'u
     // 'failed' işaretle ki "approved ama PDF yok" zombi'leri birikmesin.
     const message = err instanceof Error ? err.message : String(err);
-    await supabase
+    await renderClient
       .from('requests')
       .update({ pdf_status: 'failed', pdf_last_error: message })
       .eq('id', requestId);
@@ -57,7 +59,7 @@ export async function buildAndUploadRequestPDF(
   }
 
   if (persistPdfPath) {
-    const { error } = await supabase
+    const { error } = await renderClient
       .from('requests')
       .update({
         pdf_path: pdfPath,

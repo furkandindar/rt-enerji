@@ -292,6 +292,14 @@ export async function PATCH(
       );
     }
 
+    // Buraya kadar yetki doğrulandı: işlem yetkisi DB'nin can_act_on_approval()
+    // fonksiyonuyla kullanıcının kendi oturumunda çözüldü (kendisi VEYA aktif vekil),
+    // sıra, aktif tur ve açık statü kontrol edildi. İş akışı durumunu (requests +
+    // request_approvals + adımda doldurulan detay alanları) yalnız sunucu yazar:
+    // authenticated'ın bu tablolara yazma yetkisi yok
+    // (sql/hardening_2_server_side_state_writes.sql).
+    const serviceDb = createServiceRoleClient();
+
     // 2a. Kaşeli belge: PDF'i basan SON onay adımında kaşe üstü canvas imzası zorunlu.
     // UI bunu zaten şart koşuyor; burada yoksa imzasız onay font-imza fallback'iyle
     // basılıp arşive gidiyordu. Ara adımlar (Bölüm Müdürü) imzasız onay verir.
@@ -365,7 +373,7 @@ export async function PATCH(
         .single();
 
       if (leaveRequest) {
-        const { error: hrUpdateError } = await supabase
+        const { error: hrUpdateError } = await serviceDb
           .from("leave_requests")
           .update({
             remaining_days: hr_fields.remaining_days,
@@ -399,7 +407,7 @@ export async function PATCH(
         .single();
 
       if (advanceRequest) {
-        const { error: consentUpdateError } = await supabase
+        const { error: consentUpdateError } = await serviceDb
           .from("salary_advance_requests")
           .update({
             salary_deduction_consent: true,
@@ -445,7 +453,7 @@ export async function PATCH(
           updateData[`${key}_notes`] = value.notes || null;
         }
 
-        const { error: onboardingUpdateError } = await supabase
+        const { error: onboardingUpdateError } = await serviceDb
           .from("onboarding_requests")
           .update(updateData)
           .eq("id", onboardingRequest.id);
@@ -488,7 +496,7 @@ export async function PATCH(
           updateData[`${key}_notes`] = value.notes || null;
         }
 
-        const { error: separationUpdateError } = await supabase
+        const { error: separationUpdateError } = await serviceDb
           .from("separation_requests")
           .update(updateData)
           .eq("id", separationRequest.id);
@@ -519,7 +527,7 @@ export async function PATCH(
         .single();
 
       if (travelRequest) {
-        const { error: travelUpdateError } = await supabase
+        const { error: travelUpdateError } = await serviceDb
           .from("travel_assignment_requests")
           .update({
             actual_departure_at: travel_completion_fields.actual_departure_at,
@@ -554,7 +562,7 @@ export async function PATCH(
         return NextResponse.json({ error: "Geçersiz imzalı PDF yolu" }, { status: 400 });
       }
 
-      const { error: pdfPathError } = await supabase
+      const { error: pdfPathError } = await serviceDb
         .from("requests")
         .update({ pdf_path: ykb_signed_pdf_path.trim() })
         .eq("id", requestData.id);
@@ -568,7 +576,7 @@ export async function PATCH(
     }
 
     // 4. Approval'ı güncelle
-    const { error: updateError } = await supabase
+    const { data: updatedApprovalRows, error: updateError } = await serviceDb
       .from("request_approvals")
       .update({
         status: decision,
@@ -576,11 +584,21 @@ export async function PATCH(
         decided_at: new Date().toISOString(),
         acted_by_employee_id: acting.isDelegate ? appUser.employee_id : null, // Vekalet (B2): fiilen yapan
       })
-      .eq("id", id);
+      .eq("id", id)
+      .eq("status", "PENDING")
+      .select("id");
 
     if (updateError) {
       console.error("Error updating approval:", updateError);
       return NextResponse.json({ error: "Failed to update approval" }, { status: 500 });
+    }
+    // Eşzamanlı bir karar (çift tık / başka sekme) satırı önce kapattıysa talep
+    // ilerletilmez: aşağıdaki yazımlar yalnız bu isteğin kaydettiği kararın ardından çalışır.
+    if (!updatedApprovalRows?.length) {
+      return NextResponse.json(
+        { error: "Karar kaydedilemedi: onay kaydı güncel değil veya bu işlem için yetkiniz yok." },
+        { status: 409 }
+      );
     }
 
     // 4. Workflow bilgilerini al (bildirimler için)
@@ -627,7 +645,7 @@ export async function PATCH(
     // 5. Request'i güncelle ve bildirim gönder
     if (decision === 'REJECTED') {
       // Reddedildi - talep reddedilir
-      await supabase
+      await serviceDb
         .from("requests")
         .update({
           status: 'REJECTED',
@@ -647,7 +665,7 @@ export async function PATCH(
             .single();
 
           if (stampReq?.original_pdf_path) {
-            await supabase
+            await serviceDb
               .from("requests")
               .update({ pdf_path: stampReq.original_pdf_path })
               .eq("id", requestData.id);
@@ -756,13 +774,15 @@ export async function PATCH(
         }
 
         if (forwardAutoApproveIds.length > 0) {
-          const { error: forwardError } = await supabase
+          const { error: forwardError } = await serviceDb
             .from("request_approvals")
             .update({
               status: 'APPROVED',
               decided_at: now,
             })
-            .in("id", forwardAutoApproveIds);
+            .in("id", forwardAutoApproveIds)
+            .eq("approver_employee_id", appUser.employee_id)
+            .eq("status", "PENDING");
 
           if (forwardError) {
             console.error("Error auto-approving forward steps:", forwardError);
@@ -822,7 +842,7 @@ export async function PATCH(
         // MEVCUT DAVRANIŞ: Tüm adımlar tamamlandı, COMPLETION fazı yok
         // İzin, avans, işe giriş, ayrılış vb. süreçler buraya düşer
         // ================================================================
-        await supabase
+        await serviceDb
           .from("requests")
           .update({
             status: 'APPROVED',
@@ -887,7 +907,7 @@ export async function PATCH(
 
               if (uploadError) {
                 console.error('Error uploading stamped PDF:', uploadError);
-                await supabase
+                await serviceDb
                   .from("requests")
                   .update({
                     pdf_status: 'failed',
@@ -896,13 +916,13 @@ export async function PATCH(
                   .eq("id", requestData.id);
               } else {
                 // stamp_requests tablosunda stamped_pdf_path güncelle
-                await supabase
+                await serviceDb
                   .from("stamp_requests")
                   .update({ stamped_pdf_path: stampedPdfPath })
                   .eq("id", stampRequest.id);
 
                 // requests tablosunda pdf_path + pdf_status güncelle
-                await supabase
+                await serviceDb
                   .from("requests")
                   .update({
                     pdf_path: stampedPdfPath,
@@ -931,7 +951,7 @@ export async function PATCH(
               }
             } else {
               console.error('Stamp request or stamp not found for request:', requestData.id);
-              await supabase
+              await serviceDb
                 .from("requests")
                 .update({
                   pdf_status: 'failed',
@@ -955,7 +975,7 @@ export async function PATCH(
           // yazıyor; stamp akışı için defansif olarak biz de yazıyoruz.
           console.error('Error generating/uploading PDF:', pdfError);
           const message = pdfError instanceof Error ? pdfError.message : String(pdfError);
-          await supabase
+          await serviceDb
             .from("requests")
             .update({ pdf_status: 'failed', pdf_last_error: message })
             .eq("id", requestData.id);
@@ -979,7 +999,7 @@ export async function PATCH(
         // ================================================================
         console.log('All APPROVAL steps completed. Entering COMPLETION phase for request:', requestData.id);
 
-        await supabase
+        await serviceDb
           .from("requests")
           .update({
             status: 'AWAITING_COMPLETION',
@@ -1046,7 +1066,7 @@ export async function PATCH(
         // ================================================================
         console.log('COMPLETION phase finished. Request fully completed:', requestData.id);
 
-        await supabase
+        await serviceDb
           .from("requests")
           .update({
             status: 'COMPLETED',
@@ -1119,7 +1139,7 @@ export async function PATCH(
         // Henüz bitmedi — sonraki PENDING adıma geç
         // Hem mevcut süreçler hem yeni süreçler bu bloğu kullanır
         // ================================================================
-        await supabase
+        await serviceDb
           .from("requests")
           .update({
             current_step: nextStep,

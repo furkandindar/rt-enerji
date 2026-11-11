@@ -307,7 +307,9 @@ export async function POST(
 
     // 4. Approval kaydını REVISION_REQUESTED'a çek
     const now = new Date().toISOString();
-    const { data: updatedApprovalRows, error: aUpdateError } = await supabase
+    // Yetki yukarıda doğrulandı (canRequestRevision + can_act_on_approval ile vekalet);
+    // onay satırlarını yalnız sunucu yazar (sql/hardening_2_server_side_state_writes.sql).
+    const { data: updatedApprovalRows, error: aUpdateError } = await createServiceRoleClient()
       .from("request_approvals")
       .update({
         status: "REVISION_REQUESTED",
@@ -318,7 +320,7 @@ export async function POST(
         revision_return_mode: returnMode,
       })
       .eq("id", approvalId)
-      .eq("status", "PENDING") // race-safe; onaycı/vekil kısıtı RLS update politikasında
+      .eq("status", "PENDING") // race-safe (çift tık / eşzamanlı karar)
       .select("id");
 
     if (aUpdateError || !updatedApprovalRows || updatedApprovalRows.length === 0) {
@@ -371,7 +373,9 @@ export async function POST(
       }
     } else {
       // 5a. Talep sahibi: status REVISION_REQUESTED, current_step=1 (zincir resubmit'te kurulur)
-      const { error: rUpdateError } = await supabase
+      //     Yetki yukarıda doğrulandı; `requests` satırını yalnız sunucu yazar
+      //     (sql/hardening_2_server_side_state_writes.sql).
+      const { error: rUpdateError } = await createServiceRoleClient()
         .from("requests")
         .update({
           status: "REVISION_REQUESTED",

@@ -3,10 +3,15 @@
 -- Anlık görüntü: 2026-11-11, prod, public şeması, 139 politika (pg_policies).
 -- Yalnız perf_rls_2_policies.sql prod'da beklenmedik davranış gösterirse uygulanır;
 -- politikaları birebir eski metne döndürür. perf_rls_1 fonksiyonları zararsızdır, kalabilir.
+-- NOT (2026-11-12): hardening_1 yardımcı fonksiyonları `private` şemasına taşıdı;
+-- aşağıdaki nitelenmemiş adlar (get_current_employee_id, is_approver_for_request…)
+-- search_path'e private eklendiği için çözülür. hardening_2 sonrası bu script
+-- iş akışı yazma politikalarını (requests_update, request_approvals_insert/update)
+-- geri getirmez — onlar bilinçli kaldırıldı; yalnız SELECT görünürlüğü için kullan.
 -- ============================================================================
 
 BEGIN;
-SET LOCAL search_path = public, extensions;
+SET LOCAL search_path = public, private, extensions;
 
 ALTER POLICY "accounting_approval_cover_items_delete" ON public."accounting_approval_cover_items" USING ((EXISTS ( SELECT 1
    FROM (accounting_approval_cover_requests acr

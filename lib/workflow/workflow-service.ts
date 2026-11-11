@@ -4,6 +4,7 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import { WorkflowStep, WorkflowDefinition, StepCondition, CreateRequestDynamicApprovers } from './types';
 import { hasExtraApproverSupport, type ExtraApproverStepLike } from './extra-approvers-shared';
+import { createServiceRoleClient } from '@/lib/supabase/service-role';
 
 // ============================================================================
 // Types
@@ -571,6 +572,13 @@ export async function resolveApprovalChain(
  * resolveApprovalChain ile çözülmüş zinciri talebe yazar: oto-onaylar, revize
  * taşıması, insert ve current_step / tüm-adımlar-onaylı tamamlama.
  * Parametreler createApprovalChain ile aynı anlamdadır.
+ *
+ * Onay satırlarını ve talep durumunu yalnız sunucu yazar (service role):
+ * authenticated'ın request_approvals INSERT ve requests UPDATE yetkisi yoktur
+ * (sql/hardening_2_server_side_state_writes.sql) — aksi halde talep sahibi API'ye
+ * doğrudan istek atıp kendi talebine onaylı satır ekleyebilirdi. Çağıran talebi
+ * kendi oturumuyla (RLS: requester = ben) oluşturmuş olmalıdır; `supabase` yalnız
+ * okuma ve bildirim için kullanılır.
  */
 export async function insertApprovalChain(
   supabase: SupabaseClient,
@@ -582,6 +590,7 @@ export async function insertApprovalChain(
   const { workflowDefinitionId, requesterEmployeeId } = chain;
   // Satırlar aşağıda yerinde güncellenir; çağıranın elindeki çözüm değişmesin.
   const approvals = chain.drafts.map((d) => ({ ...d }));
+  const admin = createServiceRoleClient();
 
   // Oto-onaylanan ilk REQUESTER satırı (gönderim imzası): karar anı çözüm anı değil
   // yazma anıdır — zincir talep kaydından önce çözüldüğü için aksi halde
@@ -641,7 +650,7 @@ export async function insertApprovalChain(
     return { ...rest, request_id: requestId, revision_cycle: cycle };
   });
 
-  const { error: insertError } = await supabase
+  const { error: insertError } = await admin
     .from('request_approvals')
     .insert(approvalsForInsert);
 
@@ -662,7 +671,7 @@ export async function insertApprovalChain(
   // Tüm adımlar auto-approve olduysa request'i tamamla + PDF üret + bildirim gönder
   const allApproved = currentStep > approvals.length;
   if (allApproved) {
-    const { error: updateError } = await supabase
+    const { error: updateError } = await admin
       .from('requests')
       .update({
         status: 'APPROVED',
@@ -689,11 +698,13 @@ export async function insertApprovalChain(
         const { uploadRequestPDF } = await import('../storage/upload-request-pdf');
 
         console.log('Generating PDF after all auto-approvals for request:', requestId);
-        const pdfBuffer = await generateRequestPDF({ requestId, supabase });
-        const finalPdfBuffer = await mergeAttachments(pdfBuffer, requestId, supabase);
+        // Render service role ile: RLS'li oturum zincirin tüm satırlarını göremeyebilir
+        // (bkz. lib/pdf/build-and-upload-request-pdf.ts).
+        const pdfBuffer = await generateRequestPDF({ requestId, supabase: admin });
+        const finalPdfBuffer = await mergeAttachments(pdfBuffer, requestId, admin);
         const pdfPath = await uploadRequestPDF({ requestId, pdfBuffer: finalPdfBuffer });
 
-        await supabase.from('requests').update({ pdf_path: pdfPath }).eq('id', requestId);
+        await admin.from('requests').update({ pdf_path: pdfPath }).eq('id', requestId);
         console.log('PDF generated after all auto-approvals:', pdfPath);
       } catch (pdfError) {
         console.error('Error generating PDF after all auto-approvals:', pdfError);
@@ -714,7 +725,7 @@ export async function insertApprovalChain(
     }
   } else if (currentStep > 1) {
     // current_step'i ilk PENDING adıma ayarla
-    const { error: updateError } = await supabase
+    const { error: updateError } = await admin
       .from('requests')
       .update({ current_step: currentStep })
       .eq('id', requestId);

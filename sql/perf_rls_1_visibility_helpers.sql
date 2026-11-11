@@ -21,6 +21,8 @@
 --
 -- Önce DEV, sonra PROD.
 -- DEV + PROD: 2026-11-11 uygulandı (yalnız ekleme; 2/2 uygulanana kadar kullanılmaz).
+-- ARŞİV NOTU (2026-11-12): bu script'teki fonksiyonlar hardening_1 ile `private`
+-- şemasına taşındı; yeniden ÇALIŞTIRMA (public'te kopya oluşturur). Güncel tanım: canlı DB.
 -- ============================================================================
 
 BEGIN;

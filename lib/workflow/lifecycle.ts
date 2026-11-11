@@ -411,6 +411,10 @@ export async function rewindApprovalChain(
  * Bir lifecycle aksiyonu sonrası requests.last_action* alanlarını günceller.
  * Action örnekleri: 'WITHDRAWN', 'RESUBMITTED', 'REVISION_REQUESTED',
  *                   'CANCELLED', 'EDITED', 'EDITED_BY_ADMIN'.
+ *
+ * `requests` satırını yalnız sunucu yazar (authenticated'ın UPDATE yetkisi yok —
+ * sql/hardening_2_server_side_state_writes.sql); çağıran aksiyonu kendi yetkisiyle
+ * doğruladıktan sonra çağırır. `supabase` parametresi imza uyumu için durur.
  */
 export async function applyAuditStamp(
   supabase: SupabaseClient,
@@ -418,7 +422,7 @@ export async function applyAuditStamp(
   action: string,
   byEmployeeId: string | null
 ): Promise<void> {
-  const { error } = await supabase
+  const { error } = await createServiceRoleClient()
     .from('requests')
     .update({
       last_action: action,

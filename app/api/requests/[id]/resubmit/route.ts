@@ -259,7 +259,9 @@ export async function POST(
       .single();
 
     if (refreshed?.status !== "APPROVED" && refreshed?.status !== "COMPLETED") {
-      const { error: updateError } = await supabase
+      // Yetki yukarıda doğrulandı; `requests` satırını yalnız sunucu yazar
+      // (sql/hardening_2_server_side_state_writes.sql).
+      const { error: updateError } = await admin
         .from("requests")
         .update({
           status: "PENDING",

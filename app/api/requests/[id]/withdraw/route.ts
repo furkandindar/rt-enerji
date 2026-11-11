@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { applyAuditStamp, canWithdrawRequest } from "@/lib/workflow";
 
@@ -72,7 +72,9 @@ export async function POST(
     //    current_step ilerletmişse 0 satır etkilenir → 409.
     //    NOT: current_step=1 sabitlemiyoruz çünkü REQUESTER auto-approve adımları
     //    insert anında ileri taşıyabilir (createApprovalChain mantığı).
-    const { data: updated, error: updateError } = await supabase
+    //    Yetki yukarıda doğrulandı; `requests` satırını yalnız sunucu yazar
+    //    (sql/hardening_2_server_side_state_writes.sql).
+    const { data: updated, error: updateError } = await createServiceRoleClient()
       .from("requests")
       .update({
         status: "DRAFT",
