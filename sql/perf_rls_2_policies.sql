@@ -29,7 +29,10 @@
 --   PROD: eski ↔ yeni ifade eşdeğerliği 77 kullanıcı + anon, ana 3 tablo + 8 detay
 --        tablosu, ~1,23 milyon satır değerlendirmesi → 0 fark. Simülasyon: finans
 --        kapağı ağır liste sorgusu 7.958 ms → 33,6 ms.
---   PROD uygulaması: auto-mode classifier reddetti → kullanıcı onayı / SQL editor.
+--   PROD: 2026-11-11 uygulandı (kullanıcı onayıyla). RLS altında 4 temsilci kullanıcı ×
+--        43 tablo önce/sonra birebir aynı (aynı tarama 68,5 sn → 0,8 sn). Gerçek RLS:
+--        ağır finans sorgusu 7.958 → 36 ms; Bekleyen Onaylar 1.278 → 56 ms; Onay Geçmişi
+--        ~1.200 → 46 ms. Advisor auth_rls_initplan 123 → 0.
 --   Acil geri alma: perf_rls_2_rollback_prod_snapshot.sql (139 politikanın eski metni).
 -- ============================================================================
 
