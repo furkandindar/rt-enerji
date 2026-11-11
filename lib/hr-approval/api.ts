@@ -18,9 +18,7 @@ import {
 } from "@/lib/workflow";
 import { approvalChainErrorResponse, rollbackCreatedRequest } from "@/lib/workflow/request-creation";
 import type { ParseResult } from "./forms";
-
-const ALLOWED_PAGE_SIZES = [10, 25, 50, 100] as const;
-const DEFAULT_PAGE_SIZE = 10;
+import { listDepartmentRequests, listErrorBody, parseListPaging } from "@/lib/department-processes/list-requests";
 
 export interface HrApprovalApiConfig<T extends object> {
   workflowCode: string;
@@ -62,58 +60,39 @@ export function createListHandler<T extends object>(cfg: HrApprovalApiConfig<T>)
       const searchParams = request.nextUrl.searchParams;
       const scope = searchParams.get("scope") === "department" ? "department" : "mine";
       const status = searchParams.get("status");
-      const pageParam = searchParams.get("page");
-      const pageSizeParam = searchParams.get("page_size");
-      const usePagination = pageParam !== null || pageSizeParam !== null;
-      const pageSize = (ALLOWED_PAGE_SIZES as readonly number[]).includes(Number(pageSizeParam))
-        ? Number(pageSizeParam)
-        : DEFAULT_PAGE_SIZE;
-      const page = Number.isFinite(Number(pageParam)) && Number(pageParam) >= 1 ? Math.floor(Number(pageParam)) : 1;
+      const paging = parseListPaging(searchParams);
 
       const auth = await getAppUser(supabase);
       if (auth.error) return auth.error;
       const { appUser } = auth;
 
+      const workflowDef = await getWorkflowDefinitionByCode(supabase, cfg.workflowCode);
+      if (!workflowDef) return NextResponse.json({ error: "Workflow not found" }, { status: 400 });
       if (scope === "department") {
-        const workflowDef = await getWorkflowDefinitionByCode(supabase, cfg.workflowCode);
-        if (!workflowDef) return NextResponse.json({ error: "Workflow not found" }, { status: 400 });
         const allowed = await canStartWorkflow(supabase, appUser.employee_id, workflowDef.id, appUser.role);
         if (!allowed) {
           return NextResponse.json({ error: "Bu süreçleri görüntüleme yetkiniz yok" }, { status: 403 });
         }
       }
 
-      let query = supabase
-        .from("requests")
-        .select(
-          `
-          id, request_no, status, created_at, updated_at, submitted_at, requester_employee_id,
-          workflow_definition:workflow_definitions!inner(id, code, name),
-          ${cfg.relation}:${cfg.detailTable}(${cfg.listColumns}),
-          requester:employees!requester_employee_id(id, first_name, last_name, employee_no)
-        `,
-          usePagination ? { count: "exact" } : {}
-        )
-        .eq("workflow_definition.code", cfg.workflowCode)
-        .order("created_at", { ascending: false });
-
-      if (scope === "mine") query = query.eq("requester_employee_id", appUser.employee_id);
-      if (status) query = query.eq("status", status);
-      if (usePagination) {
-        const from = (page - 1) * pageSize;
-        query = query.range(from, from + pageSize - 1);
+      // İki aşamalı, ölçeklenen liste sorgusu (lib/department-processes/list-requests.ts)
+      const result = await listDepartmentRequests(supabase, {
+        workflowDefinitionId: workflowDef.id,
+        scope,
+        employeeId: appUser.employee_id,
+        status,
+        paging,
+        relationSelect: `${cfg.relation}:${cfg.detailTable}(${cfg.listColumns})`,
+        context: `${cfg.context} GET`,
+      });
+      if (!result.ok) {
+        const err = listErrorBody(result.timeout);
+        return NextResponse.json(err.body, { status: err.status });
       }
 
-      const { data, error, count } = await query;
-      if (error) {
-        console.error(`[${cfg.context} GET] fetch failed:`, error);
-        return NextResponse.json({ error: "Failed to fetch requests" }, { status: 500 });
-      }
-
-      const items = data ?? [];
-      return usePagination
-        ? NextResponse.json({ items, total: count ?? 0, page, page_size: pageSize })
-        : NextResponse.json(items);
+      return paging.usePagination
+        ? NextResponse.json({ items: result.items, total: result.total, page: paging.page, page_size: paging.pageSize })
+        : NextResponse.json(result.items);
     } catch (err) {
       console.error(`[${cfg.context} GET] error:`, err);
       return NextResponse.json({ error: "Internal server error" }, { status: 500 });
