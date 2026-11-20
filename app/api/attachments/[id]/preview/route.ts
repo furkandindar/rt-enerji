@@ -1,6 +1,7 @@
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { isDepartmentViewer } from "@/lib/workflow/workflow-service";
+import { getRequestContentAccess, RESTRICTED_CONTENT_MESSAGE } from "@/lib/workflow/content-access";
 
 // GET /api/attachments/[id]/preview - PDF dosyasını inline görüntüle
 export async function GET(
@@ -83,6 +84,13 @@ export async function GET(
 
     if (!authorized) {
       return NextResponse.json({ error: "Bu dosyayı görüntüleme yetkiniz yok" }, { status: 403 });
+    }
+
+    // İçerik kısıtlı süreç (İşe Giriş / İşten Çıkış Onay): ekler içeriktir —
+    // yalnız talep sahibi, İK ve Genel Müdür (lib/workflow/content-access.ts)
+    const contentAccess = await getRequestContentAccess(supabase, attachment.request_id);
+    if (!contentAccess.canView) {
+      return NextResponse.json({ error: RESTRICTED_CONTENT_MESSAGE }, { status: 403 });
     }
 
     // 5. Dosyayı storage'dan indir ve inline olarak sun

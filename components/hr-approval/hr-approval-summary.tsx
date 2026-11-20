@@ -7,6 +7,7 @@
 import type { ReactNode } from "react";
 import { Lock } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { RESTRICTED_CONTENT_MESSAGE } from "@/lib/workflow/content-access-shared";
 import {
   SEPARATION_ENTITLEMENT_ROWS,
   SEPARATION_DEDUCTION_ROW,
@@ -39,6 +40,24 @@ export function SalaryVisibilityNote() {
     <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100">
       <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0" />
       <span>{HR_APPROVAL_VISIBILITY_NOTE}</span>
+    </div>
+  );
+}
+
+/**
+ * İçerik kısıtlı süreçte (İşe Giriş / İşten Çıkış Onay) içeriği görme yetkisi
+ * olmayan görüntüleyene (onay zinciri, admin) içerik yerine gösterilir.
+ */
+export function RestrictedContentNotice({ canAct = false }: { canAct?: boolean }) {
+  return (
+    <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100">
+      <Lock className="mt-0.5 h-4 w-4 shrink-0" />
+      <div className="space-y-1">
+        <p className="font-medium">{RESTRICTED_CONTENT_MESSAGE}</p>
+        {canAct && (
+          <p className="text-xs">Onay adımınızı bu ekrandan tamamlayabilirsiniz.</p>
+        )}
+      </div>
     </div>
   );
 }

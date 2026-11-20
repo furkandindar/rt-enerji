@@ -35,4 +35,4 @@ export function formatTlOrDash(value: number | string | null | undefined): strin
 }
 
 export const HR_APPROVAL_VISIBILITY_NOTE =
-  "Ücret bilgisi içerir: yalnız İnsan Kaynakları departmanı, sistem yöneticileri, talep sahibi ve onay zinciri görüntüler.";
+  "Gizli form: içeriği yalnız İnsan Kaynakları ve Genel Müdür görüntüler. Onay zincirindeki diğer kişiler ve sistem yöneticileri yalnız onay adımını görür.";

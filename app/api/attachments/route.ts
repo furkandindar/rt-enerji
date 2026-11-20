@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 import { isDepartmentViewer } from "@/lib/workflow/workflow-service";
+import { getRequestContentAccess, RESTRICTED_CONTENT_MESSAGE } from "@/lib/workflow/content-access";
 
 // GET /api/attachments?request_id=xxx - Talebe ait ek dosyaları listele
 export async function GET(request: NextRequest) {
@@ -67,6 +68,13 @@ export async function GET(request: NextRequest) {
 
     if (!authorized) {
       return NextResponse.json({ error: "Bu talep için yetkiniz yok" }, { status: 403 });
+    }
+
+    // İçerik kısıtlı süreç (İşe Giriş / İşten Çıkış Onay): ekler içeriktir —
+    // yalnız talep sahibi, İK ve Genel Müdür (lib/workflow/content-access.ts)
+    const contentAccess = await getRequestContentAccess(supabase, requestId);
+    if (!contentAccess.canView) {
+      return NextResponse.json({ error: RESTRICTED_CONTENT_MESSAGE }, { status: 403 });
     }
 
     // Ek dosyaları çek

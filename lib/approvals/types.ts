@@ -145,6 +145,8 @@ export interface PendingApproval {
     created_at: string;
     updated_at?: string | null;
     pdf_path?: string | null;
+    /** İçerik kısıtlı süreçte görüntüleyen içeriği göremiyor (API redaksiyonu) */
+    content_hidden?: boolean;
     workflow_definition: {
       code?: string;
       name: string;

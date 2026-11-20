@@ -2715,8 +2715,58 @@ export type Database = {
         }
         Relationships: []
       }
+      workflow_content_viewers: {
+        Row: {
+          created_at: string
+          id: string
+          note: string | null
+          position_id: string | null
+          unit_id: string | null
+          workflow_definition_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          note?: string | null
+          position_id?: string | null
+          unit_id?: string | null
+          workflow_definition_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          note?: string | null
+          position_id?: string | null
+          unit_id?: string | null
+          workflow_definition_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workflow_content_viewers_position_id_fkey"
+            columns: ["position_id"]
+            isOneToOne: false
+            referencedRelation: "positions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workflow_content_viewers_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "organizational_units"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workflow_content_viewers_workflow_definition_id_fkey"
+            columns: ["workflow_definition_id"]
+            isOneToOne: false
+            referencedRelation: "workflow_definitions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       workflow_definitions: {
         Row: {
+          content_restricted: boolean
           code: string
           created_at: string
           description: string | null
@@ -2727,6 +2777,7 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
+          content_restricted?: boolean
           code: string
           created_at?: string
           description?: string | null
@@ -2737,6 +2788,7 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
+          content_restricted?: boolean
           code?: string
           created_at?: string
           description?: string | null
@@ -2904,6 +2956,10 @@ export type Database = {
     }
     Functions: {
       can_act_on_approval: { Args: { p_approval_id: string }; Returns: boolean }
+      can_view_request_content: {
+        Args: { p_request_id: string }
+        Returns: boolean
+      }
       create_mukayese_request: {
         Args: {
           p_header: Json

@@ -232,37 +232,13 @@ export async function buildWorkflowDetails(
       break;
     }
 
-    // İK onay formları (maaş): e-postaya ücret/tutar YAZILMAZ (e-postalar iletilebilir,
-    // posta kutularında kalır). Kimlik bilgisi + BYS'ye yönlendirme yeterli.
-    case 'EMPLOYEE_ONBOARDING_APPROVAL': {
-      const { data } = await supabase
-        .from('onboarding_approval_requests')
-        .select('candidate_name, candidate_title, company_name, project_name, start_date')
-        .eq('request_id', requestId)
-        .single();
-      if (!data) break;
-      pushIf(rows, 'Aday', data.candidate_name);
-      pushIf(rows, 'Görev Unvanı', data.candidate_title);
-      pushIf(rows, 'Şirket', data.company_name);
-      pushIf(rows, 'Proje', data.project_name);
-      pushIf(rows, 'İşe Başlama', fmtDate(data.start_date));
-      pushIf(rows, 'Ücret Bilgisi', 'E-postada gösterilmez — BYS üzerinden görüntüleyin');
-      break;
-    }
-
+    // İK onay formları: içerik kısıtlı süreç (workflow_definitions.content_restricted) —
+    // içeriği yalnız İK ve Genel Müdür görür; e-posta zincirdeki diğer onaycılara da
+    // gider ve iletilebilir, bu yüzden kişi/ücret bilgisi YAZILMAZ. Ayrıntı BYS'de,
+    // yetkiye göre (lib/workflow/content-access.ts).
+    case 'EMPLOYEE_ONBOARDING_APPROVAL':
     case 'EMPLOYEE_SEPARATION_APPROVAL': {
-      const { data } = await supabase
-        .from('separation_approval_requests')
-        .select('employee_name, employee_title, company_name, project_name, separation_date')
-        .eq('request_id', requestId)
-        .single();
-      if (!data) break;
-      pushIf(rows, 'Personel', data.employee_name);
-      pushIf(rows, 'Görev Unvanı', data.employee_title);
-      pushIf(rows, 'Şirket', data.company_name);
-      pushIf(rows, 'Proje', data.project_name);
-      pushIf(rows, 'Çıkış Tarihi', fmtDate(data.separation_date));
-      pushIf(rows, 'Hak Ediş Bilgisi', 'E-postada gösterilmez — BYS üzerinden görüntüleyin');
+      pushIf(rows, 'Form İçeriği', 'Gizli — yalnız İnsan Kaynakları ve Genel Müdür BYS üzerinden görüntüleyebilir');
       break;
     }
   }

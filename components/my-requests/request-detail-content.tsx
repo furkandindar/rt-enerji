@@ -50,7 +50,7 @@ import type {
   ApprovalStatus as RequestLifecycleActionsApprovalStatus,
 } from "@/lib/workflow/types";
 import { RichTextDisplay } from "@/components/ui/rich-text-display";
-import { OnboardingApprovalSummary, SeparationApprovalSummary } from "@/components/hr-approval/hr-approval-summary";
+import { OnboardingApprovalSummary, RestrictedContentNotice, SeparationApprovalSummary } from "@/components/hr-approval/hr-approval-summary";
 import { pickOne, type OnboardingApprovalRecord, type SeparationApprovalRecord } from "@/lib/hr-approval/display";
 
 export interface WorkflowDefinition {
@@ -203,6 +203,8 @@ export interface Request {
   created_at: string;
   updated_at?: string | null;
   pdf_path?: string | null;
+  /** İçerik kısıtlı süreçte görüntüleyen içeriği göremiyor (API redaksiyonu) */
+  content_hidden?: boolean;
   workflow_definition: WorkflowDefinition;
   leave_request?: LeaveRequestData;
   salary_advance_request?: SalaryAdvanceRequest;
@@ -460,8 +462,11 @@ export function RequestDetailContent({
   onShowLivePreview,
 }: RequestDetailContentProps) {
   // Aksiyon butonlarının görünürlük koşulları (header sağ tarafa taşındı).
+  // İçerik kısıtlı süreç: içeriği göremeyen görüntüleyende PDF/önizleme yok
+  const contentHidden = !!selectedRequest?.content_hidden;
   const pdfButtonsVisible =
     !!selectedRequest &&
+    !contentHidden &&
     (selectedRequest.status === "APPROVED" ||
       selectedRequest.status === "AWAITING_COMPLETION" ||
       selectedRequest.status === "COMPLETED" ||
@@ -469,6 +474,7 @@ export function RequestDetailContent({
 
   const livePreviewVisible =
     !!selectedRequest &&
+    !contentHidden &&
     !selectedRequest.stamp_request &&
     (selectedRequest.status === "PENDING" ||
       selectedRequest.status === "AWAITING_COMPLETION");
@@ -1513,7 +1519,8 @@ export function RequestDetailContent({
             );
           })()}
 
-          {/* İK Onay formları (maaş içerir) */}
+          {/* İK Onay formları (içerik kısıtlı: yalnız İK + Genel Müdür) */}
+          {contentHidden && <RestrictedContentNotice />}
           {(() => {
             const onboardingApproval = pickOne(selectedRequest.onboarding_approval_request);
             return onboardingApproval ? <OnboardingApprovalSummary data={onboardingApproval} /> : null;

@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
-import { getRequestDetailSelect } from "@/lib/my-requests/server-selects";
+import { getRequestDetailSelect, getTypeJoinKey } from "@/lib/my-requests/server-selects";
+import { getRequestContentAccess, redactRequestContent } from "@/lib/workflow/content-access";
 
 // Postgres "canceling statement due to statement timeout"
 const PG_STATEMENT_TIMEOUT = "57014";
@@ -100,6 +101,13 @@ export async function GET(
       reqAny.approvals = reqAny.approvals.filter(
         (a) => (a.revision_cycle ?? 0) === activeCycle
       );
+    }
+
+    // İçerik kısıtlı süreç: detay tablosu RLS ile zaten boş gelir; UI bilgi notu
+    // göstersin ve PDF düğmelerini gizlesin diye işaretle (lib/workflow/content-access.ts).
+    const contentAccess = await getRequestContentAccess(supabase, requestId);
+    if (!contentAccess.canView) {
+      redactRequestContent(request as unknown as Record<string, unknown>, getTypeJoinKey(workflowCode));
     }
 
     return NextResponse.json(request);

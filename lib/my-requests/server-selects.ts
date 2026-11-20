@@ -115,6 +115,15 @@ const WORKFLOW_CODE_TO_TYPE_JOIN: Record<string, string> = {
 };
 
 /**
+ * Tipe özel join'in yanıttaki alan adı (ör. "onboarding_approval_request").
+ * İçerik kısıtlı süreçlerde bu alan redaksiyonla boşaltılır (lib/workflow/content-access.ts).
+ */
+export function getTypeJoinKey(code: string | null | undefined): string | null {
+  const typeJoin = code ? WORKFLOW_CODE_TO_TYPE_JOIN[code] : null;
+  return typeJoin ? typeJoin.split(":")[0].trim() : null;
+}
+
+/**
  * "requests" tablosundan tek bir kaydın detay select'ini döndürür.
  * Önce hafif sorguyla code çekilmeli, sonra bu helper çağrılmalı.
  */

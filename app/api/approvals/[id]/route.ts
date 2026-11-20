@@ -15,7 +15,8 @@ import {
 import { stampPDF, type StampPositionOverrides } from "@/lib/pdf/stamp-pdf";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { StampPosition } from "@/lib/workflow/types";
-import { getApprovalDetailSelect } from "@/lib/my-requests/server-selects";
+import { getApprovalDetailSelect, getTypeJoinKey } from "@/lib/my-requests/server-selects";
+import { getRequestContentAccess, redactRequestContent } from "@/lib/workflow/content-access";
 import { isValidYkbSignedPdfPath } from "@/lib/storage/ykb-signed-pdf-path";
 import {
   resolveActingRights,
@@ -129,6 +130,17 @@ export async function GET(
         reqInApproval.approvals = reqInApproval.approvals.filter(
           (a) => (a.revision_cycle ?? 0) === activeCycle
         );
+      }
+    }
+
+    // İçerik kısıtlı süreç (İşe Giriş / İşten Çıkış Onay): tam veri service role ile
+    // okunduğu için içeriği burada süz — onay zinciri ve admin yalnız başlığı ve
+    // kendi adımını görür (lib/workflow/content-access.ts).
+    const approvalRequestId = (approval as { request_id?: string }).request_id;
+    if (reqInApproval && approvalRequestId) {
+      const contentAccess = await getRequestContentAccess(supabase, approvalRequestId);
+      if (!contentAccess.canView) {
+        redactRequestContent(reqInApproval as Record<string, unknown>, getTypeJoinKey(workflowCode));
       }
     }
 

@@ -8,22 +8,28 @@ Takip formlarıyla (`EMPLOYEE_ONBOARDING` / `EMPLOYEE_SEPARATION`, bkz. [onboard
 
 ---
 
-## 1. Görünürlük
+## 1. Görünürlük — içerik kısıtlı süreç (2026-11-20)
 
-Diğer kısıtlı İK süreçleriyle (Fazla Mesai, Takip formları) **aynı kural** — yeni RLS yok:
+Şirket kararı (2026-11-20, acil revize): formun **içeriğini** yalnız İnsan Kaynakları ekibi ve Genel Müdür (Bekir Bey) görür. Onay zincirindeki diğer kişiler (Asistan, Hukuk Müşaviri) ve admin kullanıcılar **talebi ve kendi onay adımını** görür, onaylar; içeriği (form alanları, ekler, PDF, anlık önizleme) göremez. Admin rolü içerik yetkisi vermez — Bekir Bey Genel Müdür pozisyonu sayesinde görür.
 
-| Kim görür? | Kural |
-|---|---|
-| Talep sahibi | Her zaman |
-| Onay zincirindeki kişiler | Her zaman (`is_approver_for_request`) |
-| İnsan Kaynakları departmanı | Süreci başlatabilenler (`workflow_initiators` → birim) — `can_view_workflow_requests()` |
-| ORG_ADMIN | Görür ve başlatabilir |
+| Kim? | Talebi görür / adımını işler | İçeriği görür |
+|---|---|---|
+| Talep sahibi (İK) | ✔ | ✔ |
+| İnsan Kaynakları birimi (`workflow_initiators`) | ✔ | ✔ |
+| Genel Müdür pozisyonu (`workflow_content_viewers`) | ✔ | ✔ |
+| Diğer onaycılar (Asistan, Hukuk Müşaviri) | ✔ | ✘ — "içerik gizli" notu |
+| ORG_ADMIN | ✔ | ✘ |
 
-> 2026-11-07'de ORG_ADMIN'i dışlayan bir "gizli süreç" (`is_confidential`) tasarlanıp yalnız dev'e uygulanmıştı; kullanıcı kararıyla (2026-11-09: admin de görmeli) geri alındı ve prod'a hiç gitmedi (`sql/dev_revert_hr_approval_forms_confidential.sql`).
+Mekanizma (genel, ayarlanabilir — `sql/feature_content_restricted_workflows.sql`):
+- `workflow_definitions.content_restricted = true` + içerik görebilecek ek pozisyon/birimler `workflow_content_viewers` tablosunda (GM satırı "Genel Müdür" adımının pozisyonundan türetildi; GM değişirse pozisyon aynı kalır).
+- DB tek karar noktası: `public.can_view_request_content(request_id)` (SECURITY INVOKER) + `private.rls_content_viewer_workflow_ids()`.
+- RLS: detay tabloları, `request_attachments` (`ra_select`), Storage talep PDF'i ("Users can view related request PDFs" — onaycı dalı).
+- Kod: service role ile okuyan/sunan uçlar `lib/workflow/content-access.ts` ile süzer — onay detayı (`GET /api/approvals/[id]` redaksiyon + `content_hidden`), talep detayı, PDF uçları (`authorizePdfAccess`), ek listesi/indirme/önizleme. UI `content_hidden` ile not gösterir, PDF/önizleme düğmelerini gizler.
+- E-posta: kişi/ücret bilgisi hiç yazılmaz ("Form İçeriği: Gizli…"); uygulama içi bildirimlerde zaten içerik yok.
+- SharePoint: `İnsan Kaynakları/Birim Süreçleri/İşe Giriş Onay Formu` ve `.../İşten Çıkış Onay Formu` klasör izni **BT tarafından yalnız İK + Genel Müdür'e** daraltılmalı (adminler dahil değil).
+- Kalıcı PDF service role ile render edilir (zincirin tüm parafları için); erişim indirmede kontrol edilir.
 
-- E-postada ücret/hak ediş tutarı **yazılmaz** ("E-postada gösterilmez — BYS üzerinden görüntüleyin"; `lib/email/workflow-details.ts`, iş koduna göre).
-- SharePoint: `İnsan Kaynakları/Birim Süreçleri/İşe Giriş Onay Formu` ve `.../İşten Çıkış Onay Formu` — maaş içerdiği için **klasör izni BT tarafından İK'ya (ve yöneticilere)** daraltılmalı.
-- Kalıcı PDF (`buildAndUploadRequestPDF`) **service role ile render edilir**: onay ucu karar veren onaycının RLS'li client'ını geçirir; kısıtlı süreçte onaycı (başlatıcı birimden/admin değilse) `request_approvals`'ta yalnız kendi satırını gördüğü için önceki parafları düşüyordu (2026-11-09 dev e2e'de yakalandı). Yetki çağıranda kontrol edilir; `preview-live` aynı gerekçeyle zaten service role kullanıyordu.
+> Geçmiş: 2026-11-07'de admin'i dışlayan `is_confidential` denemesi kullanıcı kararıyla (2026-11-09) geri alınmıştı; 2026-11-20'de şirket içerik düzeyinde kısıtlama istedi — talep başlığı/onay akışı herkese açık kalır, yalnız içerik kapanır.
 
 ---
 

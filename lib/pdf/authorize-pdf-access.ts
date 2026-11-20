@@ -1,12 +1,15 @@
 import { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/database.types";
 import { isDepartmentViewer } from "@/lib/workflow/workflow-service";
+import { getRequestContentAccess, RESTRICTED_CONTENT_MESSAGE } from "@/lib/workflow/content-access";
 
 // PDF endpoint'lerinin (indir / önizle / anlık önizle) ortak yetki kontrolü.
 // Kural: talep sahibi, onaycılardan biri, ORG_ADMIN veya kısıtlı workflow'larda
 // departman görünürlüğü olan kullanıcı (isDepartmentViewer) erişebilir.
 // Request satırı kullanıcının kendi client'ıyla okunur; RLS burada ikinci
 // katman olarak çalışır (requests_select politikası da aynı grupları kapsar).
+// İçerik kısıtlı süreçlerde (İşe Giriş / İşten Çıkış Onay) ayrıca içerik kuralı:
+// yalnız talep sahibi, İK ve Genel Müdür — onaycı ve admin muafiyeti burada geçmez.
 
 type RequestRow = Database["public"]["Tables"]["requests"]["Row"];
 
@@ -100,6 +103,12 @@ export async function authorizePdfAccess(
     if (!isDeptViewer) {
       return { ok: false, status: 403, error: "Forbidden" };
     }
+  }
+
+  // 4. İçerik kısıtlı süreç: PDF içeriktir (lib/workflow/content-access.ts)
+  const contentAccess = await getRequestContentAccess(supabase, requestId);
+  if (!contentAccess.canView) {
+    return { ok: false, status: 403, error: RESTRICTED_CONTENT_MESSAGE };
   }
 
   return { ok: true, requestData: requestData as PdfAuthRequestData };

@@ -25,7 +25,7 @@ import { AccountingApprovalCoverDetails } from "./accounting-approval-cover-deta
 import { ComparisonFormDetails } from "./comparison-form-details";
 import { ExpenseFormDetails } from "./expense-form-details";
 import { AttachmentList } from "./attachment-list";
-import { OnboardingApprovalSummary, SeparationApprovalSummary } from "@/components/hr-approval/hr-approval-summary";
+import { OnboardingApprovalSummary, RestrictedContentNotice, SeparationApprovalSummary } from "@/components/hr-approval/hr-approval-summary";
 import { pickOne } from "@/lib/hr-approval/display";
 import { ApprovalHistoryAccordion } from "./approval-history-accordion";
 import { RequestActivityLog } from "./request-activity-log";
@@ -148,11 +148,15 @@ export function ApprovalDetailView({
 
   // Aksiyon butonlarının görünürlük koşulları (header sağ tarafa taşındı).
   const requestStatus = selectedApproval.request.status;
+  // İçerik kısıtlı süreç (İşe Giriş / İşten Çıkış Onay): görüntüleyen içeriği göremiyorsa
+  // PDF/önizleme yok, içerik yerine bilgi notu (API redaksiyonu: lib/workflow/content-access.ts)
+  const contentHidden = !!selectedApproval.request.content_hidden;
   const pdfButtonsVisible =
-    ["APPROVED", "AWAITING_COMPLETION", "COMPLETED"].includes(requestStatus) ||
-    (requestStatus === "REJECTED" && !!selectedApproval.request.pdf_path);
+    !contentHidden &&
+    (["APPROVED", "AWAITING_COMPLETION", "COMPLETED"].includes(requestStatus) ||
+      (requestStatus === "REJECTED" && !!selectedApproval.request.pdf_path));
   const livePreviewVisible =
-    !isStampApproval && ["PENDING", "AWAITING_COMPLETION"].includes(requestStatus);
+    !contentHidden && !isStampApproval && ["PENDING", "AWAITING_COMPLETION"].includes(requestStatus);
 
   const isDecided = selectedApproval.status !== "PENDING";
 
@@ -379,6 +383,9 @@ export function ApprovalDetailView({
         )}
         {selectedApproval.request.expense_request && (
           <ExpenseFormDetails approval={selectedApproval} previousStepAttachments={previousStepAttachments} />
+        )}
+        {contentHidden && (
+          <RestrictedContentNotice canAct={selectedApproval.status === "PENDING" && canTakeAction} />
         )}
         {(() => {
           const onboardingApproval = pickOne(selectedApproval.request.onboarding_approval_request);
