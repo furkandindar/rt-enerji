@@ -1,6 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { getAvailableWorkflows } from "@/lib/workflow";
+import { getUserAccess } from "@/lib/auth/access";
+import { can } from "@/lib/auth/permissions";
 
 // GET /api/workflows/available - Kullanıcının başlatabileceği workflow'ları getir
 export async function GET() {
@@ -14,18 +16,14 @@ export async function GET() {
     }
 
     // 2. Employee ID ve role'ü al
-    const { data: appUser } = await supabase
-      .from("app_users")
-      .select("employee_id, role")
-      .eq("id", user.id)
-      .single();
+    const appUser = await getUserAccess(supabase);
 
     if (!appUser?.employee_id) {
       return NextResponse.json({ error: "User not linked to employee" }, { status: 400 });
     }
 
-    // 3. Kullanıcının başlatabileceği workflow'ları getir (ORG_ADMIN tümünü görür)
-    const workflows = await getAvailableWorkflows(supabase, appUser.employee_id, appUser.role);
+    // 3. Kullanıcının başlatabileceği workflow'ları getir (workflows.start_any tümünü görür)
+    const workflows = await getAvailableWorkflows(supabase, appUser.employee_id, can(appUser, "workflows.start_any"));
 
     return NextResponse.json(workflows);
   } catch (error) {

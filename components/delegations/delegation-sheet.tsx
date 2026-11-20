@@ -2,7 +2,7 @@
 
 // Vekalet tanımlama formu (Faz B / B3).
 // mode="self": kişi kendi adına vekil tanımlar (profil sayfası).
-// mode="admin": ORG_ADMIN herkes adına tanımlar (Vekaletler sayfası).
+// mode="admin": delegations.manage_all (Admin, Yönetici) herkes adına tanımlar (Vekaletler sayfası).
 // Kapsam (karar 8): bu aşamada yalnız Finans Onay Kapağı — süreç seçici yok,
 // bilgi metni var; /api/delegations/options tek süreç döner.
 

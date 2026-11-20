@@ -4,6 +4,8 @@ import { resolveApprovalChain, insertApprovalChain, getWorkflowDefinitionByCode,
 import { approvalChainErrorResponse, rollbackCreatedRequest } from "@/lib/workflow/request-creation";
 import { listDepartmentRequests, listErrorBody, parseListPaging } from "@/lib/department-processes/list-requests";
 import type { CreateOnboardingInput } from "@/lib/workflow";
+import { getUserAccess } from "@/lib/auth/access";
+import { can } from "@/lib/auth/permissions";
 
 const WORKFLOW_CODE = "EMPLOYEE_ONBOARDING";
 
@@ -30,11 +32,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { data: appUser } = await supabase
-      .from("app_users")
-      .select("employee_id, role")
-      .eq("id", user.id)
-      .single();
+    const appUser = await getUserAccess(supabase);
 
     if (!appUser?.employee_id) {
       return NextResponse.json({ error: "User not linked to employee" }, { status: 400 });
@@ -45,7 +43,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Workflow not found" }, { status: 400 });
     }
     if (scope === "department") {
-      const hasPermission = await canStartWorkflow(supabase, appUser.employee_id, workflowDef.id, appUser.role);
+      const hasPermission = await canStartWorkflow(supabase, appUser.employee_id, workflowDef.id, can(appUser, "workflows.start_any"));
       if (!hasPermission) {
         return NextResponse.json({ error: "Bu süreçleri görüntüleme yetkiniz yok" }, { status: 403 });
       }
@@ -91,11 +89,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { data: appUser } = await supabase
-      .from("app_users")
-      .select("employee_id, role")
-      .eq("id", user.id)
-      .single();
+    const appUser = await getUserAccess(supabase);
 
     if (!appUser?.employee_id) {
       return NextResponse.json({ error: "User not linked to employee" }, { status: 400 });
@@ -107,8 +101,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Workflow not found" }, { status: 400 });
     }
 
-    // 3. Workflow başlatma yetkisi kontrolü (ORG_ADMIN tümüne erişebilir)
-    const hasPermission = await canStartWorkflow(supabase, appUser.employee_id, workflowDef.id, appUser.role);
+    // 3. Workflow başlatma yetkisi kontrolü (workflows.start_any tümüne erişebilir)
+    const hasPermission = await canStartWorkflow(supabase, appUser.employee_id, workflowDef.id, can(appUser, "workflows.start_any"));
     if (!hasPermission) {
       return NextResponse.json({ error: "Bu formu başlatma yetkiniz yok" }, { status: 403 });
     }

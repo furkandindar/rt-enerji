@@ -3,6 +3,8 @@ import { NextResponse } from "next/server";
 import { resolveApprovalChain, insertApprovalChain, getWorkflowDefinitionByCode, notifyApprover, canStartWorkflow, type ResolvedApprovalChain } from "@/lib/workflow";
 import { approvalChainErrorResponse, rollbackCreatedRequest } from "@/lib/workflow/request-creation";
 import type { CreateRequestFormInput } from "@/lib/workflow";
+import { getUserAccess } from "@/lib/auth/access";
+import { can } from "@/lib/auth/permissions";
 
 // GET /api/request-form - Kullanıcının talep formlarını listele
 export async function GET() {
@@ -60,11 +62,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { data: appUser } = await supabase
-      .from("app_users")
-      .select("employee_id, role")
-      .eq("id", user.id)
-      .single();
+    const appUser = await getUserAccess(supabase);
 
     if (!appUser?.employee_id) {
       return NextResponse.json({ error: "User not linked to employee" }, { status: 400 });
@@ -76,8 +74,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Workflow not found" }, { status: 400 });
     }
 
-    // Yetki kontrolü (ORG_ADMIN tümüne erişebilir)
-    const hasPermission = await canStartWorkflow(supabase, appUser.employee_id, workflowDef.id, appUser.role);
+    // Yetki kontrolü (workflows.start_any tümüne erişebilir)
+    const hasPermission = await canStartWorkflow(supabase, appUser.employee_id, workflowDef.id, can(appUser, "workflows.start_any"));
     if (!hasPermission) {
       return NextResponse.json({ error: "Bu formu başlatma yetkiniz yok" }, { status: 403 });
     }

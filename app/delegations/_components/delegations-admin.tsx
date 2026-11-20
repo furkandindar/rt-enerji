@@ -64,7 +64,7 @@ export function DelegationsAdmin({ viewerEmployeeId }: DelegationsAdminProps) {
       ) : error ? (
         <p className="text-sm text-destructive">{error}</p>
       ) : (
-        <DelegationsTable items={items} viewerEmployeeId={viewerEmployeeId} isAdmin onChanged={load} />
+        <DelegationsTable items={items} viewerEmployeeId={viewerEmployeeId} canManageAll onChanged={load} />
       )}
     </div>
   );

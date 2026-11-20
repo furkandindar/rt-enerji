@@ -10,12 +10,14 @@
 //     → Partiyi taşır (varsayılan 25 talep). `remaining` 0 olana kadar tekrar
 //       çağrılır; taşınan talep otomatik olarak aday olmaktan çıkar.
 //
-// Yetki: ORG_ADMIN. PDF yeniden üretilmez — Storage'daki nihai belge (imzalı
+// Yetki: integrations.manage (Admin, Yönetici). PDF yeniden üretilmez — Storage'daki nihai belge (imzalı
 // tarama dahil) yeni yola yüklenir, eski SharePoint kopyası silinir.
 
 import { migrateArchiveLayout } from "@/lib/sharepoint/migrate-archive";
 import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
+import { getUserAccess } from "@/lib/auth/access";
+import { can } from "@/lib/auth/permissions";
 
 // Parti başına ~25 talep × (Storage indirme + Graph PUT + DELETE); migrate-archive
 // kendi zaman bütçesini (45s) bunun altında tutar.
@@ -76,13 +78,9 @@ async function requireOrgAdmin(): Promise<NextResponse | null> {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { data: appUser } = await supabase
-    .from("app_users")
-    .select("role")
-    .eq("id", user.id)
-    .single();
+  const appUser = await getUserAccess(supabase);
 
-  if (appUser?.role !== "ORG_ADMIN") {
+  if (!can(appUser, "integrations.manage")) {
     return NextResponse.json(
       { error: "Forbidden — admin yetkisi gerekli" },
       { status: 403 }

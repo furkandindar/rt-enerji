@@ -1,7 +1,9 @@
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
-import { isDepartmentViewer } from "@/lib/workflow/workflow-service";
+import { isDepartmentViewer, isUnitManagerViewer } from "@/lib/workflow/workflow-service";
 import { getRequestContentAccess, RESTRICTED_CONTENT_MESSAGE } from "@/lib/workflow/content-access";
+import { getUserAccess } from "@/lib/auth/access";
+import { can } from "@/lib/auth/permissions";
 
 // GET /api/attachments/[id]/download - Dosya indir (server-side stream)
 export async function GET(
@@ -18,15 +20,14 @@ export async function GET(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { data: appUser } = await supabase
-      .from("app_users")
-      .select("employee_id, role")
-      .eq("id", user.id)
-      .single();
+    const appUser = await getUserAccess(supabase);
+    if (!appUser) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
-    // ORG_ADMIN employee bağı olmadan da erişebilmeli (PDF rotalarıyla tutarlı)
-    const isOrgAdmin = appUser?.role === "ORG_ADMIN";
-    if (!appUser?.employee_id && !isOrgAdmin) {
+    // requests.view_all (Admin) employee bağı olmadan da erişebilmeli (PDF rotalarıyla tutarlı)
+    const canViewAll = can(appUser, "requests.view_all");
+    if (!appUser.employee_id && !canViewAll) {
       return NextResponse.json({ error: "User not linked to employee" }, { status: 400 });
     }
 
@@ -42,8 +43,8 @@ export async function GET(
       return NextResponse.json({ error: "Dosya bulunamadı" }, { status: 404 });
     }
 
-    // 3. Yetki kontrolü: talep sahibi, onaylayıcı, ORG_ADMIN veya departman
-    // görüntüleyicisi mi?
+    // 3. Yetki kontrolü: talep sahibi, onaylayıcı, Admin (requests.view_all), departman
+    // görüntüleyicisi veya Müdür mü?
     const { data: req } = await supabaseAdmin
       .from("requests")
       .select("requester_employee_id, workflow_definition_id")
@@ -56,7 +57,7 @@ export async function GET(
 
     const isRequester =
       !!appUser.employee_id && req.requester_employee_id === appUser.employee_id;
-    let authorized = isRequester || isOrgAdmin;
+    let authorized = isRequester || canViewAll;
 
     if (!authorized && appUser.employee_id) {
       const { data: approval } = await supabaseAdmin
@@ -74,6 +75,11 @@ export async function GET(
           appUser.employee_id,
           req.workflow_definition_id
         );
+      }
+
+      // Müdür: birimindeki çalışanın talebi (salt okunur)
+      if (!authorized) {
+        authorized = await isUnitManagerViewer(supabase, appUser.is_unit_manager, attachment.request_id);
       }
     }
 

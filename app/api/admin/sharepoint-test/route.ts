@@ -9,7 +9,7 @@
 //     → Verilen talep için PDF'i yeniden üretip Supabase + SharePoint'e yükler.
 //       requests tablosundaki sharepoint_* alanları güncellenir. Faz 4 e2e test.
 //
-// Yalnız ORG_ADMIN (2026-11-07: önceden her oturum açmış kullanıcıya açıktı ve
+// Yalnız integrations.manage (2026-11-07: önceden her oturum açmış kullanıcıya açıktı ve
 // pdf_path'i ezebiliyordu). COMPLETED talepler (pdf_path = YKB'nin ıslak imzalı
 // taraması olabilir) full-sync modunda reddedilir.
 
@@ -24,6 +24,8 @@ import {
   uploadFileToSharePoint,
 } from "@/lib/msgraph/sharepoint";
 import { NextRequest, NextResponse } from "next/server";
+import { getUserAccess } from "@/lib/auth/access";
+import { can } from "@/lib/auth/permissions";
 
 // full-sync modu PDF gen + SharePoint zinciri + 15s polling içeriyor.
 export const maxDuration = 60;
@@ -37,12 +39,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { data: appUser } = await supabase
-    .from("app_users")
-    .select("role")
-    .eq("id", user.id)
-    .single();
-  if (appUser?.role !== "ORG_ADMIN") {
+  const appUser = await getUserAccess(supabase);
+  if (!can(appUser, "integrations.manage")) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

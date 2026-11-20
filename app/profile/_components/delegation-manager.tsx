@@ -72,7 +72,7 @@ export function DelegationManager({ employeeId }: DelegationManagerProps) {
             <DelegationsTable
               items={given}
               viewerEmployeeId={employeeId}
-              isAdmin={false}
+              canManageAll={false}
               onChanged={load}
               emptyText="Henüz vekalet tanımlamadınız"
             />
@@ -82,7 +82,7 @@ export function DelegationManager({ employeeId }: DelegationManagerProps) {
             <DelegationsTable
               items={received}
               viewerEmployeeId={employeeId}
-              isAdmin={false}
+              canManageAll={false}
               onChanged={load}
               emptyText="Size verilmiş vekalet yok"
             />

@@ -16,7 +16,7 @@ export async function GET(
     const supabase = await createClient();
     const { id } = await params;
 
-    // 1-3. Kullanıcı + yetki kontrolü (talep sahibi / onaycı / ORG_ADMIN)
+    // 1-3. Kullanıcı + yetki kontrolü (talep sahibi / onaycı / Admin / departman / Müdür)
     const auth = await authorizePdfAccess(supabase, id);
     if (!auth.ok) {
       return NextResponse.json({ error: auth.error }, { status: auth.status });
@@ -24,7 +24,7 @@ export async function GET(
     const { requestData } = auth;
 
     // 4. PDF'i o anki veriyle üret (storage'a YAZILMAZ, DB güncellenmez)
-    // Render service role ile yapılır: yetki yukarıda doğrulandı ve ORG_ADMIN
+    // Render service role ile yapılır: yetki yukarıda doğrulandı ve Admin/Müdür
     // gibi süreç dışı görüntüleyicilerde RLS nested ilişkileri (imza alanları,
     // workflow detay tabloları) eksik bırakıp PDF'i bozabilir.
     const pdfBuffer = await generateRequestPDF({

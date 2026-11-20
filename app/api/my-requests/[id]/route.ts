@@ -7,7 +7,7 @@ import { getRequestContentAccess, redactRequestContent } from "@/lib/workflow/co
 const PG_STATEMENT_TIMEOUT = "57014";
 
 // GET /api/my-requests/[id] - Tek bir talebin tüm detaylarını getirir.
-// RLS, talep sahibi / onaycı / ORG_ADMIN'in erişimini garanti eder.
+// RLS, talep sahibi / onaycı / Admin / Müdür erişimini garanti eder.
 //
 // İki adımlı (type-aware) sorgu:
 //   1) Hafif fetch: workflow_definition.code öğren (1 satır, çok az join).

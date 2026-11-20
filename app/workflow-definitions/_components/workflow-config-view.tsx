@@ -1,6 +1,6 @@
 "use client";
 
-// Süreç Tanımları — admin.
+// Süreç Tanımları — workflows.view (Admin, Yönetici); düzenleme workflows.manage (Admin).
 // Sol: süreç listesi (+ Birim Amirleri). Sağ: seçili sürecin adımları ve onaycıları.
 // Veri sunucuda derlenir (lib/workflow/config-overview.ts). Faz 2a: sabit pozisyonlu
 // adımın pozisyonu buradan değiştirilebilir (StepPositionDialog → PATCH /api/workflow-steps/[id]);
@@ -283,14 +283,16 @@ function StepCard({
   step,
   isLast,
   positions,
+  canEdit,
 }: {
   step: ConfigStep;
   isLast: boolean;
   positions: AssignablePosition[];
+  canEdit: boolean;
 }) {
   const { errors } = countWarnings(step.warnings);
   const [editOpen, setEditOpen] = useState(false);
-  const editable = step.approver_type === "STATIC_POSITION";
+  const editable = canEdit && step.approver_type === "STATIC_POSITION";
   return (
     <li className="relative flex gap-4 pb-6 last:pb-0">
       {/* Zaman çizgisi */}
@@ -399,9 +401,11 @@ function StepCard({
 function WorkflowDetail({
   workflow,
   positions,
+  canEdit,
 }: {
   workflow: ConfigWorkflow;
   positions: AssignablePosition[];
+  canEdit: boolean;
 }) {
   return (
     <div className="flex flex-col gap-6">
@@ -482,6 +486,7 @@ function WorkflowDetail({
                 step={step}
                 isLast={idx === workflow.steps.length - 1}
                 positions={positions}
+                canEdit={canEdit}
               />
             ))}
           </ol>
@@ -597,9 +602,11 @@ function UnitHeadsView({ entries }: { entries: UnitHeadEntry[] }) {
 
 interface WorkflowConfigViewProps {
   overview: WorkflowConfigOverview;
+  /** workflows.manage — sabit pozisyon düzenleme düğmesi. Yetki sunucuda da kontrol edilir. */
+  canEdit: boolean;
 }
 
-export function WorkflowConfigView({ overview }: WorkflowConfigViewProps) {
+export function WorkflowConfigView({ overview, canEdit }: WorkflowConfigViewProps) {
   const [selectedKey, setSelectedKey] = useState<string>(
     overview.workflows[0]?.id ?? UNIT_HEADS_KEY
   );
@@ -765,7 +772,7 @@ export function WorkflowConfigView({ overview }: WorkflowConfigViewProps) {
           {selectedKey === UNIT_HEADS_KEY ? (
             <UnitHeadsView entries={overview.unit_heads} />
           ) : selectedWorkflow ? (
-            <WorkflowDetail workflow={selectedWorkflow} positions={overview.assignable_positions} />
+            <WorkflowDetail workflow={selectedWorkflow} positions={overview.assignable_positions} canEdit={canEdit} />
           ) : (
             <p className="text-sm text-muted-foreground">Soldan bir süreç seçin.</p>
           )}

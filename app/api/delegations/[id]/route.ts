@@ -2,10 +2,12 @@ import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { notifyDelegationCancelled } from "@/lib/workflow/notification-service";
 import { DELEGATION_SELECT, withIsCurrent } from "@/lib/workflow/delegation";
+import { getUserAccess } from "@/lib/auth/access";
+import { can } from "@/lib/auth/permissions";
 
 // PATCH /api/delegations/[id] — vekaleti iptal et veya bitişini kısalt. Faz B / B2.
 // Body: { action: "cancel" }  |  { ends_at: ISO }
-// Yetki: delegator veya ORG_ADMIN (RLS update politikası da aynı kuralı uygular).
+// Yetki: delegator veya delegations.manage_all (RLS update politikası da aynı kuralı uygular).
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -19,11 +21,7 @@ export async function PATCH(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { data: appUser } = await supabase
-      .from("app_users")
-      .select("employee_id, role")
-      .eq("id", user.id)
-      .single();
+    const appUser = await getUserAccess(supabase);
 
     if (!appUser?.employee_id) {
       return NextResponse.json({ error: "User not linked to employee" }, { status: 400 });
@@ -57,8 +55,8 @@ export async function PATCH(
       workflow_definition?: { name: string } | null;
     };
 
-    const isAdmin = appUser.role === "ORG_ADMIN";
-    if (row.delegator_employee_id !== appUser.employee_id && !isAdmin) {
+    const canManageAll = can(appUser, "delegations.manage_all");
+    if (row.delegator_employee_id !== appUser.employee_id && !canManageAll) {
       return NextResponse.json({ error: "Bu vekaleti yalnız tanımlayan kişi veya yönetici değiştirebilir" }, { status: 403 });
     }
     if (row.status !== "ACTIVE") {

@@ -13,12 +13,12 @@ import {
 } from "@/components/ui/sidebar";
 import { useUser } from "@/lib/contexts/user-context";
 
-// Süreç Yönetimi — ORG_ADMIN'e özel konfigürasyon ekranları.
+// Süreç Yönetimi — workflows.view (Admin, Yönetici); düzenleme ayrıca workflows.manage.
 export function NavWorkflowAdmin() {
   const pathname = usePathname();
-  const { isAdmin } = useUser();
+  const { can } = useUser();
 
-  if (!isAdmin) {
+  if (!can("workflows.view")) {
     return null;
   }
 

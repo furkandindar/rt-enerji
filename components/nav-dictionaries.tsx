@@ -15,10 +15,10 @@ import { useUser } from "@/lib/contexts/user-context";
 
 export function NavDictionaries() {
   const pathname = usePathname();
-  const { isAdmin } = useUser();
+  const { can } = useUser();
 
-  // Sadece admin kullanıcılar bu menüyü görebilir
-  if (!isAdmin) {
+  // Sözlükler organizasyon yönetiminin parçası (org.manage: Admin, Yönetici)
+  if (!can("org.manage")) {
     return null;
   }
 

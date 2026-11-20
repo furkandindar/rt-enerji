@@ -1,7 +1,7 @@
 // İşe Giriş / İşten Çıkış ONAY formları — client + server ortak tipler ve doğrulama.
 //
 // İki süreç de kısıtlı (is_restricted) ve maaş içerir: talebi talep sahibi, onay zinciri,
-// İK departmanı (workflow_initiators) ve ORG_ADMIN görür; diğer kısıtlı İK süreçleriyle aynı kural.
+// İK departmanı (workflow_initiators) ve Admin (requests.view_all) görür; diğer kısıtlı İK süreçleriyle aynı kural.
 // Formun tamamını İK doldurur; onaycılar yalnız paraflar (SIGN_ONLY). Takip formlarıyla
 // (EMPLOYEE_ONBOARDING / EMPLOYEE_SEPARATION) bağı yoktur.
 

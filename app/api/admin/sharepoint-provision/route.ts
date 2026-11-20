@@ -13,7 +13,7 @@
 //       Idempotent — var olanlar "existing" sayılır. 530 klasörü tek istekte
 //       açmak Vercel 60s sınırında 504 veriyordu; parti bu yüzden.
 //
-// Yetki: ORG_ADMIN rolü zorunlu (app_users.role). Yıl/ay klasörleri burada
+// Yetki: integrations.manage (Admin, Yönetici). Yıl/ay klasörleri burada
 // açılmaz, ilk belgeyle kendiliğinden oluşur.
 
 import {
@@ -26,6 +26,8 @@ import {
 } from "@/lib/sharepoint/provision-tree";
 import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
+import { getUserAccess } from "@/lib/auth/access";
+import { can } from "@/lib/auth/permissions";
 
 // Parti başına 50 klasör, 4 paralel istek — provision-tree kendi zaman
 // bütçesini (25s) bunun çok altında tutar ki yanıt her zaman JSON dönsün.
@@ -90,13 +92,9 @@ async function requireOrgAdmin(): Promise<NextResponse | null> {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { data: appUser } = await supabase
-    .from("app_users")
-    .select("role")
-    .eq("id", user.id)
-    .single();
+  const appUser = await getUserAccess(supabase);
 
-  if (appUser?.role !== "ORG_ADMIN") {
+  if (!can(appUser, "integrations.manage")) {
     return NextResponse.json(
       { error: "Forbidden — admin yetkisi gerekli" },
       { status: 403 }

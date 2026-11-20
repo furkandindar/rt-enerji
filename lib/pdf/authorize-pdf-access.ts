@@ -1,11 +1,14 @@
 import { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/database.types";
-import { isDepartmentViewer } from "@/lib/workflow/workflow-service";
+import { isDepartmentViewer, isUnitManagerViewer } from "@/lib/workflow/workflow-service";
 import { getRequestContentAccess, RESTRICTED_CONTENT_MESSAGE } from "@/lib/workflow/content-access";
+import { getUserAccess } from "@/lib/auth/access";
+import { can } from "@/lib/auth/permissions";
 
 // PDF endpoint'lerinin (indir / önizle / anlık önizle) ortak yetki kontrolü.
-// Kural: talep sahibi, onaycılardan biri, ORG_ADMIN veya kısıtlı workflow'larda
-// departman görünürlüğü olan kullanıcı (isDepartmentViewer) erişebilir.
+// Kural: talep sahibi, onaycılardan biri, requests.view_all (Admin), kısıtlı
+// workflow'larda departman görünürlüğü olan kullanıcı (isDepartmentViewer) veya
+// Müdür (birimindeki çalışanın talebi — isUnitManagerViewer) erişebilir.
 // Request satırı kullanıcının kendi client'ıyla okunur; RLS burada ikinci
 // katman olarak çalışır (requests_select politikası da aynı grupları kapsar).
 // İçerik kısıtlı süreçlerde (İşe Giriş / İşten Çıkış Onay) ayrıca içerik kuralı:
@@ -45,16 +48,15 @@ export async function authorizePdfAccess(
     return { ok: false, status: 401, error: "Unauthorized" };
   }
 
-  const { data: appUser } = await supabase
-    .from("app_users")
-    .select("employee_id, role")
-    .eq("id", user.id)
-    .single();
+  const appUser = await getUserAccess(supabase);
+  if (!appUser) {
+    return { ok: false, status: 401, error: "Unauthorized" };
+  }
 
-  // ORG_ADMIN employee bağı olmadan da PDF görebilmeli; diğer kullanıcılar
-  // için employee bağı zorunlu (requester/approver eşleşmesi employee_id ile).
-  const isOrgAdmin = appUser?.role === "ORG_ADMIN";
-  if (!appUser?.employee_id && !isOrgAdmin) {
+  // requests.view_all (Admin) employee bağı olmadan da PDF görebilmeli; diğer
+  // kullanıcılar için employee bağı zorunlu (requester/approver eşleşmesi employee_id ile).
+  const canViewAll = can(appUser, "requests.view_all");
+  if (!appUser.employee_id && !canViewAll) {
     return { ok: false, status: 400, error: "User not linked to employee" };
   }
 
@@ -82,8 +84,8 @@ export async function authorizePdfAccess(
     return { ok: false, status: 404, error: "Request not found" };
   }
 
-  // 3. Yetki kontrolü - Talep sahibi, onaylayanlar, ORG_ADMIN veya kısıtlı
-  // workflow'da departman görünürlüğü olan kullanıcı görebilir
+  // 3. Yetki kontrolü - Talep sahibi, onaylayanlar, Admin (requests.view_all),
+  // kısıtlı workflow'da departman görünürlüğü olan kullanıcı veya Müdür görebilir
   const isRequester =
     requestData.requester_employee_id === appUser?.employee_id;
   const isApprover = requestData.approvals?.some(
@@ -91,7 +93,7 @@ export async function authorizePdfAccess(
       approval.approver_employee_id === appUser?.employee_id
   );
 
-  if (!isRequester && !isApprover && !isOrgAdmin) {
+  if (!isRequester && !isApprover && !canViewAll) {
     const isDeptViewer =
       !!appUser?.employee_id &&
       (await isDepartmentViewer(
@@ -100,7 +102,10 @@ export async function authorizePdfAccess(
         requestData.workflow_definition_id
       ));
 
-    if (!isDeptViewer) {
+    const isManagerViewer =
+      !isDeptViewer && (await isUnitManagerViewer(supabase, appUser.is_unit_manager, requestId));
+
+    if (!isDeptViewer && !isManagerViewer) {
       return { ok: false, status: 403, error: "Forbidden" };
     }
   }

@@ -22,7 +22,8 @@ import type {
 
 export interface LifecycleUser {
   employeeId: string;
-  role: string | null | undefined; // 'ORG_ADMIN' veya başka rol
+  /** requests.manage_all (Admin): her talebe her durumda müdahale. lib/auth/access.ts lifecycleUser() */
+  canManageAll: boolean;
 }
 
 /** Talep terminal duruma düşmüş mü (ileri akış mümkün değil)? */
@@ -47,13 +48,13 @@ export const ACTIONABLE_REQUEST_STATUSES: ReadonlyArray<RequestStatus> = [
 /**
  * Edit: detay tablo + items üzerinde UPDATE. Status'u değiştirmez.
  * - Talep sahibi: status DRAFT veya REVISION_REQUESTED
- * - ORG_ADMIN: her durumda
+ * - requests.manage_all (Admin): her durumda
  */
 export function canEditRequest(
   req: Pick<Request, 'status' | 'requester_employee_id'>,
   user: LifecycleUser
 ): boolean {
-  if (user.role === 'ORG_ADMIN') return true;
+  if (user.canManageAll) return true;
   if (req.requester_employee_id !== user.employeeId) return false;
   return req.status === 'DRAFT' || req.status === 'REVISION_REQUESTED';
 }
@@ -67,18 +68,18 @@ export function canWithdrawRequest(
   activeCycleApprovals: Pick<RequestApproval, 'status'>[],
   user: LifecycleUser
 ): boolean {
-  if (user.role !== 'ORG_ADMIN' && req.requester_employee_id !== user.employeeId) return false;
+  if (!user.canManageAll && req.requester_employee_id !== user.employeeId) return false;
   if (req.status !== 'PENDING') return false;
   return activeCycleApprovals.every(a => a.status === 'PENDING');
 }
 
 /**
  * Cancel: talebi CANCELLED'a çeker (terminal). Faz-bazlı yetki:
- *  - ORG_ADMIN: terminal olmayan her durumda. İmza ilerlemiş veya completion
+ *  - requests.manage_all (Admin): terminal olmayan her durumda. İmza ilerlemiş veya completion
  *    fazına geçmiş ("takılı") talepleri de sonlandırabilen escape hatch.
  *  - Talep eden: YALNIZCA imza öncesi — status PENDING ve aktif cycle'da hiç
  *    gerçek onay verilmemiş (withdraw ile aynı eşik). İmzalardan geçmiş bir
- *    talebi talep eden tek taraflı iptal edemez; bir ORG_ADMIN'e başvurur.
+ *    talebi talep eden tek taraflı iptal edemez; bir Admin'e başvurur.
  *
  * activeCycleRealApprovals: aktif revize cycle'ının onay kayıtları, REQUESTER
  * tipindeki (talep gönderme imzası) adımlar HARİÇ — filtreleme çağırana ait.
@@ -89,7 +90,7 @@ export function canCancelRequest(
   user: LifecycleUser
 ): boolean {
   if (TERMINAL_FOR_CANCEL.includes(req.status)) return false;
-  if (user.role === 'ORG_ADMIN') return true;
+  if (user.canManageAll) return true;
   if (req.requester_employee_id !== user.employeeId) return false;
   if (req.status !== 'PENDING') return false;
   return activeCycleRealApprovals.every(a => a.status === 'PENDING');
@@ -101,7 +102,7 @@ export function canCancelRequest(
 export function canRequestRevision(
   approval: Pick<RequestApproval, 'status' | 'sequence_order' | 'approver_employee_id'>,
   req: Pick<Request, 'status' | 'current_step'>,
-  user: LifecycleUser,
+  user: Pick<LifecycleUser, 'employeeId'>,
   // Vekalet (B2): verilirse "kendisi mi" karşılaştırması yerine DB'den çözülmüş
   // işlem yetkisi (resolveActingRights → can_act_on_approval) kullanılır.
   acting?: { canAct: boolean }

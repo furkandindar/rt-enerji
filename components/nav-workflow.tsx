@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarPlus, Laptop, FileCheck, ClipboardList, Banknote, Calculator, Clock, UserPlus, UserMinus, UserCheck, UserX, FileText, Stamp, MapPin, FilePenLine, Scale, ReceiptText, History, type LucideIcon } from "lucide-react";
+import { CalendarPlus, Laptop, FileCheck, ClipboardList, UsersRound, Banknote, Calculator, Clock, UserPlus, UserMinus, UserCheck, UserX, FileText, Stamp, MapPin, FilePenLine, Scale, ReceiptText, History, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -26,6 +26,8 @@ interface NavItem {
   // /approvals (Bekleyen Onaylar) ve /approvals/history (Onay Geçmişi) gibi
   // alt route'ların doğru ayrımı için gerekli.
   isActiveMatch?: (pathname: string) => boolean;
+  // Yalnız birim amirlerine (Müdür — access.is_unit_manager) gösterilir.
+  unitManagerOnly?: boolean;
 }
 
 // Her zaman görünen bireysel süreçler
@@ -67,6 +69,7 @@ const trackingItems: NavItem[] = [
       p.startsWith("/approvals") && !p.startsWith("/approvals/history"),
   },
   { title: "Onay Geçmişi",     url: "/approvals/history", icon: History },
+  { title: "Birimimin Talepleri", url: "/team-requests", icon: UsersRound, unitManagerOnly: true },
 ];
 
 function NavItems({ items, pathname }: { items: NavItem[]; pathname: string }) {
@@ -88,7 +91,8 @@ function NavItems({ items, pathname }: { items: NavItem[]; pathname: string }) {
 
 export function NavWorkflow() {
   const pathname = usePathname();
-  const { user } = useUser();
+  const { user, isUnitManager } = useUser();
+  const visibleTrackingItems = trackingItems.filter((item) => !item.unitManagerOnly || isUnitManager);
 
   const availableCodes = user?.availableWorkflowCodes ?? [];
 
@@ -127,7 +131,7 @@ export function NavWorkflow() {
       <SidebarGroup>
         <SidebarGroupLabel>Takip</SidebarGroupLabel>
         <SidebarMenu>
-          <NavItems items={trackingItems} pathname={pathname} />
+          <NavItems items={visibleTrackingItems} pathname={pathname} />
         </SidebarMenu>
       </SidebarGroup>
     </>

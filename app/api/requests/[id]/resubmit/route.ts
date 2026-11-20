@@ -24,6 +24,8 @@ import { mentionContextLabel, parseMentionIds } from "@/lib/workflow/mentions-sh
 import { scheduleMentions } from "@/lib/workflow/mentions";
 import { revisionReturnModeOf } from "@/lib/workflow/revision-target";
 import type { CarryOverSourceRow } from "@/lib/workflow/workflow-service";
+import { getUserAccess } from "@/lib/auth/access";
+import { can } from "@/lib/auth/permissions";
 
 // POST /api/requests/[id]/resubmit
 // DRAFT veya REVISION_REQUESTED durumdaki bir talebi yeniden gönderir:
@@ -64,11 +66,14 @@ export async function POST(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { data: appUser } = await supabase
-      .from("app_users")
-      .select("employee_id, role, employee:employees(first_name, last_name)")
-      .eq("id", user.id)
-      .single();
+    const [{ data: appUser }, access] = await Promise.all([
+      supabase
+        .from("app_users")
+        .select("employee_id, employee:employees(first_name, last_name)")
+        .eq("id", user.id)
+        .single(),
+      getUserAccess(supabase),
+    ]);
 
     if (!appUser?.employee_id) {
       return NextResponse.json({ error: "User not linked to employee" }, { status: 400 });
@@ -97,7 +102,7 @@ export async function POST(
       return NextResponse.json({ error: "Request not found" }, { status: 404 });
     }
 
-    // 3. Eligibility: status ∈ (DRAFT, REVISION_REQUESTED) ve (requester veya ORG_ADMIN)
+    // 3. Eligibility: status ∈ (DRAFT, REVISION_REQUESTED) ve (requester veya requests.manage_all)
     if (req.status !== "DRAFT" && req.status !== "REVISION_REQUESTED") {
       return NextResponse.json(
         { error: `Cannot resubmit from status ${req.status}` },
@@ -106,12 +111,12 @@ export async function POST(
     }
 
     const isRequester = req.requester_employee_id === appUser.employee_id;
-    if (!isRequester && appUser.role !== "ORG_ADMIN") {
+    if (!isRequester && !can(access, "requests.manage_all")) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
     // Revize Açıklaması yalnız revize turunda ve yalnız talep sahibinden alınır: not
-    // talep sahibinin satırına yazıldığı için yazarı her zaman talep sahibidir (ORG_ADMIN
+    // talep sahibinin satırına yazıldığı için yazarı her zaman talep sahibidir (Admin
     // başkası adına gönderirse arayüz alanı göstermez, burada da yok sayılır).
     const revisionResponse =
       req.status === "REVISION_REQUESTED" && isRequester

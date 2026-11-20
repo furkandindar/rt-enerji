@@ -2,6 +2,8 @@ import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { applyAuditStamp, canEditRequest } from "@/lib/workflow";
 import type { CreateOnboardingInput } from "@/lib/workflow";
+import { getUserAccess, lifecycleUser } from "@/lib/auth/access";
+import { can } from "@/lib/auth/permissions";
 
 const WORKFLOW_CODE = "EMPLOYEE_ONBOARDING";
 
@@ -34,11 +36,7 @@ export async function PATCH(
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const { data: appUser } = await supabase
-      .from("app_users")
-      .select("employee_id, role")
-      .eq("id", user.id)
-      .single();
+    const appUser = await getUserAccess(supabase);
 
     if (!appUser?.employee_id) {
       return NextResponse.json({ error: "User not linked to employee" }, { status: 400 });
@@ -61,7 +59,7 @@ export async function PATCH(
       return NextResponse.json({ error: "Bu talep bir işe giriş takip formu değil" }, { status: 400 });
     }
 
-    if (!canEditRequest(req, { employeeId: appUser.employee_id, role: appUser.role })) {
+    if (!canEditRequest(req, lifecycleUser(appUser))) {
       return NextResponse.json({ error: "Cannot edit in current state" }, { status: 403 });
     }
 
@@ -87,7 +85,7 @@ export async function PATCH(
     patch.updated_at = new Date().toISOString();
 
     // .select() ile etkilenen satırı geri alıyoruz: RLS UPDATE'i sessizce 0 satıra
-    // düşürürse (ör. onboarding_requests_update policy'si ORG_ADMIN'i kapsamıyor)
+    // düşürürse (ör. politika koşulu sağlanmıyorsa)
     // hata dönmez — başarılı gibi görünmesin diye kontrol ediyoruz.
     const { data: updatedRows, error: updateError } = await supabase
       .from("onboarding_requests")
@@ -110,7 +108,7 @@ export async function PATCH(
     await applyAuditStamp(
       supabase,
       requestId,
-      appUser.role === "ORG_ADMIN" && req.requester_employee_id !== appUser.employee_id
+      can(appUser, "requests.manage_all") && req.requester_employee_id !== appUser.employee_id
         ? "EDITED_BY_ADMIN"
         : "EDITED",
       appUser.employee_id

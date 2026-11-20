@@ -2,27 +2,29 @@
 
 import { type ReactNode } from "react";
 import { useUser } from "@/lib/contexts/user-context";
+import type { Permission } from "@/lib/auth/permissions";
 import { Loading } from "@/components/ui/loading";
 import { ShieldX } from "lucide-react";
 
 interface AdminPageWrapperProps {
+  /** Sayfayı açan izin (lib/auth/permissions.ts). */
+  permission: Permission;
   children: ReactNode;
 }
 
 /**
- * Admin-only sayfalar için wrapper component.
- * Sadece ORG_ADMIN rolüne sahip kullanıcılar içeriği görebilir.
+ * Yönetim sayfaları için görsel guard: içerik yalnız `permission` iznine sahip
+ * kullanıcıya gösterilir. Veri yetkisi ayrıca RLS / sunucu tarafında uygulanır.
  *
  * Kullanım:
  * ```tsx
- * // page.tsx içinde
- * <AdminPageWrapper>
+ * <AdminPageWrapper permission="org.manage">
  *   <YourPageContent />
  * </AdminPageWrapper>
  * ```
  */
-export function AdminPageWrapper({ children }: AdminPageWrapperProps) {
-  const { user, loading, isAdmin } = useUser();
+export function AdminPageWrapper({ permission, children }: AdminPageWrapperProps) {
+  const { user, loading, can } = useUser();
 
   if (loading) {
     return <Loading fullscreen text="Yetki kontrol ediliyor..." />;
@@ -36,7 +38,7 @@ export function AdminPageWrapper({ children }: AdminPageWrapperProps) {
     );
   }
 
-  if (!isAdmin) {
+  if (!can(permission)) {
     return (
       <div className="flex flex-1 items-center justify-center">
         <AccessDenied />
@@ -56,7 +58,7 @@ function AccessDenied({ message }: { message?: string }) {
       <div className="space-y-2">
         <h2 className="text-xl font-semibold">Erişim Engellendi</h2>
         <p className="text-muted-foreground">
-          {message ?? "Bu sayfaya erişim yetkiniz bulunmamaktadır. Sadece yöneticiler erişebilir."}
+          {message ?? "Bu sayfaya erişim yetkiniz bulunmamaktadır."}
         </p>
       </div>
     </div>

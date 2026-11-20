@@ -9,9 +9,10 @@ import {
 } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { getAvailableWorkflows } from "@/lib/workflow";
+import { can as canWith, toPermissionSet, type Permission } from "@/lib/auth/permissions";
 
-// Rol tipleri
-export type UserRole = "ORG_ADMIN" | "ORG_VIEWER";
+// Rol kodu (app_roles.code). Yetki kararı rol adıyla değil izinle verilir: can("...").
+export type UserRole = "ORG_ADMIN" | "ORG_MANAGER" | "ORG_VIEWER" | "NONE";
 
 // Kullanıcı bilgileri
 export interface AppUser {
@@ -20,6 +21,12 @@ export interface AppUser {
   email: string;
   avatar: string;
   role: UserRole;
+  /** Rolün görünen adı (Admin, Yönetici, Kullanıcı). */
+  roleLabel: string;
+  /** Rolün izinleri (DB role_permissions — public.my_access()). */
+  permissions: ReadonlySet<Permission>;
+  /** Aktif birim amiri pozisyonu var → Müdür (birimindeki talepleri görür). */
+  isUnitManager: boolean;
   employeeId: string | null;
   availableWorkflowCodes: string[];
   privacyAccepted: boolean;
@@ -29,16 +36,17 @@ export interface AppUser {
 interface UserContextType {
   user: AppUser | null;
   loading: boolean;
-  isAdmin: boolean;
-  hasRole: (role: UserRole) => boolean;
+  /** Oturumdaki kullanıcı bu izne sahip mi (yüklenirken false). */
+  can: (permission: Permission) => boolean;
+  isUnitManager: boolean;
   refetchUser: () => Promise<void>;
 }
 
 const UserContext = createContext<UserContextType>({
   user: null,
   loading: true,
-  isAdmin: false,
-  hasRole: () => false,
+  can: () => false,
+  isUnitManager: false,
   refetchUser: async () => {},
 });
 
@@ -68,12 +76,22 @@ export function UserProvider({ children }: UserProviderProps) {
     if (authData?.user) {
       const authUser = authData.user;
 
-      // app_users -> employees ilişkisinden bilgileri çek (role dahil)
-      const { data: appUserData } = await supabase
-        .from("app_users")
-        .select("employee_id, role, privacy_accepted_at, employees(first_name, last_name)")
-        .eq("id", authUser.id)
-        .single();
+      // app_users -> employees (ad, KVKK onayı) + erişim özeti (rol, izinler, Müdür)
+      const [{ data: appUserData }, { data: accessData }] = await Promise.all([
+        supabase
+          .from("app_users")
+          .select("employee_id, role, privacy_accepted_at, employees(first_name, last_name)")
+          .eq("id", authUser.id)
+          .single(),
+        supabase.rpc("my_access"),
+      ]);
+      const access = (accessData ?? {}) as {
+        role?: string;
+        role_label?: string;
+        permissions?: unknown;
+        is_unit_manager?: boolean;
+      };
+      const permissions = toPermissionSet(access.permissions);
 
       const employeeData = appUserData?.employees;
       const employee = Array.isArray(employeeData)
@@ -86,12 +104,12 @@ export function UserProvider({ children }: UserProviderProps) {
           "User";
 
       const employeeId = appUserData?.employee_id || null;
-      const userRole = (appUserData?.role as UserRole) || "ORG_VIEWER";
+      const userRole = ((access.role ?? appUserData?.role) as UserRole) || "ORG_VIEWER";
 
       // Çalışanın başlatabileceği workflow kodlarını al
-      // ORG_ADMIN tüm workflow'ları görebilir
+      // workflows.start_any (Admin) tüm workflow'ları görebilir
       const availableWorkflows = employeeId
-        ? await getAvailableWorkflows(supabase, employeeId, userRole)
+        ? await getAvailableWorkflows(supabase, employeeId, permissions.has("workflows.start_any"))
         : [];
       const availableWorkflowCodes = availableWorkflows.map((wf) => wf.code);
 
@@ -100,7 +118,10 @@ export function UserProvider({ children }: UserProviderProps) {
         name: fullName,
         email: authUser.email || "",
         avatar: authUser.user_metadata?.avatar_url || "",
-        role: (appUserData?.role as UserRole) || "ORG_VIEWER",
+        role: userRole,
+        roleLabel: access.role_label ?? "",
+        permissions,
+        isUnitManager: access.is_unit_manager === true,
         employeeId,
         availableWorkflowCodes,
         privacyAccepted: !!appUserData?.privacy_accepted_at,
@@ -133,15 +154,11 @@ export function UserProvider({ children }: UserProviderProps) {
     };
   }, []);
 
-  const hasRole = (role: UserRole): boolean => {
-    return user?.role === role;
-  };
-
   const value: UserContextType = {
     user,
     loading,
-    isAdmin: user?.role === "ORG_ADMIN",
-    hasRole,
+    can: (permission: Permission) => canWith(user, permission),
+    isUnitManager: user?.isUnitManager ?? false,
     refetchUser: fetchUser,
   };
 

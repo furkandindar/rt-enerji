@@ -105,7 +105,7 @@ export async function POST(
 
     const { data: appUser } = await supabase
       .from("app_users")
-      .select("employee_id, role, employee:employees(first_name, last_name)")
+      .select("employee_id, employee:employees(first_name, last_name)")
       .eq("id", user.id)
       .single();
 
@@ -177,7 +177,7 @@ export async function POST(
         approver_employee_id: approval.approver_employee_id,
       },
       { status: req.status as "PENDING", current_step: req.current_step },
-      { employeeId: appUser.employee_id, role: appUser.role },
+      { employeeId: appUser.employee_id },
       acting
     );
 

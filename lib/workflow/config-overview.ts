@@ -9,7 +9,7 @@
 // yazma PATCH /api/workflow-steps/[id] üzerinden.
 //
 // Yalnız SELECT yapar. RLS: konfigürasyon tabloları tüm authenticated kullanıcılara
-// açıktır, ancak sayfa/route seviyesinde ORG_ADMIN kontrolü yapılır.
+// açıktır, ancak sayfa/route seviyesinde workflows.view kontrolü yapılır.
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { ActionType, ApproverType, StepCondition, WorkflowStepPhase } from './types';
@@ -500,7 +500,7 @@ export async function loadWorkflowConfigOverview(
     if (d.is_restricted && configInitiators.length === 0) {
       warnings.push({
         level: 'warning',
-        message: 'Kısıtlı süreç ama başlatıcı tanımı yok; yalnız ORG_ADMIN başlatabilir.',
+        message: 'Kısıtlı süreç ama başlatıcı tanımı yok; yalnız Admin (workflows.start_any) başlatabilir.',
       });
     }
     for (const ini of configInitiators) {

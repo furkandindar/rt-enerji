@@ -36,7 +36,7 @@ import {
 interface DelegationsTableProps {
   items: DelegationRow[];
   viewerEmployeeId: string | null;
-  isAdmin: boolean;
+  canManageAll: boolean;
   onChanged?: () => void;
   emptyText?: string;
 }
@@ -51,7 +51,7 @@ const PHASE_BADGE_VARIANT: Record<DelegationPhase, "default" | "secondary" | "ou
 export function DelegationsTable({
   items,
   viewerEmployeeId,
-  isAdmin,
+  canManageAll,
   onChanged,
   emptyText = "Tanımlı vekalet yok",
 }: DelegationsTableProps) {
@@ -61,7 +61,7 @@ export function DelegationsTable({
   const canCancel = (row: DelegationRow) => {
     const phase = getDelegationPhase(row);
     if (phase === "cancelled" || phase === "expired") return false;
-    return isAdmin || row.delegator_employee_id === viewerEmployeeId;
+    return canManageAll || row.delegator_employee_id === viewerEmployeeId;
   };
 
   const handleCancel = async () => {

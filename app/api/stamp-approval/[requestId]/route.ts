@@ -7,6 +7,8 @@ import {
   parseSelectedPages,
   parseStampPositionFields,
 } from "@/lib/stamp-approval/form-fields";
+import { getUserAccess, lifecycleUser } from "@/lib/auth/access";
+import { can } from "@/lib/auth/permissions";
 
 // Not: dinamik segment adı `[requestId]` — aynı seviyedeki `original-pdf` alt
 // rotasıyla uyumlu olmak zorunda (Next aynı seviyede iki farklı segment adına
@@ -39,11 +41,7 @@ export async function PATCH(
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const { data: appUser } = await supabase
-      .from("app_users")
-      .select("employee_id, role")
-      .eq("id", user.id)
-      .single();
+    const appUser = await getUserAccess(supabase);
 
     if (!appUser?.employee_id) {
       return NextResponse.json({ error: "User not linked to employee" }, { status: 400 });
@@ -67,11 +65,11 @@ export async function PATCH(
       return NextResponse.json({ error: "Bu talep kaşeli belge talebi değil" }, { status: 400 });
     }
 
-    if (!canEditRequest(req, { employeeId: appUser.employee_id, role: appUser.role })) {
+    if (!canEditRequest(req, lifecycleUser(appUser))) {
       return NextResponse.json({ error: "Cannot edit in current state" }, { status: 403 });
     }
 
-    // Aşağıdaki yazma service role ile (RLS bypass) yapıldığı için ORG_ADMIN dahil
+    // Aşağıdaki yazma service role ile (RLS bypass) yapıldığı için Admin (requests.manage_all) dahil
     // yalnız yeniden gönderilecek (DRAFT / REVISION_REQUESTED) talepte izin verilir;
     // onay sürecindeki/tamamlanmış talebin belgesi değiştirilemez.
     if (req.status !== "DRAFT" && req.status !== "REVISION_REQUESTED") {
@@ -105,10 +103,10 @@ export async function PATCH(
 
     // Detay güncellemesi + Storage işlemleri SERVICE ROLE ile yapılır. Gerekçe:
     //  - stamp_requests UPDATE RLS politikası yalnız PENDING onaycıya veya
-    //    ORG_ADMIN'e izin veriyor; revize aşamasındaki talep sahibi RLS'li
+    //    requests.manage_all'a izin veriyor; revize aşamasındaki talep sahibi RLS'li
     //    client ile kendi detay satırını güncelleyemez (UPDATE 0 satır döner).
-    //  - stamp_requests SELECT politikasında ORG_ADMIN dalı yok; admin düzenlemesinde
-    //    mevcut satırı (eski PDF yolu) okumak için de gerekli.
+    //  - eski PDF yolunu okumak service role ile tek tip (2026-11-20'den beri
+    //    stamp_requests SELECT politikasında requests.view_all dalı da var).
     //  - request-documents bucket'ına yazma/silme yalnız service_role'e açık (POST
     //    rotası da yüklemeyi service role ile yapıyor).
     // Yetki kontrolü yukarıda RLS'li client ile yapıldı (auth + canEditRequest +
@@ -197,7 +195,7 @@ export async function PATCH(
     await applyAuditStamp(
       supabase,
       requestId,
-      appUser.role === "ORG_ADMIN" && req.requester_employee_id !== appUser.employee_id
+      can(appUser, "requests.manage_all") && req.requester_employee_id !== appUser.employee_id
         ? "EDITED_BY_ADMIN"
         : "EDITED",
       appUser.employee_id

@@ -2,25 +2,24 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { loadWorkflowConfigOverview } from "@/lib/workflow/config-overview";
 import { WorkflowConfigView } from "./_components/workflow-config-view";
+import { getUserAccess } from "@/lib/auth/access";
+import { can } from "@/lib/auth/permissions";
 
-// /workflow-definitions — ORG_ADMIN: süreç tanımları, adımlar ve onaycılar. Salt okunur;
-// tek istisna sabit pozisyonlu adımın pozisyonu (Faz 2a, PATCH /api/workflow-steps/[id]).
+// /workflow-definitions — workflows.view (Admin, Yönetici): süreç tanımları, adımlar ve
+// onaycılar. Salt okunur; tek istisna sabit pozisyonlu adımın pozisyonu — yalnız
+// workflows.manage (Admin) (Faz 2a, PATCH /api/workflow-steps/[id]).
 //
 // Veri sunucuda derlenir (lib/workflow/config-overview.ts) ve istemciye hazır
 // görünüm modeli olarak gider. Layout'taki AdminPageWrapper görsel guard'dır;
-// konfigürasyon verisinin admin olmayanlara gitmemesi için rol burada da kontrol edilir.
+// konfigürasyon verisinin yetkisizlere gitmemesi için izin burada da kontrol edilir.
 export default async function WorkflowDefinitionsPage() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/auth/login");
 
-  const { data: appUser } = await supabase
-    .from("app_users")
-    .select("role")
-    .eq("id", user.id)
-    .single();
+  const appUser = await getUserAccess(supabase);
 
-  if (appUser?.role !== "ORG_ADMIN") {
+  if (!appUser || !can(appUser, "workflows.view")) {
     return (
       <div className="flex h-full items-center justify-center p-6">
         <p className="text-muted-foreground">Bu sayfa yalnızca yöneticilere açıktır.</p>
@@ -42,5 +41,5 @@ export default async function WorkflowDefinitionsPage() {
     );
   }
 
-  return <WorkflowConfigView overview={overview} />;
+  return <WorkflowConfigView overview={overview} canEdit={can(appUser, "workflows.manage")} />;
 }

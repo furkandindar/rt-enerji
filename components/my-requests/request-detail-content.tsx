@@ -203,6 +203,8 @@ export interface Request {
   created_at: string;
   updated_at?: string | null;
   pdf_path?: string | null;
+  /** requests.* — yaşam döngüsü düğmeleri yalnız talep sahibine (ve Admin'e) gösterilir */
+  requester_employee_id?: string | null;
   /** İçerik kısıtlı süreçte görüntüleyen içeriği göremiyor (API redaksiyonu) */
   content_hidden?: boolean;
   workflow_definition: WorkflowDefinition;
@@ -495,6 +497,7 @@ export function RequestDetailContent({
             <RequestLifecycleActions
               request={{
                 id: selectedRequest.id,
+                requester_employee_id: selectedRequest.requester_employee_id ?? null,
                 status: selectedRequest.status as RequestLifecycleActionsStatus,
                 workflow_definition: selectedRequest.workflow_definition
                   ? { code: selectedRequest.workflow_definition.code }

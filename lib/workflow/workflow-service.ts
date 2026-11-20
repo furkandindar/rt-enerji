@@ -809,16 +809,16 @@ async function getEmployeeUnitId(
 /**
  * Çalışanın belirli bir workflow'u başlatıp başlatamayacağını kontrol eder.
  * Kural bazlı kontrol: position_id eşleşmesi VEYA unit_id eşleşmesi yeterli.
- * ORG_ADMIN rolü tüm workflow'ları başlatabilir.
+ * workflows.start_any izni (Admin) tüm workflow'ları başlatabilir.
  */
 export async function canStartWorkflow(
   supabase: SupabaseClient,
   employeeId: string,
   workflowDefinitionId: string,
-  userRole?: string
+  canStartAny = false
 ): Promise<boolean> {
-  // ORG_ADMIN her workflow'u başlatabilir
-  if (userRole === 'ORG_ADMIN') return true;
+  // workflows.start_any: başlatıcı kısıtı olmadan her workflow
+  if (canStartAny) return true;
 
   // 1. Workflow'u al
   const { data: workflow } = await supabase
@@ -911,13 +911,40 @@ export async function isDepartmentViewer(
 }
 
 /**
+ * Müdür kapsamı: oturumdaki kişi talebi birim amiri olarak (salt okunur) görebilir mi?
+ * RLS'teki private.rls_unit_manager_request_ids() ile aynı kural (birimi + alt
+ * birimleri, "Müdür görür" işaretli süreçler, taslak ve içerik kısıtlı hariç).
+ * PDF/ek gibi service role ile sunan uçlar için. Kendi talebi bu kümede değildir
+ * (talep sahibi dalı ayrıca kontrol edilir).
+ *
+ * @param isUnitManager my_access().is_unit_manager — false ise sorgu atılmaz.
+ */
+export async function isUnitManagerViewer(
+  supabase: SupabaseClient,
+  isUnitManager: boolean,
+  requestId: string
+): Promise<boolean> {
+  if (!isUnitManager) return false;
+  const { data, error } = await supabase
+    .rpc('unit_manager_requests')
+    .select('id')
+    .eq('id', requestId)
+    .maybeSingle();
+  if (error) {
+    console.error('[isUnitManagerViewer] unit_manager_requests failed:', error);
+    return false;
+  }
+  return !!data;
+}
+
+/**
  * Çalışanın başlatabileceği tüm workflow'ları getirir.
- * ORG_ADMIN rolü tüm aktif workflow'ları görebilir.
+ * workflows.start_any izni (Admin) tüm aktif workflow'ları görebilir.
  */
 export async function getAvailableWorkflows(
   supabase: SupabaseClient,
   employeeId: string,
-  userRole?: string
+  canStartAny = false
 ): Promise<WorkflowDefinition[]> {
   // 1. Tüm aktif workflow'ları al
   const { data: workflows, error } = await supabase
@@ -937,8 +964,8 @@ export async function getAvailableWorkflows(
 
   if (error || !workflows) return [];
 
-  // ORG_ADMIN tüm aktif workflow'ları görebilir
-  if (userRole === 'ORG_ADMIN') {
+  // workflows.start_any: tüm aktif workflow'lar
+  if (canStartAny) {
     return workflows as WorkflowDefinition[];
   }
 

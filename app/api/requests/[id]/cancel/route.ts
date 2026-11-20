@@ -3,9 +3,10 @@ import { NextResponse, after } from "next/server";
 import { applyAuditStamp, canCancelRequest, createNotification } from "@/lib/workflow";
 import { buildAndUploadRequestPDF } from "@/lib/pdf/build-and-upload-request-pdf";
 import { enqueueSharePointSyncFromStorage } from "@/lib/sharepoint/enqueue-sync";
+import { getUserAccess, lifecycleUser } from "@/lib/auth/access";
 
 // POST /api/requests/[id]/cancel
-// Talep eden veya ORG_ADMIN talebi CANCELLED'a çeker (soft cancel, hard delete yok).
+// Talep eden veya requests.manage_all (Admin) talebi CANCELLED'a çeker (soft cancel, hard delete yok).
 export async function POST(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -20,11 +21,7 @@ export async function POST(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { data: appUser } = await supabase
-      .from("app_users")
-      .select("employee_id, role")
-      .eq("id", user.id)
-      .single();
+    const appUser = await getUserAccess(supabase);
 
     if (!appUser?.employee_id) {
       return NextResponse.json({ error: "User not linked to employee" }, { status: 400 });
@@ -67,7 +64,7 @@ export async function POST(
     const ok = canCancelRequest(
       { status: req.status, requester_employee_id: req.requester_employee_id },
       realApprovals,
-      { employeeId: appUser.employee_id, role: appUser.role }
+      lifecycleUser(appUser)
     );
 
     if (!ok) {

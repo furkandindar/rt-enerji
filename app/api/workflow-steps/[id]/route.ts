@@ -10,7 +10,7 @@
 //       olmalı (positionAssignmentBlocker: aktif, tek açık atama, aktif çalışan).
 //       Yalnız static_position_id ve name yazılır.
 //
-// Yetki: ORG_ADMIN. Yazma RLS'li client ile (workflow_steps_update_admin); log
+// Yetki: workflows.manage (Admin). Yazma RLS'li client ile (workflow_steps_update_admin); log
 // kaydını DB trigger'ı atar (sql/feature_workflow_step_change_log.sql).
 // Değişiklik yalnız bundan sonra gönderilen talepleri etkiler — onaycı gönderim
 // anında çözülür; bekleyen onay satırlarına dokunulmaz.
@@ -22,6 +22,8 @@ import {
   positionAssignmentBlocker,
   STEP_NAME_MAX_LENGTH,
 } from "@/lib/workflow/step-position-rules";
+import { getUserAccess } from "@/lib/auth/access";
+import { can } from "@/lib/auth/permissions";
 
 type AdminGuard =
   | { ok: true; supabase: SupabaseClient }
@@ -36,13 +38,9 @@ async function requireOrgAdmin(): Promise<AdminGuard> {
     return { ok: false, response: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
   }
 
-  const { data: appUser } = await supabase
-    .from("app_users")
-    .select("role")
-    .eq("id", user.id)
-    .single();
+  const appUser = await getUserAccess(supabase);
 
-  if (appUser?.role !== "ORG_ADMIN") {
+  if (!can(appUser, "workflows.manage")) {
     return {
       ok: false,
       response: NextResponse.json({ error: "Forbidden — admin yetkisi gerekli" }, { status: 403 }),

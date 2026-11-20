@@ -14,7 +14,7 @@ export async function GET(
     const supabase = await createClient();
     const { id } = await params;
 
-    // 1-3. Kullanıcı + yetki kontrolü (talep sahibi / onaycı / ORG_ADMIN)
+    // 1-3. Kullanıcı + yetki kontrolü (talep sahibi / onaycı / Admin / departman / Müdür)
     const auth = await authorizePdfAccess(supabase, id);
     if (!auth.ok) {
       return NextResponse.json({ error: auth.error }, { status: auth.status });
@@ -28,7 +28,7 @@ export async function GET(
 
     // 5. Storage'dan PDF'i indir
     // Yetki yukarıda uygulama seviyesinde doğrulandı; storage bucket
-    // politikası ORG_ADMIN'i kapsamadığı için indirme service role ile yapılır.
+    // politikası Admin/Müdür görüntüleyicileri kapsamadığı için indirme service role ile yapılır.
     const pdfBlob = await downloadRequestPDF(
       requestData.pdf_path,
       createServiceRoleClient()

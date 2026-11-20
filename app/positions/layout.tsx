@@ -7,6 +7,6 @@ export default function PositionsLayout({
 }: {
   children: React.ReactNode;
 }) {
-  return <AdminPageWrapper>{children}</AdminPageWrapper>;
+  return <AdminPageWrapper permission="org.manage">{children}</AdminPageWrapper>;
 }
 

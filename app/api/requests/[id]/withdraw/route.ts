@@ -1,6 +1,7 @@
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { applyAuditStamp, canWithdrawRequest } from "@/lib/workflow";
+import { getUserAccess, lifecycleUser } from "@/lib/auth/access";
 
 // POST /api/requests/[id]/withdraw
 // Talep eden, henüz hiçbir onay verilmemişse PENDING talebini DRAFT'a çeker.
@@ -18,11 +19,7 @@ export async function POST(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { data: appUser } = await supabase
-      .from("app_users")
-      .select("employee_id, role")
-      .eq("id", user.id)
-      .single();
+    const appUser = await getUserAccess(supabase);
 
     if (!appUser?.employee_id) {
       return NextResponse.json({ error: "User not linked to employee" }, { status: 400 });
@@ -57,7 +54,7 @@ export async function POST(
     const canWithdraw = canWithdrawRequest(
       { status: req.status, requester_employee_id: req.requester_employee_id },
       realApprovals,
-      { employeeId: appUser.employee_id, role: appUser.role }
+      lifecycleUser(appUser)
     );
 
     if (!canWithdraw) {

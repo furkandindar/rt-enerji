@@ -1,6 +1,6 @@
 "use client";
 
-import { Network, Briefcase, Users, UserCheck, GitBranch, Handshake, type LucideIcon } from "lucide-react";
+import { Network, Briefcase, Users, UserCheck, GitBranch, Handshake, ShieldCheck, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -12,59 +12,30 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
 import { useUser } from "@/lib/contexts/user-context";
+import type { Permission } from "@/lib/auth/permissions";
 
 export function NavOrganization() {
   const pathname = usePathname();
-  const { isAdmin } = useUser();
+  const { can } = useUser();
 
-  // Admin-only sayfalar
-  const adminItems: {
+  // İzne bağlı yönetim sayfaları (lib/auth/permissions.ts) + herkese açık sayfalar.
+  // null izin = herkes görür.
+  const allItems: {
     title: string;
     url: string;
     icon: LucideIcon;
+    permission: Permission | null;
   }[] = [
-      {
-        title: "Birimler",
-        url: "/organizational-units",
-        icon: Network,
-      },
-      {
-        title: "Pozisyonlar",
-        url: "/positions",
-        icon: Briefcase,
-      },
-      {
-        title: "Çalışanlar",
-        url: "/employees",
-        icon: Users,
-      },
-      {
-        title: "Pozisyon Atamaları",
-        url: "/position-assignments",
-        icon: UserCheck,
-      },
-      {
-        title: "Vekaletler",
-        url: "/delegations",
-        icon: Handshake,
-      },
-    ];
+    { title: "Birimler", url: "/organizational-units", icon: Network, permission: "org.manage" },
+    { title: "Pozisyonlar", url: "/positions", icon: Briefcase, permission: "org.manage" },
+    { title: "Çalışanlar", url: "/employees", icon: Users, permission: "org.manage" },
+    { title: "Pozisyon Atamaları", url: "/position-assignments", icon: UserCheck, permission: "org.manage" },
+    { title: "Vekaletler", url: "/delegations", icon: Handshake, permission: "delegations.manage_all" },
+    { title: "Kullanıcılar ve Roller", url: "/users", icon: ShieldCheck, permission: "users.manage_roles" },
+    { title: "Organizasyon Şeması", url: "/org-chart", icon: GitBranch, permission: null },
+  ];
 
-  // Herkesin görebileceği sayfalar
-  const publicItems: {
-    title: string;
-    url: string;
-    icon: LucideIcon;
-  }[] = [
-      {
-        title: "Organizasyon Şeması",
-        url: "/org-chart",
-        icon: GitBranch,
-      },
-    ];
-
-  // Admin ise tüm itemları, değilse sadece public olanları göster
-  const items = isAdmin ? [...adminItems, ...publicItems] : publicItems;
+  const items = allItems.filter((item) => item.permission === null || can(item.permission));
 
   return (
     <SidebarGroup>

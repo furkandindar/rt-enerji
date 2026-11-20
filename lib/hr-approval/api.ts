@@ -2,7 +2,7 @@
 // İki form aynı akışı izler; route dosyaları yalnız yapılandırmayı bağlar.
 //
 // Tüm okuma/yazma RLS'li client ile yapılır (görünürlük DB'de: can_view_workflow_requests).
-// Talep oluşturma İK departmanına (workflow_initiators) ve ORG_ADMIN'e açık (canStartWorkflow).
+// Talep oluşturma İK departmanına (workflow_initiators) ve workflows.start_any (Admin) iznine açık (canStartWorkflow).
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
@@ -19,6 +19,8 @@ import {
 import { approvalChainErrorResponse, rollbackCreatedRequest } from "@/lib/workflow/request-creation";
 import type { ParseResult } from "./forms";
 import { listDepartmentRequests, listErrorBody, parseListPaging } from "@/lib/department-processes/list-requests";
+import { getUserAccess, lifecycleUser } from "@/lib/auth/access";
+import { can } from "@/lib/auth/permissions";
 
 export interface HrApprovalApiConfig<T extends object> {
   workflowCode: string;
@@ -37,16 +39,12 @@ async function getAppUser(supabase: Awaited<ReturnType<typeof createClient>>) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
 
-  const { data: appUser } = await supabase
-    .from("app_users")
-    .select("employee_id, role")
-    .eq("id", user.id)
-    .single();
+  const appUser = await getUserAccess(supabase);
 
   if (!appUser?.employee_id) {
     return { error: NextResponse.json({ error: "User not linked to employee" }, { status: 400 }) };
   }
-  return { appUser: appUser as { employee_id: string; role: string } };
+  return { appUser: { ...appUser, employee_id: appUser.employee_id } };
 }
 
 /**
@@ -69,7 +67,7 @@ export function createListHandler<T extends object>(cfg: HrApprovalApiConfig<T>)
       const workflowDef = await getWorkflowDefinitionByCode(supabase, cfg.workflowCode);
       if (!workflowDef) return NextResponse.json({ error: "Workflow not found" }, { status: 400 });
       if (scope === "department") {
-        const allowed = await canStartWorkflow(supabase, appUser.employee_id, workflowDef.id, appUser.role);
+        const allowed = await canStartWorkflow(supabase, appUser.employee_id, workflowDef.id, can(appUser, "workflows.start_any"));
         if (!allowed) {
           return NextResponse.json({ error: "Bu süreçleri görüntüleme yetkiniz yok" }, { status: 403 });
         }
@@ -116,7 +114,7 @@ export function createCreateHandler<T extends object>(cfg: HrApprovalApiConfig<T
       const workflowDef = await getWorkflowDefinitionByCode(supabase, cfg.workflowCode);
       if (!workflowDef) return NextResponse.json({ error: "Workflow not found" }, { status: 400 });
 
-      const allowed = await canStartWorkflow(supabase, appUser.employee_id, workflowDef.id, appUser.role);
+      const allowed = await canStartWorkflow(supabase, appUser.employee_id, workflowDef.id, can(appUser, "workflows.start_any"));
       if (!allowed) return NextResponse.json({ error: "Bu formu başlatma yetkiniz yok" }, { status: 403 });
 
       // Zincir talepten ÖNCE: onaycısı çözülemeyen adım varsa hiç kayıt oluşmaz
@@ -220,7 +218,7 @@ export function createUpdateHandler<T extends object>(cfg: HrApprovalApiConfig<T
         .single();
       if (!req) return NextResponse.json({ error: "Request not found" }, { status: 404 });
 
-      if (!canEditRequest(req, { employeeId: appUser.employee_id, role: appUser.role })) {
+      if (!canEditRequest(req, lifecycleUser(appUser))) {
         return NextResponse.json({ error: "Cannot edit in current state" }, { status: 403 });
       }
 

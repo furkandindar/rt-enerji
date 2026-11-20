@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { DELEGATION_ALLOWED_WORKFLOW_CODES } from "@/lib/workflow/delegation";
+import { getUserAccess } from "@/lib/auth/access";
 
 // GET /api/delegations/options — vekalet formu seçenekleri. Faz B / B2.
 //   workflows: vekalete açık süreçler (karar 8: şimdilik tek)
@@ -13,11 +14,7 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { data: appUser } = await supabase
-      .from("app_users")
-      .select("employee_id, role")
-      .eq("id", user.id)
-      .single();
+    const appUser = await getUserAccess(supabase);
 
     if (!appUser?.employee_id) {
       return NextResponse.json({ error: "User not linked to employee" }, { status: 400 });

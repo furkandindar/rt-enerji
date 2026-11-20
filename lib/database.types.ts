@@ -126,6 +126,69 @@ export type Database = {
           },
         ]
       }
+      app_roles: {
+        Row: {
+          code: string
+          created_at: string
+          description: string
+          is_member: boolean
+          label: string
+          sort_order: number
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          description: string
+          is_member?: boolean
+          label: string
+          sort_order: number
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          description?: string
+          is_member?: boolean
+          label?: string
+          sort_order?: number
+        }
+        Relationships: []
+      }
+      app_user_role_changes: {
+        Row: {
+          changed_at: string
+          changed_by_email: string | null
+          changed_by_user_id: string | null
+          id: string
+          new_role: string
+          old_role: string | null
+          reason: string | null
+          user_email: string | null
+          user_id: string
+        }
+        Insert: {
+          changed_at?: string
+          changed_by_email?: string | null
+          changed_by_user_id?: string | null
+          id?: string
+          new_role: string
+          old_role?: string | null
+          reason?: string | null
+          user_email?: string | null
+          user_id: string
+        }
+        Update: {
+          changed_at?: string
+          changed_by_email?: string | null
+          changed_by_user_id?: string | null
+          id?: string
+          new_role?: string
+          old_role?: string | null
+          reason?: string | null
+          user_email?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       app_users: {
         Row: {
           created_at: string
@@ -158,6 +221,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "employees"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "app_users_role_fkey"
+            columns: ["role"]
+            isOneToOne: false
+            referencedRelation: "app_roles"
+            referencedColumns: ["code"]
           },
         ]
       }
@@ -1568,6 +1638,30 @@ export type Database = {
           },
         ]
       }
+      permissions: {
+        Row: {
+          category: string
+          code: string
+          description: string
+          label: string
+          sort_order: number
+        }
+        Insert: {
+          category: string
+          code: string
+          description: string
+          label: string
+          sort_order: number
+        }
+        Update: {
+          category?: string
+          code?: string
+          description?: string
+          label?: string
+          sort_order?: number
+        }
+        Relationships: []
+      }
       position_types: {
         Row: {
           code: string
@@ -2109,6 +2203,36 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "workflow_definitions"
             referencedColumns: ["id"]
+          },
+        ]
+      }
+      role_permissions: {
+        Row: {
+          permission: string
+          role: string
+        }
+        Insert: {
+          permission: string
+          role: string
+        }
+        Update: {
+          permission?: string
+          role?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "role_permissions_permission_fkey"
+            columns: ["permission"]
+            isOneToOne: false
+            referencedRelation: "permissions"
+            referencedColumns: ["code"]
+          },
+          {
+            foreignKeyName: "role_permissions_role_fkey"
+            columns: ["role"]
+            isOneToOne: false
+            referencedRelation: "app_roles"
+            referencedColumns: ["code"]
           },
         ]
       }
@@ -2775,6 +2899,7 @@ export type Database = {
           is_restricted: boolean | null
           name: string
           updated_at: string | null
+          unit_manager_visible: boolean
         }
         Insert: {
           content_restricted?: boolean
@@ -2786,6 +2911,7 @@ export type Database = {
           is_restricted?: boolean | null
           name: string
           updated_at?: string | null
+          unit_manager_visible?: boolean
         }
         Update: {
           content_restricted?: boolean
@@ -2797,6 +2923,7 @@ export type Database = {
           is_restricted?: boolean | null
           name?: string
           updated_at?: string | null
+          unit_manager_visible?: boolean
         }
         Relationships: []
       }
@@ -2996,6 +3123,15 @@ export type Database = {
           p_note?: string
         }
         Returns: number
+      }
+      my_access: { Args: never; Returns: Json }
+      set_user_role: {
+        Args: { p_reason?: string; p_role: string; p_user_id: string }
+        Returns: undefined
+      }
+      unit_manager_requests: {
+        Args: never
+        Returns: Database["public"]["Tables"]["requests"]["Row"][]
       }
     }
     Enums: {

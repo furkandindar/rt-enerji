@@ -18,6 +18,8 @@ import type { RequestStatus, ApprovalStatus } from "@/lib/workflow/types";
 
 interface LifecycleRequestSummary {
   id: string;
+  /** Düğmeler yalnız talep sahibine ve requests.manage_all (Admin) iznine gösterilir. */
+  requester_employee_id: string | null;
   status: RequestStatus;
   workflow_definition?: { code?: string } | null;
   approvals?: Array<{
@@ -35,7 +37,9 @@ interface Props {
 
 export function RequestLifecycleActions({ request, onChange }: Props) {
   const router = useRouter();
-  const { isAdmin } = useUser();
+  const { user, can } = useUser();
+  const canManageAll = can("requests.manage_all");
+  const isOwner = !!user?.employeeId && user.employeeId === request.requester_employee_id;
   const [busy, setBusy] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
 
@@ -55,10 +59,14 @@ export function RequestLifecycleActions({ request, onChange }: Props) {
     (status === "DRAFT" || status === "REVISION_REQUESTED") && editUrl !== null;
   // Faz-bazlı iptal yetkisi (server'daki canCancelRequest ile aynı kural):
   //  - Talep eden: yalnızca imza öncesi (withdraw ile aynı eşik).
-  //  - ORG_ADMIN: terminal olmayan her durumda (imza sonrası / completion fazı dahil).
+  //  - requests.manage_all (Admin): terminal olmayan her durumda (imza sonrası / completion fazı dahil).
   const isTerminalForCancel =
     status === "CANCELLED" || status === "COMPLETED" || status === "APPROVED";
-  const canCancel = isAdmin ? !isTerminalForCancel : canWithdraw;
+  const canCancel = canManageAll ? !isTerminalForCancel : canWithdraw;
+
+  // Talebi yalnız görüntüleyenler (onaycı, departman görüntüleyicisi, Müdür) düğme görmez;
+  // sunucu da aynı kuralı uygular (lib/workflow/lifecycle.ts).
+  if (!isOwner && !canManageAll) return null;
 
   // Hiçbir aksiyon yoksa render etme
   if (!canWithdraw && !canEdit && !canCancel) return null;

@@ -7,11 +7,13 @@ import {
   withIsCurrent,
 } from "@/lib/workflow/delegation";
 import { notifyDelegationAssigned } from "@/lib/workflow/notification-service";
+import { getUserAccess } from "@/lib/auth/access";
+import { can } from "@/lib/auth/permissions";
 
 // Vekalet listesi + tanımlama. Faz B / B2.
 //
 // GET  /api/delegations            → kendi vekaletleri (delegator VEYA delegate olduğu)
-// GET  /api/delegations?scope=all  → ORG_ADMIN: tüm vekaletler (RLS admin'e açar)
+// GET  /api/delegations?scope=all  → delegations.manage_all: tüm vekaletler (RLS bu izne açar)
 // POST /api/delegations            → vekalet tanımla (kendi adına; admin herkes adına)
 //
 // Yetki son savunma hattı RLS'tedir (approval_delegations_* politikaları);
@@ -29,18 +31,14 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { data: appUser } = await supabase
-      .from("app_users")
-      .select("employee_id, role")
-      .eq("id", user.id)
-      .single();
+    const appUser = await getUserAccess(supabase);
 
     if (!appUser?.employee_id) {
       return NextResponse.json({ error: "User not linked to employee" }, { status: 400 });
     }
 
     const scope = request.nextUrl.searchParams.get("scope");
-    const wantAll = scope === "all" && appUser.role === "ORG_ADMIN";
+    const wantAll = scope === "all" && can(appUser, "delegations.manage_all");
 
     let query = supabase
       .from("approval_delegations")
@@ -83,11 +81,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { data: appUser } = await supabase
-      .from("app_users")
-      .select("employee_id, role")
-      .eq("id", user.id)
-      .single();
+    const appUser = await getUserAccess(supabase);
 
     if (!appUser?.employee_id) {
       return NextResponse.json({ error: "User not linked to employee" }, { status: 400 });
@@ -102,11 +96,11 @@ export async function POST(request: Request) {
       reason?: string;
     };
 
-    const isAdmin = appUser.role === "ORG_ADMIN";
+    const canManageAll = can(appUser, "delegations.manage_all");
 
     // 1) Delegator: varsayılan kendisi; başkası adına yalnız admin
     const delegatorEmployeeId = body.delegator_employee_id || appUser.employee_id;
-    if (delegatorEmployeeId !== appUser.employee_id && !isAdmin) {
+    if (delegatorEmployeeId !== appUser.employee_id && !canManageAll) {
       return NextResponse.json(
         { error: "Başkası adına vekalet tanımlamak için yönetici yetkisi gerekir" },
         { status: 403 }

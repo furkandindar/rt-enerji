@@ -7,6 +7,7 @@ import {
   buildFinanceCoverItems,
   validateFinanceCoverInput,
 } from "@/lib/workflow/approval-cover-payload";
+import { getUserAccess, lifecycleUser } from "@/lib/auth/access";
 
 const WORKFLOW_CODE = "FINANCE_APPROVAL_COVER";
 
@@ -28,11 +29,7 @@ export async function PATCH(
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const { data: appUser } = await supabase
-      .from("app_users")
-      .select("employee_id, role")
-      .eq("id", user.id)
-      .single();
+    const appUser = await getUserAccess(supabase);
 
     if (!appUser?.employee_id) {
       return NextResponse.json({ error: "User not linked to employee" }, { status: 400 });
@@ -55,11 +52,11 @@ export async function PATCH(
     }
 
     // Yalnız talep sahibi: ödeme satırlarının INSERT RLS'i talep sahibine bağlı.
-    // ORG_ADMIN başkasının kapağını düzenlerse DELETE geçer ama INSERT (ve geri
+    // Admin (requests.manage_all) başkasının kapağını düzenlerse DELETE geçer ama INSERT (ve geri
     // yükleme) reddedilir → talep satırsız kalırdı.
     if (
       req.requester_employee_id !== appUser.employee_id ||
-      !canEditRequest(req, { employeeId: appUser.employee_id, role: appUser.role })
+      !canEditRequest(req, lifecycleUser(appUser))
     ) {
       return NextResponse.json({ error: "Cannot edit in current state" }, { status: 403 });
     }

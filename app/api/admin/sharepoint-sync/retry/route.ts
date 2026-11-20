@@ -6,7 +6,7 @@
 //   POST { all: true }              → kuyrukta pending/failed olan herkesi işle
 //                                     (backoff bypass — admin bilinçli istiyor)
 //
-// Yetki: ORG_ADMIN rolü zorunlu (app_users.role).
+// Yetki: integrations.manage (Admin, Yönetici).
 
 import {
   processSharePointRetryQueue,
@@ -14,6 +14,8 @@ import {
 } from "@/lib/sharepoint/retry-worker";
 import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
+import { getUserAccess } from "@/lib/auth/access";
+import { can } from "@/lib/auth/permissions";
 
 // Admin "all" modunda queue'nun tamamı işlenebilir — geniş pencere şart.
 export const maxDuration = 60;
@@ -28,13 +30,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { data: appUser } = await supabase
-    .from("app_users")
-    .select("role")
-    .eq("id", user.id)
-    .single();
+  const appUser = await getUserAccess(supabase);
 
-  if (appUser?.role !== "ORG_ADMIN") {
+  if (!can(appUser, "integrations.manage")) {
     return NextResponse.json({ error: "Forbidden — admin yetkisi gerekli" }, { status: 403 });
   }
 
