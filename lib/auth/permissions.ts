@@ -10,6 +10,8 @@
 //   ORG_MANAGER  Yönetici   org.manage, stamps.manage, delegations.manage_all,
 //                           integrations.manage, workflows.view
 //   ORG_VIEWER   Kullanıcı  —
+//   SUPER_ADMIN  Süper Admin (gizli) tüm izinler; geliştirici/sistem hesabı. Arayüzde
+//                listelenmez, arayüzden atanamaz (app_roles.is_hidden).
 //   Müdür        rol değil; aktif birim amiri pozisyonundan türetilir
 //                (access.is_unit_manager) — birimindeki talepleri salt okunur görür.
 
@@ -28,7 +30,7 @@ export const PERMISSIONS = [
 
 export type Permission = (typeof PERMISSIONS)[number];
 
-export const ROLE_CODES = ["ORG_ADMIN", "ORG_MANAGER", "ORG_VIEWER", "NONE"] as const;
+export const ROLE_CODES = ["SUPER_ADMIN", "ORG_ADMIN", "ORG_MANAGER", "ORG_VIEWER", "NONE"] as const;
 export type RoleCode = (typeof ROLE_CODES)[number];
 
 export function isRoleCode(value: unknown): value is RoleCode {

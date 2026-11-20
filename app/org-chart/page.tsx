@@ -35,7 +35,7 @@ export default async function OrgChartPage() {
   const [unitsRes, positionsRes, employeesRes, assignmentsRes, unitTypesRes, positionTypesRes] = await Promise.all([
     supabase.from("organizational_units").select("*").eq("is_active", true).order("order_index"),
     supabase.from("positions").select("*").eq("is_active", true).order("order_index"),
-    supabase.from("employees").select("*").eq("status", "ACTIVE"),
+    supabase.from("employees").select("*").eq("status", "ACTIVE").eq("is_system", false), // sistem hesabı şemada yok
     supabase.from("employee_positions").select("*").is("end_date", null),
     supabase.from("unit_types").select("*"),
     supabase.from("position_types").select("id, color, display_order"),
@@ -52,7 +52,9 @@ export default async function OrgChartPage() {
   const units = unitsRes.data || [];
   const positions = positionsRes.data || [];
   const employees = employeesRes.data || [];
-  const assignments = assignmentsRes.data || [];
+  // Yalnız listelenen (aktif, sistem hesabı olmayan) çalışanların atamaları şemaya girer.
+  const visibleEmployeeIds = new Set(employees.map((e) => e.id));
+  const assignments = (assignmentsRes.data || []).filter((a) => visibleEmployeeIds.has(a.employee_id));
   const unitTypes = unitTypesRes.data || [];
   const positionTypes = positionTypesRes.data || [];
 

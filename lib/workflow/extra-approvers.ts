@@ -119,6 +119,7 @@ export async function listApproverCandidates(admin: SupabaseClient): Promise<App
         'id, first_name, last_name, employee_no, employee_positions(is_primary, end_date, position:positions(title))'
       )
       .eq('status', 'ACTIVE')
+      .eq('is_system', false) // sistem hesabı (gizli Süper Admin) onaycı seçilemez
       .order('first_name', { ascending: true })
       .order('last_name', { ascending: true }),
     admin.from('app_users').select('employee_id').not('employee_id', 'is', null),

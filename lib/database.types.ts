@@ -134,6 +134,7 @@ export type Database = {
           is_member: boolean
           label: string
           sort_order: number
+          is_hidden: boolean
         }
         Insert: {
           code: string
@@ -142,6 +143,7 @@ export type Database = {
           is_member?: boolean
           label: string
           sort_order: number
+          is_hidden?: boolean
         }
         Update: {
           code?: string
@@ -150,6 +152,7 @@ export type Database = {
           is_member?: boolean
           label?: string
           sort_order?: number
+          is_hidden?: boolean
         }
         Relationships: []
       }
@@ -481,6 +484,7 @@ export type Database = {
           status: string
           termination_date: string | null
           updated_at: string | null
+          is_system: boolean
         }
         Insert: {
           created_at?: string
@@ -497,6 +501,7 @@ export type Database = {
           status?: string
           termination_date?: string | null
           updated_at?: string | null
+          is_system?: boolean
         }
         Update: {
           created_at?: string
@@ -513,6 +518,7 @@ export type Database = {
           status?: string
           termination_date?: string | null
           updated_at?: string | null
+          is_system?: boolean
         }
         Relationships: []
       }

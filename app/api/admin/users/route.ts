@@ -8,7 +8,10 @@ import { can } from "@/lib/auth/permissions";
 //   - kullanıcılar + çalışan + aktif pozisyonlar (Müdür = aktif birim amiri pozisyonu)
 //   - rol kataloğu + izin kataloğu + rol→izin eşlemesi (matris)
 //   - son rol değişiklikleri (app_user_role_changes, RLS yalnız users.manage_roles)
-// SQL: sql/feature_roles_1_permissions.sql
+// Gizli roller (app_roles.is_hidden — SUPER_ADMIN, geliştirici/sistem hesabı) ve o
+// roldeki kullanıcılar, yalnız gizli roldeki kişi bakıyorsa döner: liste, sayılar,
+// rol seçenekleri ve rol geçmişi bu hesabı göstermez; yaptığı değişiklikte "Sistem" yazar.
+// SQL: sql/feature_roles_1_permissions.sql, sql/feature_super_admin_1_schema.sql
 
 export async function GET() {
   try {
@@ -43,14 +46,14 @@ export async function GET() {
           )
         `)
         .order("email"),
-      supabase.from("app_roles").select("code, label, description, is_member, sort_order").order("sort_order"),
+      supabase.from("app_roles").select("code, label, description, is_member, is_hidden, sort_order").order("sort_order"),
       supabase.from("permissions").select("code, label, description, category, sort_order").order("sort_order"),
       supabase.from("role_permissions").select("role, permission"),
       supabase
         .from("app_user_role_changes")
-        .select("id, user_id, user_email, old_role, new_role, changed_by_email, reason, changed_at")
+        .select("id, user_id, user_email, old_role, new_role, changed_by_user_id, changed_by_email, reason, changed_at")
         .order("changed_at", { ascending: false })
-        .limit(30),
+        .limit(50),
     ]);
 
     const firstError = [usersRes, rolesRes, permsRes, rolePermsRes, changesRes].find((r) => r.error)?.error;
@@ -97,12 +100,42 @@ export async function GET() {
       };
     });
 
+    // Gizli roller: yalnız gizli roldeki kişi (sistem hesabı) görür.
+    const roles = (rolesRes.data ?? []) as { code: string; is_hidden: boolean }[];
+    const hiddenRoles = new Set(roles.filter((r) => r.is_hidden).map((r) => r.code));
+    const viewerIsHidden = hiddenRoles.has(access.role);
+    const hiddenUserIds = new Set(users.filter((u) => hiddenRoles.has(u.role)).map((u) => u.id));
+
+    type ChangeRow = {
+      id: string;
+      user_id: string;
+      user_email: string | null;
+      old_role: string | null;
+      new_role: string;
+      changed_by_user_id: string | null;
+      changed_by_email: string | null;
+      reason: string | null;
+      changed_at: string;
+    };
+    const changes = ((changesRes.data ?? []) as ChangeRow[])
+      .filter(
+        (c) =>
+          viewerIsHidden ||
+          (!hiddenUserIds.has(c.user_id) && !hiddenRoles.has(c.new_role) && !hiddenRoles.has(c.old_role ?? ""))
+      )
+      .slice(0, 30)
+      .map(({ changed_by_user_id, ...c }) => ({
+        ...c,
+        changed_by_email:
+          !viewerIsHidden && changed_by_user_id && hiddenUserIds.has(changed_by_user_id) ? null : c.changed_by_email,
+      }));
+
     return NextResponse.json({
-      users,
-      roles: rolesRes.data ?? [],
+      users: viewerIsHidden ? users : users.filter((u) => !hiddenUserIds.has(u.id)),
+      roles: viewerIsHidden ? roles : roles.filter((r) => !r.is_hidden),
       permissions: permsRes.data ?? [],
-      role_permissions: rolePermsRes.data ?? [],
-      changes: changesRes.data ?? [],
+      role_permissions: (rolePermsRes.data ?? []).filter((rp) => viewerIsHidden || !hiddenRoles.has(rp.role)),
+      changes,
     });
   } catch (err) {
     console.error("[admin/users] unexpected error:", err);

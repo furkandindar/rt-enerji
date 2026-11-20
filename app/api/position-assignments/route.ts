@@ -10,10 +10,11 @@ export async function GET() {
     .select("*")
     .order("created_at", { ascending: false });
 
-  // Fetch all employees
+  // Fetch all employees (sistem hesabı — gizli Süper Admin — ve atamaları listelenmez)
   const { data: employees, error: employeesError } = await supabase
     .from("employees")
-    .select("id, first_name, last_name, employee_no");
+    .select("id, first_name, last_name, employee_no")
+    .eq("is_system", false);
 
   // Fetch all positions
   const { data: positions, error: positionsError } = await supabase
@@ -27,7 +28,10 @@ export async function GET() {
   }
 
   // Manually join the data
-  const data = assignments?.map((assignment) => {
+  const visibleEmployeeIds = new Set((employees ?? []).map((e) => e.id));
+  const data = assignments
+    ?.filter((assignment) => visibleEmployeeIds.has(assignment.employee_id))
+    .map((assignment) => {
     const employee = employees?.find((e) => e.id === assignment.employee_id) || null;
     const position = positions?.find((p) => p.id === assignment.position_id) || null;
 

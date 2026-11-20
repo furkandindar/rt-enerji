@@ -41,6 +41,7 @@ export async function GET() {
           )
         `)
         .eq("status", "ACTIVE")
+        .eq("is_system", false) // sistem hesabı vekil olamaz
         .order("first_name")
         .order("last_name"),
     ]);

@@ -237,6 +237,7 @@ export default function NewAccountingApprovalCoverPage() {
         const { data: allEmployees } = await supabase
           .from("employees")
           .select("id, first_name, last_name, employee_no")
+          .eq("is_system", false) // sistem hesabı seçilemez
           .order("first_name", { ascending: true });
 
         if (allEmployees) {

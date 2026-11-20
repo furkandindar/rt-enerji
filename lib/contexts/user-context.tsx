@@ -12,7 +12,7 @@ import { getAvailableWorkflows } from "@/lib/workflow";
 import { can as canWith, toPermissionSet, type Permission } from "@/lib/auth/permissions";
 
 // Rol kodu (app_roles.code). Yetki kararı rol adıyla değil izinle verilir: can("...").
-export type UserRole = "ORG_ADMIN" | "ORG_MANAGER" | "ORG_VIEWER" | "NONE";
+export type UserRole = "SUPER_ADMIN" | "ORG_ADMIN" | "ORG_MANAGER" | "ORG_VIEWER" | "NONE";
 
 // Kullanıcı bilgileri
 export interface AppUser {

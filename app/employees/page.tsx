@@ -10,6 +10,7 @@ export default async function EmployeesPage() {
   const { data: employees, error } = await supabase
     .from("employees")
     .select("*")
+    .eq("is_system", false) // sistem hesabı (gizli Süper Admin) listelenmez
     .order("created_at", { ascending: false });
 
   if (error) {

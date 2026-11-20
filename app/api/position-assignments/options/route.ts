@@ -9,6 +9,7 @@ export async function GET() {
     .from("employees")
     .select("id, first_name, last_name, employee_no")
     .eq("status", "ACTIVE")
+    .eq("is_system", false) // sistem hesabına pozisyon atanmaz
     .order("first_name", { ascending: true });
 
   // Fetch active positions

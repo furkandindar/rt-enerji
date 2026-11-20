@@ -44,6 +44,8 @@ interface RoleDef {
   label: string;
   description: string;
   is_member: boolean;
+  /** Gizli rol (Süper Admin): yalnız sistem hesabına döner; atanamaz, matriste yok. */
+  is_hidden: boolean;
   sort_order: number;
 }
 interface PermissionDef {
@@ -160,7 +162,10 @@ export default function UsersPage() {
     return { categories, has: (role: string, perm: string) => set.has(`${role}|${perm}`) };
   }, [data]);
 
-  const matrixRoles = (data?.roles ?? []).filter((r) => r.is_member);
+  // Gizli rol (Süper Admin) matriste, kartlarda ve rol seçeneklerinde yer almaz.
+  const assignableRoles = (data?.roles ?? []).filter((r) => !r.is_hidden);
+  const matrixRoles = assignableRoles.filter((r) => r.is_member);
+  const isHiddenRole = (code: string) => !!data?.roles.find((r) => r.code === code)?.is_hidden;
 
   const confirmChange = async () => {
     if (!pending) return;
@@ -343,7 +348,7 @@ export default function UsersPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Tüm Roller</SelectItem>
-                {data.roles.map((r) => (
+                {assignableRoles.map((r) => (
                   <SelectItem key={r.code} value={r.code}>
                     {r.label}
                   </SelectItem>
@@ -392,8 +397,11 @@ export default function UsersPage() {
                       )}
                     </TableCell>
                     <TableCell>
-                      {u.is_self ? (
-                        <Badge variant={ROLE_BADGE[u.role] ?? "outline"}>{roleLabel(u.role)} (siz)</Badge>
+                      {u.is_self || isHiddenRole(u.role) ? (
+                        <Badge variant={ROLE_BADGE[u.role] ?? "outline"}>
+                          {roleLabel(u.role)}
+                          {u.is_self ? " (siz)" : ""}
+                        </Badge>
                       ) : (
                         <Select
                           value={u.role}
@@ -408,7 +416,7 @@ export default function UsersPage() {
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            {data.roles.map((r) => (
+                            {assignableRoles.map((r) => (
                               <SelectItem key={r.code} value={r.code}>
                                 {r.label}
                               </SelectItem>
