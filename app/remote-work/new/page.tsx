@@ -4,6 +4,8 @@
 // İzin altyapısını kullanır (leave_requests, /api/leave-requests, izin PDF şablonu)
 // ama ayrı süreçtir: tür REMOTE_WORK'e sabittir, izin bakiyesine dokunmaz.
 // Zincir: Talep Eden → İlgili Bölüm Müdürü → İnsan Kaynakları → Genel Koordinatör.
+// Ek dosya: 1. adımın (Talep Eden) opsiyonel slotu — create'te talep oluştuktan sonra
+// yüklenir, düzenlemede anında yüklenir/silinir (sql/feature_remote_work_attachment.sql).
 
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -20,6 +22,9 @@ import { SignaturePanel } from "@/components/signature-panel";
 import type { SignatureFont } from "@/lib/signature/types";
 import { RevisionNoticeForRequest } from "@/components/my-requests/revision-notice";
 import { RevisionResponseField } from "@/components/my-requests/revision-response-field";
+import { RequestEditAttachments } from "@/components/my-requests/request-edit-attachments";
+import { PendingAttachmentsField, showFailedUploadsToast } from "@/components/pending-attachments-field";
+import { uploadPendingFiles } from "@/lib/attachments/upload-attachment";
 import { useRevisionResponse } from "@/hooks/use-revision-response";
 import {
   calculateBusinessTime,
@@ -91,6 +96,16 @@ export default function NewRemoteWorkPage() {
   const [signatureInfo, setSignatureInfo] = useState<SignatureInfo>({ signatureText: null, signatureFont: null });
   const [loadingSignature, setLoadingSignature] = useState(true);
 
+  // Ek dosya (create akışı — talep oluşturulduktan sonra yüklenir)
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [attachmentConfig, setAttachmentConfig] = useState<{
+    id: string;
+    label: string;
+    allowedMimeTypes: string[] | null;
+    maxFileSizeBytes: number;
+    maxFiles: number;
+  } | null>(null);
+
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: { start_time: "09:00", end_time: "17:00", reason: "" },
@@ -123,6 +138,46 @@ export default function NewRemoteWorkPage() {
       }
     })();
   }, []);
+
+  // 1. adımın (Talep Eden) ek slotu — düzenlemede RequestEditAttachments kendi config'ini yükler.
+  useEffect(() => {
+    if (isEditMode) return;
+    const supabase = createClient();
+    (async () => {
+      try {
+        const { data: wfDef } = await supabase
+          .from("workflow_definitions")
+          .select("id")
+          .eq("code", "REMOTE_WORK")
+          .single();
+        if (!wfDef) return;
+        const { data: step } = await supabase
+          .from("workflow_steps")
+          .select("id")
+          .eq("workflow_definition_id", wfDef.id)
+          .eq("step_order", 1)
+          .single();
+        if (!step) return;
+        const { data: configs } = await supabase
+          .from("workflow_step_attachments")
+          .select("id, label, allowed_mime_types, max_file_size_bytes, max_files")
+          .eq("workflow_step_id", step.id)
+          .limit(1);
+        const c = configs?.[0];
+        if (c) {
+          setAttachmentConfig({
+            id: c.id,
+            label: c.label,
+            allowedMimeTypes: c.allowed_mime_types,
+            maxFileSizeBytes: c.max_file_size_bytes,
+            maxFiles: c.max_files,
+          });
+        }
+      } catch (error) {
+        console.error("Error loading attachment config:", error);
+      }
+    })();
+  }, [isEditMode]);
 
   // Düzenleme modu: ?edit=<id>
   useEffect(() => {
@@ -211,6 +266,12 @@ export default function NewRemoteWorkPage() {
         }
         toast.success("Talep güncellendi ve onaya gönderildi");
       } else {
+        // Create akışı: seçilen dosyaları yeni talebe yükle
+        const created = (await response.json().catch(() => null)) as { id?: string } | null;
+        if (created?.id && attachmentConfig && pendingFiles.length > 0) {
+          const failedUploads = await uploadPendingFiles(pendingFiles, created.id, attachmentConfig.id);
+          showFailedUploadsToast(failedUploads);
+        }
         toast.success("Uzaktan çalışma talebi onaya gönderildi");
       }
       router.push("/my-requests");
@@ -408,6 +469,25 @@ export default function NewRemoteWorkPage() {
                   </FormItem>
                 )}
               />
+
+              {/* Ek Dosya — düzenlemede talep zaten var: ekler anında yüklenir/silinir */}
+              {editId ? (
+                <RequestEditAttachments requestId={editId} workflowCode="REMOTE_WORK" disabled={isSubmitting} />
+              ) : (
+                attachmentConfig && (
+                  <PendingAttachmentsField
+                    label={attachmentConfig.label}
+                    files={pendingFiles}
+                    onFilesChange={setPendingFiles}
+                    rules={{
+                      allowedMimeTypes: attachmentConfig.allowedMimeTypes,
+                      maxFileSizeBytes: attachmentConfig.maxFileSizeBytes,
+                      maxFiles: attachmentConfig.maxFiles,
+                    }}
+                    disabled={isSubmitting}
+                  />
+                )
+              )}
 
               <RevisionResponseField state={revisionResponse} disabled={isSubmitting} />
 
