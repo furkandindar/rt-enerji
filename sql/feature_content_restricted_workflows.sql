@@ -23,7 +23,15 @@
 --   - public.can_view_request_content(): SECURITY INVOKER — kod (PDF/ek uçları,
 --     service-role ile okunan onay detayı) tek kaynaktan sorar.
 --
--- Önce DEV, sonra PROD.
+-- Önce DEV, sonra PROD; ardından kod (kod content_restricted kolonunu okur —
+-- kolon yokken hata → güvenli tarafta içerik kapalı; bu yüzden DB önce).
+-- DEV: 2026-11-20 uygulandı. Diğer tüm tablolarda RLS görünürlüğü birebir; e2e 38/38
+--      (İK + GM içerik görür; admin/Asistan/Hukuk API, RLS ve doğrudan Storage'da
+--      engellenir; onayları çalışır; diğer süreçler değişmez).
+-- PROD: 2026-11-20 uygulandı. Mevcut veride görünürlük birebir (79 kullanıcı × 46 tablo,
+--      893.876 satır; bu iki süreçte henüz talep yok). İçerik görebilenler: 5 İK
+--      çalışanı + Genel Müdür (Bekir Korkmaz); 5 admin'den yalnız Bekir Bey.
+--      Kod: commit 82bb15b.
 -- ============================================================================
 
 BEGIN;
