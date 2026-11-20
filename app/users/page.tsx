@@ -5,6 +5,10 @@
 // değişikliği PATCH /api/admin/users/[id]/role → public.set_user_role() (gerekçe +
 // denetim kaydı). Müdür elle atanmaz: aktif birim amiri pozisyonundan türetilir.
 // SQL: sql/feature_roles_1_permissions.sql, sql/feature_roles_2_unit_manager_scope.sql
+//
+// Yerleşim: TableCell varsayılanı whitespace-nowrap'tir ve ana içerik alanı en geniş
+// satıra göre genişler. Uzun metin taşıyan hücreler (açıklama, pozisyon, e-posta,
+// gerekçe) bilinçli olarak satır kaydırır (WRAP) — aksi halde sayfa ekrandan taşar.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -75,6 +79,9 @@ interface UsersPayload {
   role_permissions: { role: string; permission: string }[];
   changes: RoleChange[];
 }
+
+// Uzun metin hücreleri: satır kaydır, uzun e-posta/kelimeyi böl.
+const WRAP = "whitespace-normal [overflow-wrap:anywhere]";
 
 const ROLE_BADGE: Record<string, "default" | "secondary" | "outline" | "destructive"> = {
   ORG_ADMIN: "default",
@@ -245,7 +252,7 @@ export default function UsersPage() {
             </TableHeader>
             <TableBody>
               <TableRow>
-                <TableCell>
+                <TableCell className={`${WRAP} min-w-[14rem]`}>
                   <div className="font-medium">Kendi talepleri ve sırası gelen onaylar</div>
                 </TableCell>
                 {matrixRoles.map((r) => (
@@ -258,7 +265,7 @@ export default function UsersPage() {
                 </TableCell>
               </TableRow>
               <TableRow>
-                <TableCell>
+                <TableCell className={`${WRAP} min-w-[14rem]`}>
                   <div className="font-medium">Biriminin taleplerini görme (salt okunur)</div>
                   <div className="text-xs text-muted-foreground">
                     Birimi ve alt birimleri; taslak, maaş avansı ve İK formları hariç
@@ -280,7 +287,7 @@ export default function UsersPage() {
               {matrix.categories.map((cat) =>
                 cat.perms.map((p, idx) => (
                   <TableRow key={p.code}>
-                    <TableCell>
+                    <TableCell className={`${WRAP} min-w-[14rem]`}>
                       {idx === 0 && (
                         <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                           {cat.name}
@@ -359,11 +366,11 @@ export default function UsersPage() {
               <TableBody>
                 {filteredUsers.map((u) => (
                   <TableRow key={u.id}>
-                    <TableCell>
+                    <TableCell className={`${WRAP} min-w-[10rem]`}>
                       <div className="font-medium">{u.employee_name || "—"}</div>
                       <div className="text-xs text-muted-foreground">{u.email}</div>
                     </TableCell>
-                    <TableCell>
+                    <TableCell className={`${WRAP} min-w-[12rem]`}>
                       {u.positions.length === 0 ? (
                         <span className="text-sm text-muted-foreground">Pozisyon yok</span>
                       ) : (
@@ -442,12 +449,14 @@ export default function UsersPage() {
                   {data.changes.map((c) => (
                     <TableRow key={c.id}>
                       <TableCell className="whitespace-nowrap text-sm">{formatTrDateTime(c.changed_at)}</TableCell>
-                      <TableCell className="text-sm">{c.user_email || "-"}</TableCell>
+                      <TableCell className={`${WRAP} min-w-[10rem] text-sm`}>{c.user_email || "-"}</TableCell>
                       <TableCell className="whitespace-nowrap text-sm">
                         {roleLabel(c.old_role)} → <span className="font-medium">{roleLabel(c.new_role)}</span>
                       </TableCell>
-                      <TableCell className="text-sm">{c.changed_by_email || "Sistem"}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground">{c.reason || "-"}</TableCell>
+                      <TableCell className={`${WRAP} min-w-[8rem] text-sm`}>{c.changed_by_email || "Sistem"}</TableCell>
+                      <TableCell className={`${WRAP} min-w-[14rem] text-sm text-muted-foreground`}>
+                        {c.reason || "-"}
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
