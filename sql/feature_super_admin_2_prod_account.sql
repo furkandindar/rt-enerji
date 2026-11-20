@@ -60,5 +60,8 @@ END $$;
 COMMIT;
 
 -- =====================================================================
--- PROD (iiagqsbiexyukupkffwb): bekliyor
+-- PROD (iiagqsbiexyukupkffwb): 2026-11-20 uygulandı (deploy 52a4f35 sonrası). Doğrulama:
+--   rol SUPER_ADMIN (10 izin, 2.338 talebin tamamını görür, Müdür değil); kayıt "Sistem
+--   Yöneticisi", is_system, aktif pozisyon 0; Yönetim Kurulu Başkanı pozisyonu boş;
+--   @bahsetme adaylarında yok. Görünür roller: Admin = Genel Müdür; Yönetici = 2 kişi.
 -- =====================================================================
