@@ -18,7 +18,7 @@ import type { RequestStatus, ApprovalStatus } from "@/lib/workflow/types";
 
 interface LifecycleRequestSummary {
   id: string;
-  /** Düğmeler yalnız talep sahibine ve requests.manage_all (Admin) iznine gösterilir. */
+  /** Düğmeler yalnız talep sahibine ve requests.manage_all (Admin, Yönetici) iznine gösterilir. */
   requester_employee_id: string | null;
   status: RequestStatus;
   workflow_definition?: { code?: string } | null;
@@ -59,7 +59,7 @@ export function RequestLifecycleActions({ request, onChange }: Props) {
     (status === "DRAFT" || status === "REVISION_REQUESTED") && editUrl !== null;
   // Faz-bazlı iptal yetkisi (server'daki canCancelRequest ile aynı kural):
   //  - Talep eden: yalnızca imza öncesi (withdraw ile aynı eşik).
-  //  - requests.manage_all (Admin): terminal olmayan her durumda (imza sonrası / completion fazı dahil).
+  //  - requests.manage_all (Admin, Yönetici): terminal olmayan her durumda (imza sonrası / completion fazı dahil).
   const isTerminalForCancel =
     status === "CANCELLED" || status === "COMPLETED" || status === "APPROVED";
   const canCancel = canManageAll ? !isTerminalForCancel : canWithdraw;

@@ -10,7 +10,7 @@
 //       olmalı (positionAssignmentBlocker: aktif, tek açık atama, aktif çalışan).
 //       Yalnız static_position_id ve name yazılır.
 //
-// Yetki: workflows.manage (Admin). Yazma RLS'li client ile (workflow_steps_update_admin); log
+// Yetki: workflows.manage (Admin, Yönetici). Yazma RLS'li client ile (workflow_steps_update_admin); log
 // kaydını DB trigger'ı atar (sql/feature_workflow_step_change_log.sql).
 // Değişiklik yalnız bundan sonra gönderilen talepleri etkiler — onaycı gönderim
 // anında çözülür; bekleyen onay satırlarına dokunulmaz.

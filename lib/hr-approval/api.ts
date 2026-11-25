@@ -2,7 +2,7 @@
 // İki form aynı akışı izler; route dosyaları yalnız yapılandırmayı bağlar.
 //
 // Tüm okuma/yazma RLS'li client ile yapılır (görünürlük DB'de: can_view_workflow_requests).
-// Talep oluşturma İK departmanına (workflow_initiators) ve workflows.start_any (Admin) iznine açık (canStartWorkflow).
+// Talep oluşturma İK departmanına (workflow_initiators) ve workflows.start_any (Admin, Yönetici) iznine açık (canStartWorkflow).
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";

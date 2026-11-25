@@ -2,8 +2,9 @@ import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 import { getUserAccess } from "@/lib/auth/access";
 
-// GET /api/team-requests — "Birimimin Talepleri" (Müdür).
-// Müdür = aktif birim amiri pozisyonu olan kişi (rol değil, org şemadan türetilir).
+// GET /api/team-requests — "Birimimin Talepleri" (birim kapsamı: access.is_unit_manager).
+// Müdür = aktif birim amiri pozisyonu olan kişi (rol değil, org şemadan türetilir; birimi +
+// alt birimleri). requests.view_unit (Yönetici) = yalnız kendi birimi (feature_roles_3).
 // Kapsam DB'de tek yerde: public.unit_manager_requests() →
 // private.rls_unit_manager_request_ids(): amiri olduğu birim + alt birimlerdeki
 // çalışanların, "Müdür görür" işaretli süreçlerdeki talepleri; taslak, içerik
@@ -38,7 +39,7 @@ export async function GET(request: NextRequest) {
     }
     if (!access.is_unit_manager) {
       return NextResponse.json(
-        { error: "Bu liste birim amirlerine açıktır" },
+        { error: "Bu liste birim amirlerine ve birim taleplerini görme yetkisi olanlara açıktır" },
         { status: 403 }
       );
     }

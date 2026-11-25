@@ -22,7 +22,7 @@ import type {
 
 export interface LifecycleUser {
   employeeId: string;
-  /** requests.manage_all (Admin): her talebe her durumda müdahale. lib/auth/access.ts lifecycleUser() */
+  /** requests.manage_all (Admin, Yönetici): görebildiği her talebe her durumda müdahale (talep RLS ile okunur). lib/auth/access.ts lifecycleUser() */
   canManageAll: boolean;
 }
 
@@ -48,7 +48,7 @@ export const ACTIONABLE_REQUEST_STATUSES: ReadonlyArray<RequestStatus> = [
 /**
  * Edit: detay tablo + items üzerinde UPDATE. Status'u değiştirmez.
  * - Talep sahibi: status DRAFT veya REVISION_REQUESTED
- * - requests.manage_all (Admin): her durumda
+ * - requests.manage_all (Admin, Yönetici): her durumda (talep RLS ile okunur → yalnız görebildiği)
  */
 export function canEditRequest(
   req: Pick<Request, 'status' | 'requester_employee_id'>,
@@ -75,7 +75,7 @@ export function canWithdrawRequest(
 
 /**
  * Cancel: talebi CANCELLED'a çeker (terminal). Faz-bazlı yetki:
- *  - requests.manage_all (Admin): terminal olmayan her durumda. İmza ilerlemiş veya completion
+ *  - requests.manage_all (Admin, Yönetici): terminal olmayan her durumda. İmza ilerlemiş veya completion
  *    fazına geçmiş ("takılı") talepleri de sonlandırabilen escape hatch.
  *  - Talep eden: YALNIZCA imza öncesi — status PENDING ve aktif cycle'da hiç
  *    gerçek onay verilmemiş (withdraw ile aynı eşik). İmzalardan geçmiş bir

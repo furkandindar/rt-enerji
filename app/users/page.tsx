@@ -1,10 +1,13 @@
 "use client";
 
-// /users — "Kullanıcılar ve Roller" (users.manage_roles: Admin).
+// /users — "Kullanıcılar ve Roller" (users.manage_roles: Admin, Yönetici).
 // Rol matrisi DB'den gelir (app_roles + permissions + role_permissions); rol
 // değişikliği PATCH /api/admin/users/[id]/role → public.set_user_role() (gerekçe +
 // denetim kaydı). Müdür elle atanmaz: aktif birim amiri pozisyonundan türetilir.
-// SQL: sql/feature_roles_1_permissions.sql, sql/feature_roles_2_unit_manager_scope.sql
+// Atanabilir roller / değiştirilebilir kullanıcılar API'den gelir (roles[].assignable,
+// users[].can_change): kişi kendi izinlerini aşan rolü veremez, öyle bir rolü değiştiremez.
+// SQL: sql/feature_roles_1_permissions.sql, sql/feature_roles_2_unit_manager_scope.sql,
+//      sql/feature_roles_3_role_matrix_v2.sql
 //
 // Yerleşim: TableCell varsayılanı whitespace-nowrap'tir ve ana içerik alanı en geniş
 // satıra göre genişler. Uzun metin taşıyan hücreler (açıklama, pozisyon, e-posta,
@@ -47,6 +50,8 @@ interface RoleDef {
   /** Gizli rol (Süper Admin): yalnız sistem hesabına döner; atanamaz, matriste yok. */
   is_hidden: boolean;
   sort_order: number;
+  /** Görüntüleyen bu rolü atayabilir mi (izinleri görüntüleyeninkilerin alt kümesi). */
+  assignable: boolean;
 }
 interface PermissionDef {
   code: string;
@@ -64,6 +69,8 @@ interface UserRow {
   positions: { title: string; unit_name: string | null; is_unit_head: boolean }[];
   is_unit_manager: boolean;
   is_self: boolean;
+  /** Görüntüleyen bu kişinin rolünü değiştirebilir mi (kendisi / gizli / daha yetkili değil). */
+  can_change: boolean;
 }
 interface RoleChange {
   id: string;
@@ -88,6 +95,7 @@ const WRAP = "whitespace-normal [overflow-wrap:anywhere]";
 const ROLE_BADGE: Record<string, "default" | "secondary" | "outline" | "destructive"> = {
   ORG_ADMIN: "default",
   ORG_MANAGER: "secondary",
+  ORG_IT: "secondary",
   ORG_VIEWER: "outline",
   NONE: "destructive",
 };
@@ -163,9 +171,9 @@ export default function UsersPage() {
   }, [data]);
 
   // Gizli rol (Süper Admin) matriste, kartlarda ve rol seçeneklerinde yer almaz.
-  const assignableRoles = (data?.roles ?? []).filter((r) => !r.is_hidden);
-  const matrixRoles = assignableRoles.filter((r) => r.is_member);
-  const isHiddenRole = (code: string) => !!data?.roles.find((r) => r.code === code)?.is_hidden;
+  const visibleRoles = (data?.roles ?? []).filter((r) => !r.is_hidden);
+  const assignableRoles = visibleRoles.filter((r) => r.assignable);
+  const matrixRoles = visibleRoles.filter((r) => r.is_member);
 
   const confirmChange = async () => {
     if (!pending) return;
@@ -210,7 +218,7 @@ export default function UsersPage() {
       </div>
 
       {/* Rol özeti */}
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         {matrixRoles.map((r) => (
           <Card key={r.code}>
             <CardHeader className="pb-2">
@@ -269,26 +277,6 @@ export default function UsersPage() {
                   <Check className="mx-auto h-4 w-4 text-success" />
                 </TableCell>
               </TableRow>
-              <TableRow>
-                <TableCell className={`${WRAP} min-w-[14rem]`}>
-                  <div className="font-medium">Biriminin taleplerini görme (salt okunur)</div>
-                  <div className="text-xs text-muted-foreground">
-                    Birimi ve alt birimleri; taslak, maaş avansı ve İK formları hariç
-                  </div>
-                </TableCell>
-                {matrixRoles.map((r) => (
-                  <TableCell key={r.code} className="text-center">
-                    {matrix.has(r.code, "requests.view_all") ? (
-                      <Check className="mx-auto h-4 w-4 text-success" />
-                    ) : (
-                      <Minus className="mx-auto h-4 w-4 text-muted-foreground" />
-                    )}
-                  </TableCell>
-                ))}
-                <TableCell className="text-center">
-                  <Check className="mx-auto h-4 w-4 text-success" />
-                </TableCell>
-              </TableRow>
               {matrix.categories.map((cat) =>
                 cat.perms.map((p, idx) => (
                   <TableRow key={p.code}>
@@ -311,7 +299,15 @@ export default function UsersPage() {
                       </TableCell>
                     ))}
                     <TableCell className="text-center">
-                      <Minus className="mx-auto h-4 w-4 text-muted-foreground" />
+                      {/* Müdür'ün tek yetkisi birim kapsamıdır — alt birimler dahil, salt okunur. */}
+                      {p.code === "requests.view_unit" ? (
+                        <div className="flex flex-col items-center gap-0.5">
+                          <Check className="h-4 w-4 text-success" />
+                          <span className="text-[10px] text-muted-foreground">alt birimler dahil</span>
+                        </div>
+                      ) : (
+                        <Minus className="mx-auto h-4 w-4 text-muted-foreground" />
+                      )}
                     </TableCell>
                   </TableRow>
                 ))
@@ -328,7 +324,8 @@ export default function UsersPage() {
             <UsersRound className="h-4 w-4" /> Kullanıcılar
           </CardTitle>
           <CardDescription>
-            Rol değişikliği gerekçesiyle kayda geçer. Kendi rolünüzü değiştiremezsiniz.
+            Rol değişikliği gerekçesiyle kayda geçer. Kendi rolünüzü ve sizden daha yetkili rolleri
+            değiştiremezsiniz.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
@@ -348,7 +345,7 @@ export default function UsersPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Tüm Roller</SelectItem>
-                {assignableRoles.map((r) => (
+                {visibleRoles.map((r) => (
                   <SelectItem key={r.code} value={r.code}>
                     {r.label}
                   </SelectItem>
@@ -397,7 +394,7 @@ export default function UsersPage() {
                       )}
                     </TableCell>
                     <TableCell>
-                      {u.is_self || isHiddenRole(u.role) ? (
+                      {!u.can_change ? (
                         <Badge variant={ROLE_BADGE[u.role] ?? "outline"}>
                           {roleLabel(u.role)}
                           {u.is_self ? " (siz)" : ""}

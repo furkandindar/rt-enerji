@@ -4,10 +4,11 @@ import { isRoleCode } from "@/lib/auth/permissions";
 
 // PATCH /api/admin/users/[id]/role  { role, reason? }
 // Rol atama tek kapıdan: public.set_user_role() (SECURITY DEFINER). Yetki
-// (users.manage_roles), "kendi rolünü değiştiremez" ve rol doğrulaması fonksiyonun
-// içinde; denetim kaydını trigger yazar (çağıran = auth.uid()). Bu yüzden kullanıcı
-// oturumuyla çağrılır — service role ile çağrılırsa yetki kontrolü geçmez.
-// SQL: sql/feature_roles_1_permissions.sql
+// (users.manage_roles), "kendi rolünü değiştiremez", yükseltme koruması (yalnız kendi
+// izinlerini aşmayan rol; Yönetici Admin veremez/değiştiremez) ve rol doğrulaması
+// fonksiyonun içinde; denetim kaydını trigger yazar (çağıran = auth.uid()). Bu yüzden
+// kullanıcı oturumuyla çağrılır — service role ile çağrılırsa yetki kontrolü geçmez.
+// SQL: sql/feature_roles_1_permissions.sql, sql/feature_roles_3_role_matrix_v2.sql
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 

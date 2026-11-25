@@ -10,7 +10,7 @@
 //     → Partiyi taşır (varsayılan 25 talep). `remaining` 0 olana kadar tekrar
 //       çağrılır; taşınan talep otomatik olarak aday olmaktan çıkar.
 //
-// Yetki: integrations.manage (Admin, Yönetici). PDF yeniden üretilmez — Storage'daki nihai belge (imzalı
+// Yetki: integrations.manage (Admin, Yönetici, Bilgi İşlem Uzmanı). PDF yeniden üretilmez — Storage'daki nihai belge (imzalı
 // tarama dahil) yeni yola yüklenir, eski SharePoint kopyası silinir.
 
 import { migrateArchiveLayout } from "@/lib/sharepoint/migrate-archive";

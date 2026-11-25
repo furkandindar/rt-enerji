@@ -1,17 +1,20 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { getUserAccess } from "@/lib/auth/access";
-import { can } from "@/lib/auth/permissions";
+import { can, canAssignRole } from "@/lib/auth/permissions";
 
 // GET /api/admin/users — "Kullanıcılar ve Roller" ekranı verisi. Yalnız
-// users.manage_roles (Admin). Kullanıcı oturumuyla okunur (RLS):
+// users.manage_roles (Admin, Yönetici). Kullanıcı oturumuyla okunur (RLS):
 //   - kullanıcılar + çalışan + aktif pozisyonlar (Müdür = aktif birim amiri pozisyonu)
 //   - rol kataloğu + izin kataloğu + rol→izin eşlemesi (matris)
 //   - son rol değişiklikleri (app_user_role_changes, RLS yalnız users.manage_roles)
 // Gizli roller (app_roles.is_hidden — SUPER_ADMIN, geliştirici/sistem hesabı) ve o
 // roldeki kullanıcılar, yalnız gizli roldeki kişi bakıyorsa döner: liste, sayılar,
 // rol seçenekleri ve rol geçmişi bu hesabı göstermez; yaptığı değişiklikte "Sistem" yazar.
-// SQL: sql/feature_roles_1_permissions.sql, sql/feature_super_admin_1_schema.sql
+// roles[].assignable / users[].can_change: rol atama yükseltme kuralı (canAssignRole) —
+// Yönetici Admin veremez, Admin'in rolünü değiştiremez. Asıl kontrol DB set_user_role'dadır.
+// SQL: sql/feature_roles_1_permissions.sql, sql/feature_super_admin_1_schema.sql,
+//      sql/feature_roles_3_role_matrix_v2.sql
 
 export async function GET() {
   try {
@@ -106,6 +109,10 @@ export async function GET() {
     const viewerIsHidden = hiddenRoles.has(access.role);
     const hiddenUserIds = new Set(users.filter((u) => hiddenRoles.has(u.role)).map((u) => u.id));
 
+    const rolePermissions = (rolePermsRes.data ?? []) as { role: string; permission: string }[];
+    const permsOf = (role: string) => rolePermissions.filter((rp) => rp.role === role).map((rp) => rp.permission);
+    const withinMine = (role: string) => canAssignRole(access, permsOf(role));
+
     type ChangeRow = {
       id: string;
       user_id: string;
@@ -131,10 +138,16 @@ export async function GET() {
       }));
 
     return NextResponse.json({
-      users: viewerIsHidden ? users : users.filter((u) => !hiddenUserIds.has(u.id)),
-      roles: viewerIsHidden ? roles : roles.filter((r) => !r.is_hidden),
+      users: (viewerIsHidden ? users : users.filter((u) => !hiddenUserIds.has(u.id))).map((u) => ({
+        ...u,
+        can_change: !u.is_self && !hiddenRoles.has(u.role) && withinMine(u.role),
+      })),
+      roles: (viewerIsHidden ? roles : roles.filter((r) => !r.is_hidden)).map((r) => ({
+        ...r,
+        assignable: !r.is_hidden && withinMine(r.code),
+      })),
       permissions: permsRes.data ?? [],
-      role_permissions: (rolePermsRes.data ?? []).filter((rp) => viewerIsHidden || !hiddenRoles.has(rp.role)),
+      role_permissions: rolePermissions.filter((rp) => viewerIsHidden || !hiddenRoles.has(rp.role)),
       changes,
     });
   } catch (err) {

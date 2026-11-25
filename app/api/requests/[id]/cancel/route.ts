@@ -6,7 +6,7 @@ import { enqueueSharePointSyncFromStorage } from "@/lib/sharepoint/enqueue-sync"
 import { getUserAccess, lifecycleUser } from "@/lib/auth/access";
 
 // POST /api/requests/[id]/cancel
-// Talep eden veya requests.manage_all (Admin) talebi CANCELLED'a çeker (soft cancel, hard delete yok).
+// Talep eden veya requests.manage_all (Admin; Yönetici yalnız görebildiği taleplerde) talebi CANCELLED'a çeker (soft cancel, hard delete yok).
 export async function POST(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }

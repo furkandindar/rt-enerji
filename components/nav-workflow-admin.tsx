@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/sidebar";
 import { useUser } from "@/lib/contexts/user-context";
 
-// Süreç Yönetimi — workflows.view (Admin, Yönetici); düzenleme ayrıca workflows.manage.
+// Süreç Yönetimi — workflows.view (Admin, Yönetici, Bilgi İşlem Uzmanı); düzenleme ayrıca workflows.manage.
 export function NavWorkflowAdmin() {
   const pathname = usePathname();
   const { can } = useUser();

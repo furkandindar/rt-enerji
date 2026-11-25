@@ -26,7 +26,7 @@ interface NavItem {
   // /approvals (Bekleyen Onaylar) ve /approvals/history (Onay Geçmişi) gibi
   // alt route'ların doğru ayrımı için gerekli.
   isActiveMatch?: (pathname: string) => boolean;
-  // Yalnız birim amirlerine (Müdür — access.is_unit_manager) gösterilir.
+  // Yalnız birim kapsamı olana (Müdür veya requests.view_unit — access.is_unit_manager) gösterilir.
   unitManagerOnly?: boolean;
 }
 

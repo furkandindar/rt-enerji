@@ -1,7 +1,8 @@
 "use client";
 
-// /team-requests — "Birimimin Talepleri" (Müdür: aktif birim amiri pozisyonu olan kişi).
-// Biriminizdeki ve alt birimlerdeki çalışanların talepleri, salt okunur.
+// /team-requests — "Birimimin Talepleri": birim kapsamı olan kişi (access.is_unit_manager) —
+// Müdür (aktif birim amiri: birimi + alt birimleri, salt okunur) veya requests.view_unit
+// (Yönetici: yalnız kendi birimi; talep ekranındaki müdahale düğmeleri izne göre çıkar).
 // Kapsam ve yetki sunucuda: GET /api/team-requests → public.unit_manager_requests().
 
 import { Suspense, useCallback, useEffect, useState } from "react";
@@ -137,7 +138,7 @@ function TeamRequestsPageInner() {
     return (
       <div className="flex h-full items-center justify-center p-6">
         <p className="text-muted-foreground">
-          Bu liste birim amirlerine açıktır.
+          Bu liste birim amirlerine ve birim taleplerini görme yetkisi olanlara açıktır.
         </p>
       </div>
     );
@@ -149,7 +150,7 @@ function TeamRequestsPageInner() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Birimimin Talepleri</h1>
           <p className="text-muted-foreground">
-            Biriminizdeki ve alt birimlerdeki çalışanların talepleri (salt okunur)
+            Biriminizdeki çalışanların talepleri (birim amirleri alt birimleri de görür)
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">

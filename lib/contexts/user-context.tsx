@@ -12,7 +12,7 @@ import { getAvailableWorkflows } from "@/lib/workflow";
 import { can as canWith, toPermissionSet, type Permission } from "@/lib/auth/permissions";
 
 // Rol kodu (app_roles.code). Yetki kararı rol adıyla değil izinle verilir: can("...").
-export type UserRole = "SUPER_ADMIN" | "ORG_ADMIN" | "ORG_MANAGER" | "ORG_VIEWER" | "NONE";
+export type UserRole = "SUPER_ADMIN" | "ORG_ADMIN" | "ORG_MANAGER" | "ORG_IT" | "ORG_VIEWER" | "NONE";
 
 // Kullanıcı bilgileri
 export interface AppUser {
@@ -107,7 +107,7 @@ export function UserProvider({ children }: UserProviderProps) {
       const userRole = ((access.role ?? appUserData?.role) as UserRole) || "ORG_VIEWER";
 
       // Çalışanın başlatabileceği workflow kodlarını al
-      // workflows.start_any (Admin) tüm workflow'ları görebilir
+      // workflows.start_any (Admin, Yönetici) tüm workflow'ları görebilir
       const availableWorkflows = employeeId
         ? await getAvailableWorkflows(supabase, employeeId, permissions.has("workflows.start_any"))
         : [];

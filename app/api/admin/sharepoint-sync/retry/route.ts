@@ -6,7 +6,7 @@
 //   POST { all: true }              → kuyrukta pending/failed olan herkesi işle
 //                                     (backoff bypass — admin bilinçli istiyor)
 //
-// Yetki: integrations.manage (Admin, Yönetici).
+// Yetki: integrations.manage (Admin, Yönetici, Bilgi İşlem Uzmanı).
 
 import {
   processSharePointRetryQueue,

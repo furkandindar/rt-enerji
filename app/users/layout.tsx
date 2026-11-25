@@ -2,7 +2,7 @@
 
 import { AdminPageWrapper } from "@/components/admin-page-wrapper";
 
-// /users — users.manage_roles (Admin). Veri yetkisi ayrıca API + RLS'te.
+// /users — users.manage_roles (Admin, Yönetici). Veri yetkisi ayrıca API + RLS'te.
 export default function UsersLayout({
   children,
 }: {

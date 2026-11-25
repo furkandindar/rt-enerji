@@ -1,6 +1,6 @@
 "use client";
 
-// Süreç Tanımları — workflows.view (Admin, Yönetici); düzenleme workflows.manage (Admin).
+// Süreç Tanımları — workflows.view (Admin, Yönetici, Bilgi İşlem Uzmanı); düzenleme workflows.manage (Admin, Yönetici).
 // Sol: süreç listesi (+ Birim Amirleri). Sağ: seçili sürecin adımları ve onaycıları.
 // Veri sunucuda derlenir (lib/workflow/config-overview.ts). Faz 2a: sabit pozisyonlu
 // adımın pozisyonu buradan değiştirilebilir (StepPositionDialog → PATCH /api/workflow-steps/[id]);

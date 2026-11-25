@@ -5,9 +5,9 @@ import { WorkflowConfigView } from "./_components/workflow-config-view";
 import { getUserAccess } from "@/lib/auth/access";
 import { can } from "@/lib/auth/permissions";
 
-// /workflow-definitions — workflows.view (Admin, Yönetici): süreç tanımları, adımlar ve
+// /workflow-definitions — workflows.view (Admin, Yönetici, Bilgi İşlem Uzmanı): süreç tanımları, adımlar ve
 // onaycılar. Salt okunur; tek istisna sabit pozisyonlu adımın pozisyonu — yalnız
-// workflows.manage (Admin) (Faz 2a, PATCH /api/workflow-steps/[id]).
+// workflows.manage (Admin, Yönetici) (Faz 2a, PATCH /api/workflow-steps/[id]).
 //
 // Veri sunucuda derlenir (lib/workflow/config-overview.ts) ve istemciye hazır
 // görünüm modeli olarak gider. Layout'taki AdminPageWrapper görsel guard'dır;

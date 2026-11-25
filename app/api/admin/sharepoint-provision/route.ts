@@ -13,7 +13,7 @@
 //       Idempotent — var olanlar "existing" sayılır. 530 klasörü tek istekte
 //       açmak Vercel 60s sınırında 504 veriyordu; parti bu yüzden.
 //
-// Yetki: integrations.manage (Admin, Yönetici). Yıl/ay klasörleri burada
+// Yetki: integrations.manage (Admin, Yönetici, Bilgi İşlem Uzmanı). Yıl/ay klasörleri burada
 // açılmaz, ilk belgeyle kendiliğinden oluşur.
 
 import {
