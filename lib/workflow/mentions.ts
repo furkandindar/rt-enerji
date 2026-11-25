@@ -1,9 +1,14 @@
 // @mention — sunucu tarafı: aday listesi, anma kaydı ve bildirim.
 //
-// Kurallar (kullanıcı kararı 2026-10-18):
-//  - Anılabilecekler = talebi ZATEN görebilen, aktif ve sistem hesabı bağlı
-//    çalışanlar. Yetki modeli değişmez (DB: employees_who_can_view_request,
-//    requests_select RLS'inin karşılığı).
+// Kurallar (kullanıcı kararı 2026-10-18; görünürlük daraltması 2026-11-25):
+//  - Anılabilecekler = aktif ve sistem hesabı bağlı çalışanlardan:
+//      * kısıtsız süreçte HERKES — anma = paylaşım: anılan kişi talebin başlığını,
+//        onay zincirini ve notlarını görür (RLS private.rls_mentioned_request_ids);
+//        form içeriği, ekler ve PDF görmez. Kısıtsız süreç talepleri 2026-11-25'ten
+//        beri üyelere toplu açık değil (sql/security_request_visibility_scope.sql);
+//        anma bu yüzden erişimi kendisi verir.
+//      * kısıtlı süreçte yalnız talebi ZATEN görebilenler (anma erişim vermez).
+//    Görünürlük DB: employees_who_can_view_request (requests_select'in karşılığı).
 //  - Kapsam: onay / red / revize notu (DECISION) + Revize Açıklaması (REVISION_RESPONSE).
 //  - Bildirim yalnız listeden seçilip notta "@Ad Soyad" olarak görünen kişilere;
 //    kendini anma ve aynı aksiyonda notu içeren asıl bildirimi zaten alanlar hariç.
@@ -38,17 +43,47 @@ async function getViewerIds(
   return new Set(((data ?? []) as Array<{ employee_id: string }>).map((r) => r.employee_id));
 }
 
-/** Anma adayları: aktif + sistem hesabı bağlı + talebi görebilen (kendisi hariç). */
+/**
+ * Talep kısıtsız bir süreçte mi? Yalnız orada anma paylaşımdır (anılan kişi talebi
+ * görmeye başlar — RLS private.rls_mentioned_request_ids aynı koşulu kullanır).
+ */
+async function isUnrestrictedRequest(client: SupabaseClient, requestId: string): Promise<boolean> {
+  const { data, error } = await client
+    .from('requests')
+    .select('workflow_definition:workflow_definitions!inner(is_restricted)')
+    .eq('id', requestId)
+    .maybeSingle();
+  if (error) throw new Error(`request workflow lookup failed: ${error.message}`);
+  const wd = (data as { workflow_definition?: { is_restricted: boolean } | { is_restricted: boolean }[] } | null)
+    ?.workflow_definition;
+  const def = Array.isArray(wd) ? wd[0] : wd;
+  return def ? !def.is_restricted : false;
+}
+
+/**
+ * Anılabilecek çalışanlar: null = kısıtsız süreç, aktif + hesabı bağlı herkes;
+ * aksi halde yalnız talebi zaten görebilenler.
+ */
+async function getMentionableIds(
+  client: SupabaseClient,
+  requestId: string,
+  employeeIds?: string[]
+): Promise<Set<string> | null> {
+  if (await isUnrestrictedRequest(client, requestId)) return null;
+  return getViewerIds(client, requestId, employeeIds);
+}
+
+/** Anma adayları: aktif + sistem hesabı bağlı + anılabilir (kendisi hariç). */
 export async function listMentionCandidates(
   requestId: string,
   excludeEmployeeId?: string
 ): Promise<ApproverCandidate[]> {
   const client = createMentionClient();
-  const [candidates, viewers] = await Promise.all([
+  const [candidates, mentionable] = await Promise.all([
     listApproverCandidates(client),
-    getViewerIds(client, requestId),
+    getMentionableIds(client, requestId),
   ]);
-  return candidates.filter((c) => viewers.has(c.id) && c.id !== excludeEmployeeId);
+  return candidates.filter((c) => (!mentionable || mentionable.has(c.id)) && c.id !== excludeEmployeeId);
 }
 
 export interface ProcessMentionsParams {
@@ -74,10 +109,10 @@ export async function processMentions(p: ProcessMentionsParams): Promise<void> {
 
   const client = createMentionClient();
 
-  // 1. Uygunluk — istemciye güvenilmez: talebi görebilen + aktif + hesabı bağlı +
-  //    "@Ad Soyad" notta görünüyor.
-  const [viewers, employeesRes, usersRes] = await Promise.all([
-    getViewerIds(client, p.requestId, ids),
+  // 1. Uygunluk — istemciye güvenilmez: anılabilir (kısıtsız süreçte herkes, kısıtlıda
+  //    talebi görebilen) + aktif + hesabı bağlı + "@Ad Soyad" notta görünüyor.
+  const [mentionable, employeesRes, usersRes] = await Promise.all([
+    getMentionableIds(client, p.requestId, ids),
     client.from('employees').select('id, first_name, last_name, status').in('id', ids),
     client.from('app_users').select('employee_id').in('employee_id', ids),
   ]);
@@ -95,7 +130,7 @@ export async function processMentions(p: ProcessMentionsParams): Promise<void> {
     (e) =>
       e.status === 'ACTIVE' &&
       linked.has(e.id) &&
-      viewers.has(e.id) &&
+      (!mentionable || mentionable.has(e.id)) &&
       noteContainsMention(p.note, e.first_name, e.last_name)
   );
   if (eligible.length < ids.length) {

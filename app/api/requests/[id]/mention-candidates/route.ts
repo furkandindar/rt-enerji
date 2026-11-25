@@ -3,8 +3,9 @@ import { NextResponse } from "next/server";
 import { listMentionCandidates } from "@/lib/workflow/mentions";
 
 // GET /api/requests/[id]/mention-candidates
-// @mention seçicisinin aday listesi: bu talebi zaten görebilen, aktif ve sistem
-// hesabı bağlı çalışanlar (kendisi hariç). Talebi göremeyen kullanıcı listeyi de
+// @mention seçicisinin aday listesi: aktif ve sistem hesabı bağlı çalışanlar (kendisi
+// hariç) — kısıtsız süreçte herkes (anma = paylaşım), kısıtlı süreçte yalnız talebi
+// zaten görebilenler (lib/workflow/mentions.ts). Talebi göremeyen kullanıcı listeyi de
 // alamaz (RLS ile 404). Sunucu anmaları kaydederken aynı kuralı yeniden uygular;
 // bu liste yalnız seçim kolaylığıdır.
 export async function GET(
