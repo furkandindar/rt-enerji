@@ -230,3 +230,10 @@ COMMIT;
 --   Anma testi: kısıtsız süreçte anılan talebi + onay zincirini görür, form içeriği/ek/PDF
 --   yok; kısıtlıda anma görünürlük vermez. Uç e2e 10/10.
 -- =====================================================================
+-- PROD (iiagqsbiexyukupkffwb): 2026-11-25 uygulandı (kod deploy 471d0d4'ten SONRA).
+--   79 kullanıcı: kazanılan satır 0; kişinin ilişkili olduğu (sahip / onaycı / işlem yapan /
+--   anılan / bildirim alan aktif çalışan) talep görünmez olan 0. Kaldırılan satırlar:
+--   requests 122.694, request_approvals 526.437, request_attachments 58.572 (kullanıcı başına
+--   toplam). Bu 4 tablo + request_extra_approvers dışında görünürlük 79/79 birebir
+--   (ek onaycı listesinin önceki hali yeniden kurularak doğrulandı). Admin + Süper Admin aynı.
+--   Örnek sıradan kullanıcı: 1.672 → 2 talep. Advisor değişmedi.
